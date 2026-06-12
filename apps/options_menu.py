@@ -1,0 +1,126 @@
+import os
+import json
+import win32con
+from core.app_base import SoftApp
+
+class OptionsApp(SoftApp):
+    def __init__(self, manager, window):
+        super().__init__(manager, window)
+        self.options = ["Speech Rate", "Volume", "Voice"]
+        self.index = 0
+        self.adjust_mode = None
+        self.settings_file = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'settings.json')
+        self._load_voice_settings()
+
+    def on_focus(self):
+        self.speak("Options. " + self.options[self.index])
+        self.window.update_text("Options: " + self.options[self.index])
+
+    def on_key(self, vk):
+        if self.adjust_mode:
+            self._handle_adjust(vk)
+            return
+
+        if vk == win32con.VK_ESCAPE:
+            self.exit_app()
+        elif vk == win32con.VK_BACK or vk == win32con.VK_UP:
+            self.index = (self.index - 1) % len(self.options)
+            self._announce()
+        elif vk == win32con.VK_DOWN or vk == win32con.VK_SPACE:
+            self.index = (self.index + 1) % len(self.options)
+            self._announce()
+        elif vk == win32con.VK_RETURN:
+            self._enter_adjust()
+
+    def _announce(self):
+        self.speak(self.options[self.index])
+        self.window.update_text("Options: " + self.options[self.index])
+
+    def _load_voice_settings(self):
+        if os.path.exists(self.settings_file):
+            try:
+                with open(self.settings_file, 'r') as f:
+                    settings = json.load(f)
+                rate = settings.get("rate")
+                volume = settings.get("volume")
+                if rate is not None:
+                    self.manager.set_rate(rate)
+                if volume is not None:
+                    self.manager.set_volume(volume)
+            except Exception:
+                pass
+
+    def _save_voice_settings(self):
+        try:
+            settings = {}
+            if os.path.exists(self.settings_file):
+                with open(self.settings_file, 'r') as f:
+                    settings = json.load(f)
+            settings["rate"] = self.manager.get_rate()
+            settings["volume"] = self.manager.get_volume()
+            with open(self.settings_file, 'w') as f:
+                json.dump(settings, f)
+        except Exception:
+            pass
+
+    def _enter_adjust(self):
+        key = self.options[self.index].lower().replace(' ', '_')
+        if key == "speech_rate":
+            val = self.manager.get_rate()
+            self.speak(f"Rate. Current: {val}. Use plus and minus to adjust.")
+        elif key == "volume":
+            val = self.manager.get_volume()
+            self.speak(f"Volume. Current: {val}. Use plus and minus to adjust.")
+        elif key == "voice":
+            names = self.manager.get_voice_names()
+            idx = self.manager.get_voice_index()
+            self.speak(f"Voice. Current: {names[idx]}. Use plus and minus to change.")
+        self.adjust_mode = key
+        self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
+
+    def _get_current_display(self):
+        key = self.adjust_mode
+        if key == "speech_rate":
+            return self.manager.get_rate()
+        elif key == "volume":
+            return self.manager.get_volume()
+        elif key == "voice":
+            names = self.manager.get_voice_names()
+            idx = self.manager.get_voice_index()
+            return names[idx]
+        return ""
+
+    def _handle_adjust(self, vk):
+        if vk == win32con.VK_BACK or vk == win32con.VK_ESCAPE:
+            self.adjust_mode = None
+            self._announce()
+            return
+        elif vk == 0xBB:
+            self._adjust_value(1)
+        elif vk == 0xBD:
+            self._adjust_value(-1)
+        elif vk == win32con.VK_RETURN:
+            self.speak("Set.")
+            self.adjust_mode = None
+            self._announce()
+
+    def _adjust_value(self, direction):
+        key = self.adjust_mode
+        if not key:
+            return
+        if key == "speech_rate":
+            val = self.manager.get_rate() + direction
+            self.manager.set_rate(val)
+            self.speak(str(self.manager.get_rate()))
+        elif key == "volume":
+            val = self.manager.get_volume() + direction * 10
+            self.manager.set_volume(val)
+            self.speak(str(self.manager.get_volume()))
+        elif key == "voice":
+            names = self.manager.get_voice_names()
+            idx = self.manager.get_voice_index()
+            idx = (idx + direction) % len(names)
+            self.manager.set_voice_by_index(idx)
+            self.speak(names[idx])
+        self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
+        self._save_voice_settings()

@@ -1,0 +1,6 @@
+pywin32
+comtypes
+pycryptodome
+requests
+beautifulsoup4
+pygame
