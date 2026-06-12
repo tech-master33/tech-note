@@ -6,3 +6,9 @@ bridge_log.txt
 crash.log
 bin/
 .env
+
+# Local Netlify folder
+.netlify
+
+node_modules/
+package-lock.json

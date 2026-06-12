@@ -79,20 +79,18 @@ class MenuSystem:
         else:
             self.speak(self.current_node.title)
 
-from apps.tech_edit import TechEdit
-from apps.tech_calc import TechCalc
-from apps.tech_files import TechFiles
-from apps.settings_app import SettingsApp
-from apps.planner import PlannerApp
-from apps.address_list import AddressListApp
-from apps.email_app import EmailApp
-from apps.internet_app import InternetApp
-from apps.media_player import MediaPlayerApp
-from apps.fm_radio import FMRadioApp
-from apps.titan_net_app import TitanNetApp
-
-
 def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
+    from apps.tech_edit import TechEdit
+    from apps.tech_calc import TechCalc
+    from apps.tech_files import TechFiles
+    from apps.settings_app import SettingsApp
+    from apps.planner import PlannerApp
+    from apps.address_list import AddressListApp
+    from apps.email_app import EmailApp
+    from apps.internet_app import InternetApp
+    from apps.media_player import MediaPlayerApp
+    from apps.fm_radio import FMRadioApp
+    from apps.chat_app import ChatApp
     root = MenuNode("Main Menu")
     
     # Word Processor
@@ -115,9 +113,9 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     # Internet
     root.add_child(MenuNode("Internet", lambda: app_callback(InternetApp), "i"))
     
-    # Titan Net
-    root.add_child(MenuNode("Titan Net", lambda: app_callback(TitanNetApp), "t"))
-    
+    # Chat
+    root.add_child(MenuNode("Chat", lambda: app_callback(ChatApp), "h"))
+
     # Media Center
     media = root.add_child(MenuNode("Media Center", shortcut="m"))
     media.add_child(MenuNode("Media Player", lambda: app_callback(MediaPlayerApp)))

@@ -5,7 +5,6 @@ requests
 beautifulsoup4
 sounddevice
 soundfile
-psutil
-websockets
+
 PyQt6
 PyQt6-Qt6
