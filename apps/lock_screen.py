@@ -2,6 +2,7 @@ import json
 import os
 import datetime
 import win32con
+import win32api
 import psutil
 from core.app_base import SoftApp
 from core.audio_player import AudioPlayer
@@ -15,6 +16,14 @@ class LockScreenApp(SoftApp):
     def __init__(self, manager, window, success_callback):
         super().__init__(manager, window)
         self.success_callback = success_callback
+        self._load_account()
+        self.input_buf = ""
+        self.pin_mode = False
+        self.items = []
+        self.index = 0
+        self._refresh_items()
+
+    def _load_account(self):
         if os.path.exists(ACCOUNT_PATH):
             try:
                 with open(ACCOUNT_PATH, 'r') as f:
@@ -23,11 +32,7 @@ class LockScreenApp(SoftApp):
                 self.account = {}
         else:
             self.account = {}
-        self.input_pin = ""
-        self.pin_mode = False
-        self.items = []
-        self.index = 0
-        self._refresh_items()
+        self.lock_type = self.account.get("lock_type", "pin")
 
     def _battery_text(self):
         try:
@@ -48,7 +53,10 @@ class LockScreenApp(SoftApp):
         bat = self._battery_text()
         if bat:
             self.items.append(bat)
-        self.items.append("Unlock")
+        lock_label = "Unlock"
+        if self.lock_type == "password":
+            lock_label = "Unlock (password)"
+        self.items.append(lock_label)
 
     def _display_text(self):
         parts = []
@@ -68,7 +76,7 @@ class LockScreenApp(SoftApp):
 
     def on_key(self, vk):
         if self.pin_mode:
-            self._handle_pin(vk)
+            self._handle_input(vk)
             return
 
         if vk == win32con.VK_F5:
@@ -87,33 +95,36 @@ class LockScreenApp(SoftApp):
         elif vk == win32con.VK_RETURN:
             if os.path.exists(CLICK_SOUND):
                 AudioPlayer().play_file(CLICK_SOUND)
-            if self.items[self.index] == "Unlock":
-                self._start_pin_entry()
+            if self.items[self.index].startswith("Unlock"):
+                self._start_entry()
 
-    def _start_pin_entry(self):
+    def _start_entry(self):
         self.pin_mode = True
-        self.input_pin = ""
-        self.speak("Enter PIN.")
-        self.window.update_text("PIN:")
+        self.input_buf = ""
+        if self.lock_type == "pin":
+            self.speak("Enter PIN.")
+            self.window.update_text("PIN:")
+        else:
+            self.speak("Enter password.")
+            self.window.update_text("Password:")
+
+    def _handle_input(self, vk):
+        if self.lock_type == "pin":
+            self._handle_pin(vk)
+        else:
+            self._handle_password(vk)
 
     def _handle_pin(self, vk):
         if 0x30 <= vk <= 0x39:
-            if len(self.input_pin) < 4:
-                self.input_pin += chr(vk)
-                self.window.update_text("*" * len(self.input_pin))
-                if len(self.input_pin) == 4:
-                    if self.input_pin == self.account.get("pin"):
-                        self._play_unlock()
-                        self.success_callback()
-                        self.exit_app()
-                    else:
-                        self.speak("Wrong PIN.")
-                        self.input_pin = ""
-                        self.window.update_text("PIN:")
+            if len(self.input_buf) < 4:
+                self.input_buf += chr(vk)
+                self.window.update_text("*" * len(self.input_buf))
+                if len(self.input_buf) == 4:
+                    self._check_pin()
         elif vk == win32con.VK_BACK:
-            if self.input_pin:
-                self.input_pin = self.input_pin[:-1]
-                text = "*" * len(self.input_pin) if self.input_pin else "PIN:"
+            if self.input_buf:
+                self.input_buf = self.input_buf[:-1]
+                text = "*" * len(self.input_buf) if self.input_buf else "PIN:"
                 self.window.update_text(text)
             else:
                 self.pin_mode = False
@@ -127,6 +138,70 @@ class LockScreenApp(SoftApp):
             self.index = 0
             self._refresh_items()
             self.window.update_text(self._display_text())
+
+    def _check_pin(self):
+        if self.input_buf == self.account.get("pin"):
+            self._unlock()
+        else:
+            self.speak("Wrong PIN.")
+            self.input_buf = ""
+            self.window.update_text("PIN:")
+
+    def _handle_password(self, vk):
+        if vk == win32con.VK_RETURN:
+            if self.input_buf == self.account.get("password"):
+                self._unlock()
+            else:
+                self.speak("Wrong password.")
+                self.input_buf = ""
+                self.window.update_text("Password:")
+            return
+        if vk == win32con.VK_BACK:
+            if self.input_buf:
+                self.input_buf = self.input_buf[:-1]
+                self.window.update_text("*" * len(self.input_buf) if self.input_buf else "Password:")
+            else:
+                self.pin_mode = False
+                self.speak("Cancelled.")
+                self.index = 0
+                self._refresh_items()
+                self.window.update_text(self._display_text())
+            return
+        if vk == win32con.VK_ESCAPE:
+            self.pin_mode = False
+            self.speak("Cancelled.")
+            self.index = 0
+            self._refresh_items()
+            self.window.update_text(self._display_text())
+            return
+        ch = self._vk_to_char(vk)
+        if ch is not None:
+            self.input_buf += ch
+            self.window.update_text("*" * len(self.input_buf))
+
+    def _vk_to_char(self, vk):
+        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
+        caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
+        if 0x41 <= vk <= 0x5A:
+            upper = shift ^ caps
+            return chr(vk).upper() if upper else chr(vk).lower()
+        if 0x30 <= vk <= 0x39:
+            return chr(vk) if not shift else chr(vk)
+        if vk == win32con.VK_SPACE:
+            return ' '
+        sym_map = {
+            0xBD: '-', 0xBB: '=', 0xC0: '`',
+            0xDB: '[', 0xDD: ']', 0xDC: '\\', 0xBA: ';', 0xDE: "'",
+            0xBC: ',', 0xBE: '.', 0xBF: '/',
+        }
+        if vk in sym_map:
+            return sym_map[vk] if not shift else sym_map.get(vk, '')
+        return None
+
+    def _unlock(self):
+        self._play_unlock()
+        self.success_callback()
+        self.exit_app()
 
     def _play_unlock(self):
         if os.path.exists(UNLOCK_SOUND):

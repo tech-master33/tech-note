@@ -18,6 +18,7 @@ class TechNoteSetup(SoftApp):
         self.username = ""
         self.password = ""
         self.pin = ""
+        self.lock_type = "pin"
         self.active = True
 
     def _load_voices_for_synth(self):
@@ -69,13 +70,32 @@ class TechNoteSetup(SoftApp):
                 self.speak("Digit added")
                 if len(self.pin) == 4:
                     self.current_step += 1
-                    self.speak("TTS engine. Use arrows to select.")
-                    self.window.update_text(self.available_synths[self.synth_index][0])
+                    self.lock_type = "pin"
+                    self.speak("Lock type. PIN or Password. Use arrows.")
+                    self.window.update_text("Lock type: PIN")
             elif vk == win32con.VK_BACK:
                 self.pin = self.pin[:-1]
                 self.window.update_text("*" * len(self.pin))
 
         elif self.current_step == 4:
+            lock_options = ["PIN", "Password"]
+            current_lock = 0 if self.lock_type == "pin" else 1
+            if vk == win32con.VK_DOWN or vk == win32con.VK_SPACE:
+                current_lock = (current_lock + 1) % 2
+                self.lock_type = "pin" if current_lock == 0 else "password"
+                self.window.update_text("Lock type: " + lock_options[current_lock])
+                self.speak(lock_options[current_lock])
+            elif vk == win32con.VK_UP or vk == win32con.VK_BACK:
+                current_lock = (current_lock - 1) % 2
+                self.lock_type = "pin" if current_lock == 0 else "password"
+                self.window.update_text("Lock type: " + lock_options[current_lock])
+                self.speak(lock_options[current_lock])
+            elif vk == win32con.VK_RETURN:
+                self.current_step += 1
+                self.speak("TTS engine. Use arrows to select.")
+                self.window.update_text(self.available_synths[self.synth_index][0])
+
+        elif self.current_step == 5:
             if vk == win32con.VK_DOWN or vk == win32con.VK_SPACE:
                 self.synth_index = (self.synth_index + 1) % len(self.available_synths)
                 self.window.update_text(self.available_synths[self.synth_index][0])
@@ -94,7 +114,7 @@ class TechNoteSetup(SoftApp):
                 else:
                     self.speak("No voices available. Press Enter to continue.")
 
-        elif self.current_step == 5:
+        elif self.current_step == 6:
             if not self.voices:
                 self.speak("No voices available. Press Enter to continue.")
                 if vk == win32con.VK_RETURN:
@@ -115,7 +135,7 @@ class TechNoteSetup(SoftApp):
                 self.current_step += 1
                 self.speak("Setup complete. Press Enter.")
 
-        elif self.current_step == 6:
+        elif self.current_step == 7:
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:
@@ -126,6 +146,7 @@ class TechNoteSetup(SoftApp):
             "username": self.username,
             "password": self.password,
             "pin": self.pin,
+            "lock_type": self.lock_type,
             "synth_module": self.synth_module,
             "default_synth": self.voices[self.voice_index] if self.voices else "Default"
         }

@@ -20,7 +20,7 @@ class SettingsApp(SoftApp):
         self.confirm_mode = None
         self.account_mode = None
         self.account_index = 0
-        self.account_options = ["Change Username", "Change Password", "Change PIN", "Back"]
+        self.account_options = ["Change Username", "Change Password", "Change PIN", "Lock Type", "Back"]
         self.text_input = ""
         self.text_input_label = ""
 
@@ -108,7 +108,26 @@ class SettingsApp(SoftApp):
     def _enter_account_menu(self):
         self.account_mode = "menu"
         self.account_index = 0
+        account = self._load_account()
+        self._current_lock_type = account.get("lock_type", "pin")
+        self._update_account_options()
         self.speak("Account: " + self.account_options[self.account_index])
+        self.window.update_text("Account: " + self.account_options[self.account_index])
+
+    def _update_account_options(self):
+        lt = "PIN" if self._current_lock_type == "pin" else "Password"
+        self.account_options[3] = f"Lock Type ({lt})"
+
+    def _toggle_lock_type(self):
+        account = self._load_account()
+        current = account.get("lock_type", "pin")
+        new_type = "password" if current == "pin" else "pin"
+        account["lock_type"] = new_type
+        self._save_account(account)
+        self._current_lock_type = new_type
+        lt_name = "PIN" if new_type == "pin" else "Password"
+        self._update_account_options()
+        self.speak(f"Lock type set to {lt_name}.")
         self.window.update_text("Account: " + self.account_options[self.account_index])
 
     def _handle_account_menu(self, vk):
@@ -140,6 +159,8 @@ class SettingsApp(SoftApp):
             self._start_text_input("password", "Enter new password.")
         elif option == "Change PIN":
             self._start_pin_reset()
+        elif option == "Lock Type":
+            self._toggle_lock_type()
 
     def _start_text_input(self, field, prompt):
         self.account_mode = "input"
