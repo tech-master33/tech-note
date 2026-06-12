@@ -5,6 +5,7 @@ import win32con
 import win32api
 import psutil
 from core.app_base import SoftApp
+from core.menu import MenuNode, MenuSystem
 from core.audio_player import AudioPlayer
 from core.config import ACCOUNT_PATH
 
@@ -19,9 +20,7 @@ class LockScreenApp(SoftApp):
         self._load_account()
         self.input_buf = ""
         self.pin_mode = False
-        self.items = []
-        self.index = 0
-        self._refresh_items()
+        self._build_menu()
 
     def _load_account(self):
         if os.path.exists(ACCOUNT_PATH):
@@ -45,31 +44,38 @@ class LockScreenApp(SoftApp):
         except Exception:
             return ""
 
-    def _refresh_items(self):
+    def _build_menu(self):
         now = datetime.datetime.now()
         time_str = now.strftime("%I:%M %p").lstrip("0")
         date_str = now.strftime("%A, %B %d, %Y")
-        self.items = [f"Time: {time_str}", f"Date: {date_str}"]
+        root = MenuNode("Lock Screen")
+        root.add_child(MenuNode(f"Time: {time_str}"))
+        root.add_child(MenuNode(f"Date: {date_str}"))
         bat = self._battery_text()
         if bat:
-            self.items.append(bat)
-        self.items.append("Unlock")
+            root.add_child(MenuNode(bat))
+        root.add_child(MenuNode("Unlock", self._start_entry))
+        def play():
+            if os.path.exists(CLICK_SOUND):
+                AudioPlayer().play_file(CLICK_SOUND)
+        self.menu = MenuSystem(root, self.speak, play_sound=play)
 
     def _display_text(self):
-        parts = []
-        for item in self.items[:-1]:
-            parts.append(item)
-        if self.items:
-            parts.append("---")
-            parts.append("> " + self.items[self.index])
+        children = self.menu.current_node.children
+        items = [c.title for c in children]
+        idx = self.menu.current_index
+        parts = items[:-1]
+        parts.append("---")
+        parts.append("> " + items[idx])
         return "\n".join(parts)
 
     def on_focus(self):
         self.pin_mode = False
-        self._refresh_items()
-        self.index = 0
+        self._build_menu()
+        item = self.menu.get_current_item()
+        title = item.title if item else "Lock Screen"
         self.window.update_text(self._display_text())
-        self.speak("Locked. " + self.items[self.index])
+        self.speak("Locked. " + title)
 
     def on_key(self, vk):
         if self.pin_mode:
@@ -77,23 +83,20 @@ class LockScreenApp(SoftApp):
             return
 
         if vk == win32con.VK_F5:
-            self._refresh_items()
-            self.speak(" ".join(self.items[:-1]))
+            self._build_menu()
+            titles = [c.title for c in self.menu.current_node.children[:-2]]
+            self.speak(" ".join(titles))
+            self.window.update_text(self._display_text())
         elif vk == win32con.VK_ESCAPE:
             self.speak("Locked.")
         elif vk in (win32con.VK_SPACE, win32con.VK_DOWN):
-            self.index = (self.index + 1) % len(self.items)
+            self.menu.next()
             self.window.update_text(self._display_text())
-            self.speak(self.items[self.index])
         elif vk in (win32con.VK_BACK, win32con.VK_UP):
-            self.index = (self.index - 1) % len(self.items)
+            self.menu.previous()
             self.window.update_text(self._display_text())
-            self.speak(self.items[self.index])
         elif vk == win32con.VK_RETURN:
-            if os.path.exists(CLICK_SOUND):
-                AudioPlayer().play_file(CLICK_SOUND)
-            if self.items[self.index].startswith("Unlock"):
-                self._start_entry()
+            self.menu.select()
 
     def _start_entry(self):
         self.pin_mode = True
@@ -124,17 +127,9 @@ class LockScreenApp(SoftApp):
                 text = "*" * len(self.input_buf) if self.input_buf else "PIN:"
                 self.window.update_text(text)
             else:
-                self.pin_mode = False
-                self.speak("Cancelled.")
-                self.index = 0
-                self._refresh_items()
-                self.window.update_text(self._display_text())
+                self._cancel_entry()
         elif vk == win32con.VK_ESCAPE:
-            self.pin_mode = False
-            self.speak("Cancelled.")
-            self.index = 0
-            self._refresh_items()
-            self.window.update_text(self._display_text())
+            self._cancel_entry()
 
     def _check_pin(self):
         if self.input_buf == self.account.get("pin"):
@@ -158,18 +153,10 @@ class LockScreenApp(SoftApp):
                 self.input_buf = self.input_buf[:-1]
                 self.window.update_text("*" * len(self.input_buf) if self.input_buf else "Password:")
             else:
-                self.pin_mode = False
-                self.speak("Cancelled.")
-                self.index = 0
-                self._refresh_items()
-                self.window.update_text(self._display_text())
+                self._cancel_entry()
             return
         if vk == win32con.VK_ESCAPE:
-            self.pin_mode = False
-            self.speak("Cancelled.")
-            self.index = 0
-            self._refresh_items()
-            self.window.update_text(self._display_text())
+            self._cancel_entry()
             return
         ch = self._vk_to_char(vk)
         if ch is not None:
@@ -194,6 +181,13 @@ class LockScreenApp(SoftApp):
         if vk in sym_map:
             return sym_map[vk] if not shift else sym_map.get(vk, '')
         return None
+
+    def _cancel_entry(self):
+        self.pin_mode = False
+        self.speak("Cancelled.")
+        self._build_menu()
+        self.menu.current_index = 0
+        self.window.update_text(self._display_text())
 
     def _unlock(self):
         self._play_unlock()
