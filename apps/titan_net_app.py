@@ -6,18 +6,17 @@ import win32api
 from core.app_base import SoftApp
 from core.titan_net_client import TitanNetClient, TitanNetError
 from core.titan_sounds import TitanSounds
+from core.menu import MenuNode, MenuSystem
 
 DATA_DIR = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'titannet')
 PROFILE_FILE = os.path.join(DATA_DIR, 'profile.json')
 
 STATE_LOGIN = 0
-STATE_MAIN = 1
-STATE_ROOM = 2
-STATE_CHAT = 3
-STATE_CONTACTS = 4
-STATE_CONTACT_CHAT = 5
-STATE_COMPOSING = 6
-STATE_REGISTER = 7
+STATE_MENU = 1
+STATE_CHAT = 2
+STATE_CONTACT_CHAT = 3
+STATE_COMPOSING = 4
+STATE_REGISTER = 5
 
 class TitanNetApp(SoftApp):
     def __init__(self, manager, window):
@@ -32,12 +31,13 @@ class TitanNetApp(SoftApp):
         self.password = ""
         self.full_name = ""
         self.rooms = []
-        self.room_index = 0
+        self.online_users = []
         self.messages = []
         self.msg_index = 0
         self.composing_room = None
         self.composing_contact = None
-        self.online_users = []
+        
+        self.menu = None
         self._load_profile()
 
     def _load_profile(self):
@@ -135,9 +135,8 @@ class TitanNetApp(SoftApp):
                 self.client.login(self.username, self.password)
                 self.sounds.play_welcome()
                 self.sounds.play_applist()
-                self.state = STATE_MAIN
                 self._load_rooms()
-                self._announce_main()
+                self._show_main_menu()
                 return
             except TitanNetError as e:
                 self.sounds.play_error()
@@ -148,24 +147,105 @@ class TitanNetApp(SoftApp):
         self.speak("Titan Net. Enter username and press Enter. R to register.")
         self.window.update_text("Titan Net - Username:")
 
+    def _show_main_menu(self):
+        self.state = STATE_MENU
+        root = MenuNode("Titan Net")
+        root.add_child(MenuNode("Rooms", self._show_rooms, "r"))
+        root.add_child(MenuNode("Online Users", self._show_users, "u"))
+        root.add_child(MenuNode("Create Room", self._start_create_room, "n"))
+        root.add_child(MenuNode("Logout", self._logout, "l"))
+        
+        self.menu = MenuSystem(root, self.speak)
+        self.speak("Titan Net Menu")
+        self.window.update_text(f"Titan Net: {self.username}")
+
+    def _show_rooms(self):
+        self._load_rooms()
+        if not self.rooms:
+            self.speak("No rooms available.")
+            return
+        
+        root = MenuNode("Rooms")
+        for i, r in enumerate(self.rooms):
+            name = r.get('name', f"Room {i}")
+            root.add_child(MenuNode(name, lambda idx=i: self._open_room(idx)))
+        
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _show_users(self):
+        self._load_rooms() # Refreshes online users too
+        others = [u for u in self.online_users if u != self.username]
+        if not others:
+            self.speak("No other users online.")
+            return
+            
+        root = MenuNode("Online Users")
+        for i, uname in enumerate(others):
+            root.add_child(MenuNode(uname, lambda idx=i: self._open_contact_chat(idx)))
+            
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _start_create_room(self):
+        self.state = STATE_COMPOSING
+        self.composing_room = True
+        self.composing_contact = False
+        self.input_buf = ""
+        self.sounds.play_dialog()
+        self.speak("Enter room name.")
+        self.window.update_text("New room name:")
+
+    def _logout(self):
+        self.sounds.play_dialog_close()
+        self.speak("Logging out.")
+        try:
+            self.client.logout()
+        except Exception:
+            pass
+        while self.client.poll_event() is not None:
+            pass
+        self.profile = {}
+        self._save_profile()
+        self.state = STATE_LOGIN
+        self.login_step = 0
+        self.input_buf = ""
+        self.window.update_text("Titan Net - Username:")
+
     def on_key(self, vk):
         self._poll_events()
         if self.state == STATE_LOGIN:
             self._handle_login(vk)
         elif self.state == STATE_REGISTER:
             self._handle_register(vk)
-        elif self.state == STATE_MAIN:
-            self._handle_main(vk)
-        elif self.state == STATE_ROOM:
-            self._handle_room(vk)
-        elif self.state == STATE_CHAT:
-            self._handle_chat(vk)
-        elif self.state == STATE_CONTACTS:
-            self._handle_contacts(vk)
-        elif self.state == STATE_CONTACT_CHAT:
+        elif self.state == STATE_MENU:
+            self._handle_menu(vk)
+        elif self.state == STATE_CHAT or self.state == STATE_CONTACT_CHAT:
             self._handle_chat(vk)
         elif self.state == STATE_COMPOSING:
             self._handle_composing(vk)
+
+    def _handle_menu(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            if self.menu and self.menu.current_node.parent:
+                self.menu.back()
+            else:
+                self.exit_app()
+            return
+
+        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+            self.menu.next()
+        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            self.menu.previous()
+        elif vk == win32con.VK_RETURN:
+            self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            self.menu.first_letter_nav(chr(vk))
+        
+        if self.menu:
+            item = self.menu.get_current_item()
+            title = item.title if item else self.menu.current_node.title
+            self.window.update_text(title)
 
     def _vk_to_char(self, vk):
         shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
@@ -223,15 +303,14 @@ class TitanNetApp(SoftApp):
                 self.speak("Logging in...")
                 self.window.update_text("Connecting...")
                 try:
-                    result = self.client.login(self.username, self.password)
+                    self.client.login(self.username, self.password)
                     self.profile['username'] = self.username
                     self.profile['password'] = self.password
                     self._save_profile()
                     self.sounds.play_welcome()
                     self.sounds.play_applist()
-                    self.state = STATE_MAIN
                     self._load_rooms()
-                    self._announce_main()
+                    self._show_main_menu()
                 except TitanNetError as e:
                     self.sounds.play_error()
                     msg = str(e)
@@ -292,12 +371,6 @@ class TitanNetApp(SoftApp):
             return
         self._input_char(vk)
 
-    def _announce_main(self):
-        rc = len(self.rooms)
-        uc = len([u for u in self.online_users if u != self.username])
-        self.speak(f"Titan Net. {rc} rooms, {uc} online. R rooms, C users, L logout.")
-        self.window.update_text(f"Titan Net - {self.username} ({rc}r, {uc}u)")
-
     def _load_rooms(self):
         try:
             result = self.client.get_rooms()
@@ -319,92 +392,8 @@ class TitanNetApp(SoftApp):
         except TitanNetError:
             self.online_users = []
 
-    def _handle_main(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.exit_app()
-            return
-        if vk == 0x52:
-            self.sounds.play_select()
-            self.state = STATE_ROOM
-            self.room_index = 0
-            if self.rooms:
-                r = self.rooms[self.room_index]
-                rname = r.get('name', '?')
-                self.sounds.play_focus()
-                self.speak(f"Rooms. {rname}. Space to navigate, Enter to open.")
-                self.window.update_text("Rooms: " + rname)
-            else:
-                self.speak("No rooms. Press N to create one.")
-                self.window.update_text("Rooms: (empty)")
-        elif vk == 0x43:
-            self.sounds.play_select()
-            self.state = STATE_CONTACTS
-            self.contact_index = 0
-            others = [u for u in self.online_users if u != self.username]
-            if others:
-                self.sounds.play_focus()
-                self.speak(f"Online users. {others[0]}. Space to navigate, Enter to message.")
-                self.window.update_text("Online: " + others[0])
-            else:
-                self.speak("No other users online.")
-                self.window.update_text("Online: (none)")
-        elif vk == 0x4E:
-            self.state = STATE_COMPOSING
-            self.composing_room = True
-            self.composing_contact = False
-            self.input_buf = ""
-            self.sounds.play_dialog()
-            self.speak("Enter room name.")
-            self.window.update_text("New room name:")
-        elif vk == 0x4C:
-            self.sounds.play_dialog_close()
-            self.speak("Logging out.")
-            try:
-                self.client.logout()
-            except Exception:
-                pass
-            while self.client.poll_event() is not None:
-                pass
-            self.profile = {}
-            self._save_profile()
-            self.state = STATE_LOGIN
-            self.login_step = 0
-            self.input_buf = ""
-            self.window.update_text("Titan Net - Username:")
-
-    def _handle_room(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.state = STATE_MAIN
-            self.sounds.play_dialog_close()
-            self._announce_main()
-            return
-        if not self.rooms:
-            return
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
-            before = self.room_index
-            self.room_index = (self.room_index + 1) % len(self.rooms)
-            if self.room_index < before:
-                self.sounds.play_endoflist()
-            r = self.rooms[self.room_index]
-            rname = r.get('name', '?')
-            self.sounds.play_focus()
-            self.speak(rname)
-            self.window.update_text("Rooms: " + rname)
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
-            before = self.room_index
-            self.room_index = (self.room_index - 1) % len(self.rooms)
-            if self.room_index > before:
-                self.sounds.play_endoflist()
-            r = self.rooms[self.room_index]
-            rname = r.get('name', '?')
-            self.sounds.play_focus()
-            self.speak(rname)
-            self.window.update_text("Rooms: " + rname)
-        elif vk == win32con.VK_RETURN:
-            self.sounds.play_select()
-            self._open_room(self.room_index)
-
     def _open_room(self, idx):
+        if idx >= len(self.rooms): return
         r = self.rooms[idx]
         room_id = r.get('id')
         rname = r.get('name', '?')
@@ -442,12 +431,11 @@ class TitanNetApp(SoftApp):
 
     def _handle_chat(self, vk):
         if vk == win32con.VK_ESCAPE:
-            if self.composing_room is not None:
-                self.state = STATE_ROOM
-            else:
-                self.state = STATE_CONTACTS
             self.sounds.play_dialog_close()
             self.speak("Back.")
+            self.state = STATE_MENU
+            if self.menu:
+                self.menu.announce_current()
             return
         if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
             if self.messages:
@@ -479,71 +467,44 @@ class TitanNetApp(SoftApp):
             self._refresh_chat()
 
     def _refresh_chat(self):
-        if self.composing_room is not None:
-            rid = self.composing_room
-            try:
+        rid = self.composing_room or self.composing_contact
+        if not rid: return
+        try:
+            if self.composing_room:
                 result = self.client.get_room_messages(rid)
-                raw = result.get('messages', [])
-                if isinstance(raw, list):
-                    new_msgs = []
-                    for m in raw:
-                        sender_raw = m.get('sender', m.get('username', m.get('user', '?')))
-                        if isinstance(sender_raw, dict):
-                            sender = sender_raw.get('username', '?')
-                        else:
-                            sender = str(sender_raw)
-                        new_msgs.append({
-                            'sender': sender,
-                            'text': m.get('message', m.get('text', '')),
-                            'time': m.get('timestamp', '')
-                        })
-                    if len(new_msgs) > len(self.messages):
-                        count = len(new_msgs) - len(self.messages)
-                        self.speak(f"{count} new message{'s' if count > 1 else ''}")
-                        self.sounds.play_new_message()
-                    self.messages = new_msgs
-                    if self.messages:
-                        self.msg_index = len(self.messages) - 1
-                        m = self.messages[self.msg_index]
-                        self.speak(f"{m['sender']}: {m['text']}")
-                        self.window.update_text(f"{m['sender']}: {m['text']}")
-            except TitanNetError:
-                self.sounds.play_error()
-                self.speak("Failed to refresh.")
-
-    def _handle_contacts(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.state = STATE_MAIN
-            self.sounds.play_dialog_close()
-            self._announce_main()
-            return
-        others = [u for u in self.online_users if u != self.username]
-        if not others:
-            return
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
-            before = self.contact_index
-            self.contact_index = (self.contact_index + 1) % len(others)
-            if self.contact_index < before:
-                self.sounds.play_endoflist()
-            uname = others[self.contact_index]
-            self.sounds.play_focus()
-            self.speak(uname)
-            self.window.update_text("Online: " + uname)
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
-            before = self.contact_index
-            self.contact_index = (self.contact_index - 1) % len(others)
-            if self.contact_index > before:
-                self.sounds.play_endoflist()
-            uname = others[self.contact_index]
-            self.sounds.play_focus()
-            self.speak(uname)
-            self.window.update_text("Online: " + uname)
-        elif vk == win32con.VK_RETURN:
-            self.sounds.play_select()
-            self._open_contact_chat(self.contact_index)
+            else:
+                result = self.client.get_private_messages(rid)
+            raw = result.get('messages', [])
+            if isinstance(raw, list):
+                new_msgs = []
+                for m in raw:
+                    sender_raw = m.get('sender', m.get('username', m.get('user', '?')))
+                    if isinstance(sender_raw, dict):
+                        sender = sender_raw.get('username', '?')
+                    else:
+                        sender = str(sender_raw)
+                    new_msgs.append({
+                        'sender': sender,
+                        'text': m.get('message', m.get('text', '')),
+                        'time': m.get('timestamp', '')
+                    })
+                if len(new_msgs) > len(self.messages):
+                    count = len(new_msgs) - len(self.messages)
+                    self.speak(f"{count} new message{'s' if count > 1 else ''}")
+                    self.sounds.play_new_message()
+                self.messages = new_msgs
+                if self.messages:
+                    self.msg_index = len(self.messages) - 1
+                    m = self.messages[self.msg_index]
+                    self.speak(f"{m['sender']}: {m['text']}")
+                    self.window.update_text(f"{m['sender']}: {m['text']}")
+        except TitanNetError:
+            self.sounds.play_error()
+            self.speak("Failed to refresh.")
 
     def _open_contact_chat(self, idx):
         others = [u for u in self.online_users if u != self.username]
+        if idx >= len(others): return
         uname = others[idx]
         self.composing_contact = uname
         self.composing_room = None
@@ -582,15 +543,15 @@ class TitanNetApp(SoftApp):
             self.input_buf = ""
             self.sounds.play_dialog_close()
             if self.composing_room is True:
-                self.state = STATE_MAIN
-                self._announce_main()
-            elif self.composing_contact is True:
-                self.state = STATE_MAIN
-                self._announce_main()
+                self.state = STATE_MENU
+                if self.menu: self.menu.announce_current()
             elif self.composing_room is not None:
                 self.state = STATE_CHAT
             elif self.composing_contact is not None:
                 self.state = STATE_CONTACT_CHAT
+            else:
+                self.state = STATE_MENU
+                if self.menu: self.menu.announce_current()
             return
 
         if vk == win32con.VK_RETURN:
@@ -601,22 +562,15 @@ class TitanNetApp(SoftApp):
 
             if self.composing_room is True:
                 try:
-                    result = self.client.create_room(text)
+                    self.client.create_room(text)
                     self.sounds.play_dialog()
                     self.speak(f"Room {text} created.")
                     self._load_rooms()
                 except TitanNetError as e:
                     self.sounds.play_error()
                     self.speak(f"Failed: {e}")
-                self.state = STATE_MAIN
-                self._announce_main()
-                return
-
-            if self.composing_contact is True:
-                self.sounds.play_error()
-                self.speak("Use C to see online users.")
-                self.state = STATE_MAIN
-                self._announce_main()
+                self.state = STATE_MENU
+                if self.menu: self.menu.announce_current()
                 return
 
             if self.composing_room is not None:
@@ -655,18 +609,10 @@ class TitanNetApp(SoftApp):
                 self.window.update_text(self.input_buf if self.input_buf else "Message:")
             return
 
-        if vk == win32con.VK_SPACE:
-            self.input_buf += ' '
+        ch = self._vk_to_char(vk)
+        if ch is not None:
+            self.input_buf += ch
             self.window.update_text(self.input_buf)
-            return
-        if 0x30 <= vk <= 0x39:
-            self.input_buf += chr(vk)
-            self.window.update_text(self.input_buf)
-            return
-        if 0x41 <= vk <= 0x5A:
-            self.input_buf += chr(vk).lower()
-            self.window.update_text(self.input_buf)
-            return
 
     def exit_app(self):
         try:
