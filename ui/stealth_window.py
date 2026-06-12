@@ -90,7 +90,7 @@ class StealthWindow:
                 import win32ui
                 font_obj = win32ui.CreateFont({
                     "name": "Arial",
-                    "height": 100,
+                    "height": 48,
                     "weight": 700,
                 })
                 font = font_obj.GetSafeHandle()
@@ -99,12 +99,18 @@ class StealthWindow:
                 
             old_font = win32gui.SelectObject(hdc, font)
             win32gui.DrawText(hdc, self.current_text, -1, rect, 
-                             win32con.DT_CENTER | win32con.DT_VCENTER | win32con.DT_SINGLELINE)
+                             win32con.DT_CENTER | win32con.DT_TOP | win32con.DT_WORDBREAK)
             
             win32gui.SelectObject(hdc, old_font)
             if font_obj:
                 font_obj.DeleteObject()
             win32gui.EndPaint(hwnd, ps)
+            return 0
+        elif msg == win32con.WM_SYSCOMMAND:
+            if wparam == win32con.SC_CLOSE:
+                return 0
+            return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
+        elif msg == win32con.WM_CLOSE:
             return 0
         elif msg == win32con.WM_DESTROY:
             self.running = False

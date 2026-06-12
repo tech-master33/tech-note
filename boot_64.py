@@ -128,7 +128,12 @@ class BrailleNoteApp:
         self.menu_root = build_braillenote_menu(
             self.synth, self.window, self.launch_app, self._reset_and_restart
         )
-        self.menu = MenuSystem(self.menu_root, self.synth.speak)
+        click_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds', 'clicked.ogg')
+        self._click_player = AudioPlayer()
+        def play_click():
+            if os.path.exists(click_path):
+                self._click_player.play_file(click_path)
+        self.menu = MenuSystem(self.menu_root, self.synth.speak, play_sound=play_click)
         self.synth.speak("Main Menu")
 
     def launch_app(self, app_class):

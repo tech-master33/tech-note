@@ -12,11 +12,12 @@ class MenuNode:
         return child
 
 class MenuSystem:
-    def __init__(self, root_node, speak_func):
+    def __init__(self, root_node, speak_func, play_sound=None):
         self.root = root_node
         self.current_node = root_node
         self.current_index = 0
         self.speak = speak_func
+        self.play_sound = play_sound
 
     def get_current_item(self):
         if not self.current_node.children:
@@ -40,6 +41,8 @@ class MenuSystem:
         if not item:
             return
 
+        if self.play_sound:
+            self.play_sound()
         if item.children:
             self.current_node = item
             self.current_index = 0
@@ -50,7 +53,6 @@ class MenuSystem:
 
     def back(self):
         if self.current_node.parent:
-            # Find index of current_node in parent
             parent = self.current_node.parent
             self.current_index = parent.children.index(self.current_node)
             self.current_node = parent
@@ -62,8 +64,6 @@ class MenuSystem:
         char = char.lower()
         if not self.current_node.children:
             return
-            
-        # Start searching from next item
         for i in range(1, len(self.current_node.children) + 1):
             idx = (self.current_index + i) % len(self.current_node.children)
             item = self.current_node.children[idx]
