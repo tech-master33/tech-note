@@ -29,9 +29,12 @@ class ChatApp(SoftApp):
         self.client = ChatClient(SERVER_URL)
         self.state = STATE_LOGIN
         self.input_buf = ""
-        self.login_step = 0
         self.username = ""
         self.password = ""
+        self.login_username = ""
+        self.login_password = ""
+        self.reg_username = ""
+        self.reg_password = ""
         self.rooms = []
         self.users = []
         self.messages = []
@@ -100,11 +103,7 @@ class ChatApp(SoftApp):
                 return
             except ChatError as e:
                 self.speak(f"Login failed: {e}")
-        self.state = STATE_LOGIN
-        self.login_step = 0
-        self.input_buf = ""
-        self.speak("Chat. Enter username and press Enter. R to register.")
-        self.window.update_text("Chat - Username:")
+        self._show_login_menu()
 
     def _show_main_menu(self):
         self.state = STATE_MENU
@@ -254,10 +253,9 @@ class ChatApp(SoftApp):
             pass
         self.profile = {}
         self._save_profile()
-        self.state = STATE_LOGIN
-        self.login_step = 0
-        self.input_buf = ""
-        self.window.update_text("Chat - Username:")
+        self.login_username = ""
+        self.login_password = ""
+        self._show_login_menu()
 
     def on_key(self, vk):
         self._poll_events()
@@ -388,6 +386,40 @@ class ChatApp(SoftApp):
             self.speak("Failed to refresh.")
 
     def _handle_composing(self, vk):
+        # Handle login/register field editing
+        if hasattr(self, '_editing_field') and self._editing_field:
+            if vk == win32con.VK_ESCAPE:
+                self._editing_field = None
+                self.input_buf = ""
+                if self.state == STATE_REGISTER:
+                    self._show_register_menu()
+                else:
+                    self._show_login_menu()
+                return
+            if vk == win32con.VK_RETURN:
+                val = self.input_buf.strip()
+                self._editing_field = None
+                self.input_buf = ""
+                if self.state == STATE_REGISTER:
+                    if val:
+                        setattr(self, f"reg_{self._editing_field}", val)
+                    self._show_register_menu()
+                else:
+                    if val:
+                        setattr(self, f"login_{self._editing_field}", val)
+                    self._show_login_menu()
+                return
+            if vk == win32con.VK_BACK:
+                if self.input_buf:
+                    self.input_buf = self.input_buf[:-1]
+                    self.window.update_text(self.input_buf if self.input_buf else " ")
+                return
+            ch = self._vk_to_char(vk)
+            if ch is not None:
+                self.input_buf += ch
+                self.window.update_text(self.input_buf)
+            return
+
         if vk == win32con.VK_ESCAPE:
             self.input_buf = ""
             if self.current_room_id == -99:
@@ -548,98 +580,121 @@ class ChatApp(SoftApp):
             return sym_map[vk][1] if shift else sym_map[vk][0]
         return None
 
+    def _show_login_menu(self):
+        self.state = STATE_LOGIN
+        u = self.login_username if self.login_username else "(empty)"
+        p = "*" * len(self.login_password) if self.login_password else "(empty)"
+        root = MenuNode("Login")
+        root.add_child(MenuNode(f"Username: {u}", lambda: self._edit_login_field("username")))
+        root.add_child(MenuNode(f"Password: {p}", lambda: self._edit_login_field("password")))
+        root.add_child(MenuNode("Login", self._do_login))
+        root.add_child(MenuNode("Register", self._show_register_menu))
+        root.add_child(MenuNode("Exit", self.exit_app))
+        self.menu = MenuSystem(root, self.speak)
+        self.speak("Login Menu")
+        self.menu.announce_current()
+        self._update_login_window()
+
+    def _update_login_window(self):
+        u = self.login_username if self.login_username else "(empty)"
+        p = "*" * len(self.login_password) if self.login_password else "(empty)"
+        self.window.update_text(f"Chat Login\nUsername: {u}\nPassword: {p}")
+
+    def _edit_login_field(self, field):
+        self.state = STATE_COMPOSING
+        self.input_buf = getattr(self, f"login_{field}", "")
+        self._editing_field = field
+        self.speak(f"Enter {field}.")
+        self.window.update_text(f"{field.capitalize()}:")
+
+    def _do_login(self):
+        if not self.login_username.strip() or not self.login_password.strip():
+            self.speak("Username and password required.")
+            return
+        self.username = self.login_username
+        self.password = self.login_password
+        self.speak("Logging in...")
+        self.window.update_text("Connecting...")
+        try:
+            result = self.client.login(self.username, self.password)
+            self.is_admin = result.get('role') == 'admin'
+            self.profile['username'] = self.username
+            self.profile['password'] = self.password
+            self._save_profile()
+            self._load_data()
+            self._show_main_menu()
+        except ChatError as e:
+            self.speak(f"Login failed: {e}")
+
+    def _show_register_menu(self):
+        self.state = STATE_REGISTER
+        u = self.reg_username if self.reg_username else "(empty)"
+        p = "*" * len(self.reg_password) if self.reg_password else "(empty)"
+        root = MenuNode("Register")
+        root.add_child(MenuNode(f"Username: {u}", lambda: self._edit_reg_field("username")))
+        root.add_child(MenuNode(f"Password: {p}", lambda: self._edit_reg_field("password")))
+        root.add_child(MenuNode("Register", self._do_register))
+        root.add_child(MenuNode("Back to Login", self._show_login_menu))
+        self.menu = MenuSystem(root, self.speak)
+        self.speak("Register Menu")
+        self.menu.announce_current()
+        self._update_reg_window()
+
+    def _update_reg_window(self):
+        u = self.reg_username if self.reg_username else "(empty)"
+        self.window.update_text(f"Chat Register\nUsername: {u}")
+
+    def _edit_reg_field(self, field):
+        self.state = STATE_COMPOSING
+        self.input_buf = getattr(self, f"reg_{field}", "")
+        self._editing_field = field
+        self.speak(f"Enter {field}.")
+        self.window.update_text(f"{field.capitalize()}:")
+
+    def _do_register(self):
+        if not self.reg_username.strip() or not self.reg_password.strip():
+            self.speak("Username and password required.")
+            return
+        self.speak("Registering...")
+        self.window.update_text("Registering...")
+        try:
+            self.client.register(self.reg_username, self.reg_password)
+            self.speak("Account created! You can now log in.")
+            self.login_username = self.reg_username
+            self.login_password = self.reg_password
+            self._show_login_menu()
+        except ChatError as e:
+            self.speak(f"Registration failed: {e}")
+
     def _handle_login(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
             return
-        if vk == win32con.VK_RETURN:
-            val = self.input_buf.strip()
-            if not val:
-                self.speak("Cannot be empty.")
-                return
-            if self.login_step == 0:
-                self.username = val
-                self.login_step = 1
-                self.input_buf = ""
-                self.speak("Enter password.")
-                self.window.update_text("Chat - Password:")
-            elif self.login_step == 1:
-                self.password = val
-                self.speak("Logging in...")
-                self.window.update_text("Connecting...")
-                try:
-                    result = self.client.login(self.username, self.password)
-                    self.is_admin = result.get('role') == 'admin'
-                    self.profile['username'] = self.username
-                    self.profile['password'] = self.password
-                    self._save_profile()
-                    self._load_data()
-                    self._show_main_menu()
-                except ChatError as e:
-                    self.speak(f"Login failed: {e}")
-                    self.login_step = 0
-                    self.input_buf = ""
-                    self.window.update_text("Chat - Username:")
-            return
-        if vk == 0x52 and self.login_step == 0 and not self.input_buf:
-            self.state = STATE_REGISTER
-            self.login_step = 0
-            self.input_buf = ""
-            self.speak("Register. Enter username.")
-            self.window.update_text("Register - Username:")
-            return
-        if vk == win32con.VK_BACK:
-            if self.input_buf:
-                self.input_buf = self.input_buf[:-1]
-                self.window.update_text(self.input_buf if self.input_buf else " ")
-            return
-        ch = self._vk_to_char(vk)
-        if ch is not None:
-            self.input_buf += ch
-            self.window.update_text(self.input_buf)
+        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+            self.menu.next()
+        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            self.menu.previous()
+        elif vk == win32con.VK_RETURN:
+            self.menu.select()
+        if self.menu:
+            item = self.menu.get_current_item()
+            title = item.title if item else self.menu.current_node.title
+            self.window.update_text(title)
 
     def _handle_register(self, vk):
         if vk == win32con.VK_ESCAPE:
-            self.state = STATE_LOGIN
-            self.login_step = 0
-            self.input_buf = ""
-            self.speak("Enter username.")
-            self.window.update_text("Chat - Username:")
+            self._show_login_menu()
             return
-        if vk == win32con.VK_RETURN:
-            val = self.input_buf.strip()
-            if not val:
-                self.speak("Cannot be empty.")
-                return
-            if self.login_step == 0:
-                self.username = val
-                self.login_step = 1
-                self.input_buf = ""
-                self.speak("Enter password.")
-                self.window.update_text("Register - Password:")
-            elif self.login_step == 1:
-                password = val
-                self.speak("Registering...")
-                self.window.update_text("Registering...")
-                try:
-                    self.client.register(self.username, password)
-                    self.speak("Account created! You can now log in.")
-                except ChatError as e:
-                    self.speak(f"Registration failed: {e}")
-                self.state = STATE_LOGIN
-                self.login_step = 0
-                self.input_buf = ""
-                self.window.update_text("Chat - Username:")
-            return
-        if vk == win32con.VK_BACK:
-            if self.input_buf:
-                self.input_buf = self.input_buf[:-1]
-                self.window.update_text(self.input_buf if self.input_buf else " ")
-            return
-        ch = self._vk_to_char(vk)
-        if ch is not None:
-            self.input_buf += ch
-            self.window.update_text(self.input_buf)
+        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+            self.menu.next()
+        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            self.menu.previous()
+        elif vk == win32con.VK_RETURN:
+            self.menu.select()
+        if self.menu:
+            item = self.menu.get_current_item()
+            title = item.title if item else self.menu.current_node.title
+            self.window.update_text(title)
 
     def exit_app(self):
         try:
