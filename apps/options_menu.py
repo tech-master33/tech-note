@@ -75,8 +75,19 @@ class OptionsApp(SoftApp):
         key = self.options[self.index].lower().replace(' ', '_')
         if key == "tts_engine":
             self.synth_list = get_available_synths()
-            name = self.synth_list[0][0] if self.synth_list else "None"
+            current_module = "sapi_synth"
+            try:
+                with open(ACCOUNT_PATH, 'r') as f:
+                    account = json.load(f)
+                current_module = account.get("synth_module", "sapi_synth")
+            except Exception:
+                pass
             self.synth_index = 0
+            for i, (name, mod) in enumerate(self.synth_list):
+                if mod == current_module:
+                    self.synth_index = i
+                    break
+            name = self.synth_list[self.synth_index][0]
             self.speak(f"TTS Engine. Current: {name}. Use plus and minus to change.")
         elif key == "speech_rate":
             val = self.manager.get_rate()
@@ -160,4 +171,5 @@ class OptionsApp(SoftApp):
             self.speak(f"Synth set to {name}. Restart to apply.")
         except Exception:
             self.speak("Failed to save synth.")
-        self.exit_app()
+        self.adjust_mode = None
+        self._announce()
