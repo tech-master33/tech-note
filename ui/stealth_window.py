@@ -42,7 +42,7 @@ class StealthWindow:
         except:
             class_atom = 0 
             
-        ex_style = WS_EX_LAYERED | WS_EX_NOACTIVATE 
+        ex_style = WS_EX_LAYERED | WS_EX_TOOLWINDOW
         
         # Center the window
         screen_w = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
@@ -63,8 +63,13 @@ class StealthWindow:
         win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 255, LWA_ALPHA)
         win32gui.SetWindowText(self.hwnd, " ")
         
+        # Initial set to topmost and foreground
         win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
                              win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+        try:
+            win32gui.SetForegroundWindow(self.hwnd)
+        except:
+            pass
 
         win32gui.PumpMessages()
 
@@ -117,11 +122,19 @@ class StealthWindow:
             return 0
         elif msg == win32con.WM_ACTIVATE:
             if wparam == win32con.WA_INACTIVE:
-                win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                # When inactive, allow other windows to be on top
+                win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
                                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
+            else:
+                # When active, stay on top
+                win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                                     win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
             return 0
-        elif msg == win32con.WM_MOUSEACTIVATE:
-            return win32con.MA_NOACTIVATE
+        elif msg == win32con.WM_SETFOCUS:
+            # Ensure we are topmost when focused
+            win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+            return 0
         elif msg == win32con.WM_DESTROY:
             self.running = False
             ctypes.windll.user32.PostQuitMessage(0)
