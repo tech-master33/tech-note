@@ -54,7 +54,7 @@ class StealthWindow:
         self.hwnd = win32gui.CreateWindowEx(
             ex_style,
             wc.lpszClassName,
-            "", # Empty title
+            " ", # Space title (hide from screen readers)
             win32con.WS_POPUP | win32con.WS_VISIBLE,
             x, y, w, h,
             0, 0, wc.hInstance, None
