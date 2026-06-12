@@ -22,6 +22,7 @@ class AddressListApp(SoftApp):
             self.save_contacts()
 
     def save_contacts(self):
+        os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
         with open(self.data_file, 'w') as f:
             json.dump(self.contacts, f)
 

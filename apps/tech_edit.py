@@ -85,7 +85,26 @@ class TechEdit(SoftApp):
             self.speak("Space")
             return
 
-        # Simple character input
+        # Numbers
+        if 0x30 <= vk <= 0x39:
+            char = chr(vk)
+            self.text += char
+            self.speak(char)
+            return
+
+        # Punctuation
+        punctuation = {
+            0xBA: ";", 0xBB: "=", 0xBC: ",", 0xBD: "-",
+            0xBE: ".", 0xBF: "/", 0xC0: "`",
+            0xDB: "[", 0xDC: "\\", 0xDD: "]", 0xDE: "'",
+        }
+        if vk in punctuation:
+            char = punctuation[vk]
+            self.text += char
+            self.speak(char)
+            return
+
+        # Letter input
         if 0x41 <= vk <= 0x5A:
             char = chr(vk).lower()
             self.text += char

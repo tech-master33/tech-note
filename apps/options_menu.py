@@ -43,10 +43,15 @@ class OptionsApp(SoftApp):
                     settings = json.load(f)
                 rate = settings.get("rate")
                 volume = settings.get("volume")
+                voice_index = settings.get("voice_index")
                 if rate is not None:
                     self.manager.set_rate(rate)
                 if volume is not None:
                     self.manager.set_volume(volume)
+                if voice_index is not None:
+                    names = self.manager.get_voice_names()
+                    if 0 <= voice_index < len(names):
+                        self.manager.set_voice_by_index(voice_index)
             except Exception:
                 pass
 
@@ -58,6 +63,7 @@ class OptionsApp(SoftApp):
                     settings = json.load(f)
             settings["rate"] = self.manager.get_rate()
             settings["volume"] = self.manager.get_volume()
+            settings["voice_index"] = self.manager.get_voice_index()
             with open(self.settings_file, 'w') as f:
                 json.dump(settings, f)
         except Exception:

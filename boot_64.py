@@ -12,6 +12,7 @@ from apps.lock_screen import LockScreenApp
 from apps.options_menu import OptionsApp
 from apps.power_menu import PowerApp
 from core.setup_core import TechNoteSetup
+from core.audio_player import AudioPlayer
 
 pythoncom.CoInitialize()
 
@@ -31,15 +32,26 @@ class BrailleNoteApp:
                     s = json.load(f)
                 rate = s.get("rate")
                 volume = s.get("volume")
+                voice_index = s.get("voice_index")
                 if rate is not None:
                     self.synth.set_rate(rate)
                 if volume is not None:
                     self.synth.set_volume(volume)
+                if voice_index is not None:
+                    names = self.synth.get_voice_names()
+                    if 0 <= voice_index < len(names):
+                        self.synth.set_voice_by_index(voice_index)
             except Exception:
                 pass
         self.window = StealthWindow(on_key_down=self.handle_key)
         self.menu = None
         self.current_app = None
+
+        # Play startup sound before any speech
+        startup_sound = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds', 'startup.mp3')
+        if os.path.exists(startup_sound):
+            player = AudioPlayer()
+            player.play_sound_blocking(startup_sound)
 
         account_path = os.path.join(self.tech_soft, 'account.json')
         if not os.path.exists(account_path):

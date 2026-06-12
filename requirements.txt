@@ -3,4 +3,7 @@ comtypes
 pycryptodome
 requests
 beautifulsoup4
-pygame
+sounddevice
+soundfile
+PyQt6
+PyQt6-Qt6
