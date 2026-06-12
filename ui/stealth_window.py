@@ -42,7 +42,7 @@ class StealthWindow:
         except:
             class_atom = 0 
             
-        ex_style = WS_EX_LAYERED | WS_EX_TOOLWINDOW 
+        ex_style = WS_EX_LAYERED | WS_EX_NOACTIVATE 
         
         # Center the window
         screen_w = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
@@ -115,6 +115,13 @@ class StealthWindow:
             return 0
         elif msg == 0x003D:  # WM_GETOBJECT
             return 0
+        elif msg == win32con.WM_ACTIVATE:
+            if wparam == win32con.WA_INACTIVE:
+                win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
+                                     win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
+            return 0
+        elif msg == win32con.WM_MOUSEACTIVATE:
+            return win32con.MA_NOACTIVATE
         elif msg == win32con.WM_DESTROY:
             self.running = False
             ctypes.windll.user32.PostQuitMessage(0)
