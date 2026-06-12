@@ -61,6 +61,7 @@ class StealthWindow:
         )
 
         win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 255, LWA_ALPHA)
+        win32gui.SetWindowText(self.hwnd, " ")
         
         win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
                              win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
@@ -111,6 +112,8 @@ class StealthWindow:
                 return 0
             return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
         elif msg == win32con.WM_CLOSE:
+            return 0
+        elif msg == 0x003D:  # WM_GETOBJECT
             return 0
         elif msg == win32con.WM_DESTROY:
             self.running = False
