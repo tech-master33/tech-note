@@ -144,7 +144,7 @@ class BrailleNoteApp:
             self._open_options()
             return
 
-        if vk == 0xC0:
+        if vk == 0xC0 or vk == 0xDF:
             print("Power menu")
             self._open_power_menu()
             return
