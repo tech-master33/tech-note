@@ -89,6 +89,7 @@ from apps.email_app import EmailApp
 from apps.internet_app import InternetApp
 from apps.media_player import MediaPlayerApp
 from apps.fm_radio import FMRadioApp
+from apps.titan_net_app import TitanNetApp
 
 
 def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
@@ -113,6 +114,9 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     
     # Internet
     root.add_child(MenuNode("Internet", lambda: app_callback(InternetApp), "i"))
+    
+    # Titan Net
+    root.add_child(MenuNode("Titan Net", lambda: app_callback(TitanNetApp), "t"))
     
     # Media Center
     media = root.add_child(MenuNode("Media Center", shortcut="m"))
