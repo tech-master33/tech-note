@@ -4,17 +4,14 @@ import subprocess
 import sys
 import win32con
 from core.app_base import SoftApp
-
+from core.config import TECH_SOFT, ACCOUNT_PATH, SETTINGS_PATH
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-TECH_SOFT = os.path.join(os.environ['USERPROFILE'], '.tech-soft')
-ACCOUNT_PATH = os.path.join(TECH_SOFT, 'account.json')
 
 class SettingsApp(SoftApp):
     def __init__(self, manager, window, on_reset_account=None):
         super().__init__(manager, window)
         self.on_reset_account = on_reset_account
-        self.settings_file = os.path.join(TECH_SOFT, 'settings.json')
+        self.settings_file = SETTINGS_PATH
         self.settings = {"voice_speed": 100, "theme": "Dark"}
         self.load_settings()
         self.options = ["Theme", "About Tech-Note", "Check for Updates", "Reset PIN", "Reset TechNote"]
@@ -25,8 +22,11 @@ class SettingsApp(SoftApp):
 
     def load_settings(self):
         if os.path.exists(self.settings_file):
-            with open(self.settings_file, 'r') as f:
-                self.settings = json.load(f)
+            try:
+                with open(self.settings_file, 'r') as f:
+                    self.settings = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                self.settings = {"voice_speed": 100, "theme": "Dark"}
 
     def save_settings(self):
         with open(self.settings_file, 'w') as f:

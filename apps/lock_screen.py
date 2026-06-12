@@ -3,6 +3,7 @@ import os
 import win32con
 from core.app_base import SoftApp
 from core.audio_player import AudioPlayer
+from core.config import ACCOUNT_PATH
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UNLOCK_SOUND = os.path.join(BASE, 'sounds', 'unlock.mp3')
@@ -11,11 +12,12 @@ class LockScreenApp(SoftApp):
     def __init__(self, manager, window, success_callback):
         super().__init__(manager, window)
         self.success_callback = success_callback
-        tech_soft = os.path.join(os.environ['USERPROFILE'], '.tech-soft')
-        account_path = os.path.join(tech_soft, 'account.json')
-        if os.path.exists(account_path):
-            with open(account_path, 'r') as f:
-                self.account = json.load(f)
+        if os.path.exists(ACCOUNT_PATH):
+            try:
+                with open(ACCOUNT_PATH, 'r') as f:
+                    self.account = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                self.account = {}
         else:
             self.account = {}
         self.input_pin = ""

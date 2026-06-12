@@ -1,20 +1,23 @@
-import os
 import json
 import win32con
 import re
 from core.app_base import SoftApp
+from core.config import TECH_SOFT
 
 class TechCalc(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.expression = ""
-        self.history_file = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'calc_history.json')
+        self.history_file = os.path.join(TECH_SOFT, 'calc_history.json')
         self.history = self.load_history()
 
     def load_history(self):
         if os.path.exists(self.history_file):
-            with open(self.history_file, 'r') as f:
-                return json.load(f)
+            try:
+                with open(self.history_file, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                return []
         return []
 
     def save_history(self):

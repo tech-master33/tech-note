@@ -2,11 +2,12 @@ import os
 import json
 import win32con
 from core.app_base import SoftApp
+from core.config import TECH_SOFT
 
 class AddressListApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
-        self.data_file = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'contacts', 'contacts.json')
+        self.data_file = os.path.join(TECH_SOFT, 'contacts', 'contacts.json')
         self.contacts = {}
         self.load_contacts()
         self.keys = list(self.contacts.keys())
@@ -14,8 +15,11 @@ class AddressListApp(SoftApp):
 
     def load_contacts(self):
         if os.path.exists(self.data_file):
-            with open(self.data_file, 'r') as f:
-                self.contacts = json.load(f)
+            try:
+                with open(self.data_file, 'r') as f:
+                    self.contacts = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                self.contacts = {}
         else:
             self.contacts = {"John Doe": "555-0101", "Jane Smith": "555-0102"}
             os.makedirs(os.path.dirname(self.data_file), exist_ok=True)

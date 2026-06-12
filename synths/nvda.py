@@ -9,18 +9,14 @@ class Synth:
         self.load_dll()
 
     def load_dll(self):
-        # Look for nvdaControllerClient.dll
-        # Usually we use the bitness-appropriate one. 
-        # Since this is for the 64-bit main app, we look for the 64-bit DLL.
         dll_path = "nvdaControllerClient.dll"
         if not os.path.exists(dll_path):
             dll_path = os.path.join("bin", "nvdaControllerClient64.dll")
-        
+
         try:
             self.dll = ctypes.windll.LoadLibrary(dll_path)
             print("NVDA Controller Client loaded successfully.")
         except Exception as e:
-            # Try 32-bit as fallback if we are somehow in a 32-bit process
             try:
                 self.dll = ctypes.windll.LoadLibrary("nvdaControllerClient32.dll")
             except:
@@ -29,9 +25,7 @@ class Synth:
     def speak(self, text, interrupt=True):
         if not self.dll:
             return
-            
         try:
-            # nvdaController_speakText(const wchar_t* text)
             if interrupt:
                 self.stop()
             self.dll.nvdaController_speakText(ctypes.c_wchar_p(text))
@@ -43,5 +37,36 @@ class Synth:
             self.dll.nvdaController_cancelSpeech()
 
     def test(self):
-        if not self.dll: return False
+        if not self.dll:
+            return False
         return self.dll.nvdaController_testIfRunning() == 0
+
+    def get_rate(self):
+        return 0
+
+    def set_rate(self, value):
+        pass
+
+    def get_volume(self):
+        return 100
+
+    def set_volume(self, value):
+        pass
+
+    def get_voice_names(self):
+        return ["NVDA"]
+
+    def get_current_voice_name(self):
+        return "NVDA"
+
+    def set_voice_by_index(self, index):
+        pass
+
+    def get_voice_index(self):
+        return 0
+
+    def reset_temp_params(self):
+        pass
+
+    def set_temp_params(self, rate=None, pitch=None):
+        pass

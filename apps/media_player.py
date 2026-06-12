@@ -2,12 +2,13 @@ import os
 import win32con
 from core.app_base import SoftApp
 from core.audio_player import AudioPlayer
+from core.config import TECH_SOFT
 
 
 class MediaPlayerApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
-        self.media_path = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'media')
+        self.media_path = os.path.join(TECH_SOFT, 'media')
         os.makedirs(self.media_path, exist_ok=True)
         self.player = AudioPlayer()
         self.index = 0

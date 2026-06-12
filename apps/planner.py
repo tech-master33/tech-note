@@ -1,20 +1,23 @@
-import os
 import json
 import win32con
 from core.app_base import SoftApp
+from core.config import TECH_SOFT
 
 class PlannerApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
-        self.data_file = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'planner.json')
+        self.data_file = os.path.join(TECH_SOFT, 'planner.json')
         self.tasks = []
         self.load_tasks()
         self.index = 0
 
     def load_tasks(self):
         if os.path.exists(self.data_file):
-            with open(self.data_file, 'r') as f:
-                self.tasks = json.load(f)
+            try:
+                with open(self.data_file, 'r') as f:
+                    self.tasks = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                self.tasks = []
         else:
             self.tasks = ["Task 1", "Task 2"]
             self.save_tasks()

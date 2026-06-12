@@ -51,9 +51,12 @@ class TechEdit(SoftApp):
             title="Open File"
         )
         if path:
-            with open(path, 'r') as f:
-                data = json.load(f)
-                self.text = data.get("text", "")
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                    self.text = data.get("text", "")
+            except (json.JSONDecodeError, IOError):
+                self.speak("Failed to open file.")
             self.filename = path
             self.speak("File opened: " + os.path.basename(path))
             self.window.update_text("Editing: " + os.path.basename(path))

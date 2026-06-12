@@ -1,11 +1,12 @@
 import os
 import win32con
 from core.app_base import SoftApp
+from core.config import TECH_SOFT
 
 class TechFiles(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
-        self.path = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'documents')
+        self.path = os.path.join(TECH_SOFT, 'documents')
         os.makedirs(self.path, exist_ok=True)
         self.items = []
         self.index = 0

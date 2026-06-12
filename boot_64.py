@@ -8,41 +8,26 @@ import pythoncom
 from core.menu import MenuSystem, build_braillenote_menu
 from ui.stealth_window import StealthWindow
 from synths.sapi_synth import SapiSynthBase
+from synths.registry import create_synth
 from apps.lock_screen import LockScreenApp
 from apps.options_menu import OptionsApp
 from apps.power_menu import PowerApp
 from core.setup_core import TechNoteSetup
 from core.audio_player import AudioPlayer
+from core.config import TECH_SOFT
 
 pythoncom.CoInitialize()
 
 class BrailleNoteApp:
     def __init__(self):
-        self.tech_soft = os.path.join(os.environ['USERPROFILE'], '.tech-soft')
+        self.tech_soft = TECH_SOFT
         if not os.path.exists(self.tech_soft):
             os.makedirs(self.tech_soft)
             for folder in ['documents', 'downloads', 'contacts', 'desktop']:
                 os.makedirs(os.path.join(self.tech_soft, folder))
 
         self.synth = SapiSynthBase()
-        settings_path = os.path.join(self.tech_soft, 'settings.json')
-        if os.path.exists(settings_path):
-            try:
-                with open(settings_path, 'r') as f:
-                    s = json.load(f)
-                rate = s.get("rate")
-                volume = s.get("volume")
-                voice_index = s.get("voice_index")
-                if rate is not None:
-                    self.synth.set_rate(rate)
-                if volume is not None:
-                    self.synth.set_volume(volume)
-                if voice_index is not None:
-                    names = self.synth.get_voice_names()
-                    if 0 <= voice_index < len(names):
-                        self.synth.set_voice_by_index(voice_index)
-            except Exception:
-                pass
+        self._apply_settings()
         self.window = StealthWindow(on_key_down=self.handle_key)
         self.menu = None
         self.current_app = None
@@ -61,6 +46,26 @@ class BrailleNoteApp:
             self.load_account_and_menu(account_path)
 
         print("TechNote Start Menu Running.")
+
+    def _apply_settings(self):
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+                rate = s.get("rate")
+                volume = s.get("volume")
+                voice_index = s.get("voice_index")
+                if rate is not None:
+                    self.synth.set_rate(rate)
+                if volume is not None:
+                    self.synth.set_volume(volume)
+                if voice_index is not None:
+                    names = self.synth.get_voice_names()
+                    if 0 <= voice_index < len(names):
+                        self.synth.set_voice_by_index(voice_index)
+            except Exception:
+                pass
 
     def _start_setup(self):
         setup = TechNoteSetup(self.synth, self.window)
@@ -97,8 +102,20 @@ class BrailleNoteApp:
             self._start_setup()
 
     def load_account_and_menu(self, path):
-        with open(path, 'r') as f:
-            self.account = json.load(f)
+        try:
+            with open(path, 'r') as f:
+                self.account = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            self.synth.speak("Account corrupted. Re-running setup.")
+            self._start_setup()
+            return
+
+        synth_module = self.account.get("synth_module", "sapi_synth")
+        if synth_module != "sapi_synth":
+            new_synth = create_synth(synth_module)
+            if new_synth:
+                self.synth = new_synth
+        self._apply_settings()
 
         self.synth.set_voice(self.account.get('default_synth', 'Auto'))
 

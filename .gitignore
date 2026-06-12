@@ -4,6 +4,5 @@ __pycache__/
 *.log
 bridge_log.txt
 crash.log
-resources/bridge_exe/
 bin/
 .env
