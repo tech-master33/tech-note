@@ -4,8 +4,11 @@ import subprocess
 import sys
 import win32con
 from core.app_base import SoftApp
+from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT, ACCOUNT_PATH, SETTINGS_PATH
+from core.audio_player import AudioPlayer
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CLICK_PATH = os.path.join(BASE_DIR, 'sounds', 'clicked.ogg')
 
 class SettingsApp(SoftApp):
     def __init__(self, manager, window, on_reset_account=None):
@@ -14,15 +17,37 @@ class SettingsApp(SoftApp):
         self.settings_file = SETTINGS_PATH
         self.settings = {"voice_speed": 100, "theme": "Dark"}
         self.load_settings()
-        self.options = ["Account", "Theme", "Check for Updates", "About Tech-Note", "Reset TechNote"]
-        self.index = 0
         self.pin_mode = None
         self.confirm_mode = None
-        self.account_mode = None
-        self.account_index = 0
-        self.account_options = ["Change Username", "Change Password", "Change PIN", "Lock Type", "Back"]
-        self.text_input = ""
-        self.text_input_label = ""
+        self.text_input = None
+        self.account_menu = None
+        self._build_main_menu()
+
+    def _play_click(self):
+        if os.path.exists(CLICK_PATH):
+            AudioPlayer().play_file(CLICK_PATH)
+
+    def _build_main_menu(self):
+        self.account_menu = None
+        root = MenuNode("Settings")
+        root.add_child(MenuNode("Account", self._enter_account_menu))
+        root.add_child(MenuNode("Theme", self._toggle_theme))
+        root.add_child(MenuNode("Check for Updates", self._check_for_updates))
+        root.add_child(MenuNode("About Tech-Note", self._about))
+        root.add_child(MenuNode("Reset TechNote", self._reset_technote))
+        self.menu = MenuSystem(root, self.speak, play_sound=self._play_click)
+
+    def _build_account_menu(self):
+        account = self._load_account()
+        self._current_lock_type = account.get("lock_type", "pin")
+        lt = "PIN" if self._current_lock_type == "pin" else "Password"
+        root = MenuNode("Account")
+        root.add_child(MenuNode("Change Username", lambda: self._start_text_input("username", "Enter new username.")))
+        root.add_child(MenuNode("Change Password", lambda: self._start_text_input("password", "Enter new password.")))
+        root.add_child(MenuNode("Change PIN", self._start_pin_reset))
+        root.add_child(MenuNode(f"Lock Type ({lt})", self._toggle_lock_type))
+        root.add_child(MenuNode("Back", self._back_from_account))
+        self.account_menu = MenuSystem(root, self.speak, play_sound=self._play_click)
 
     def load_settings(self):
         if os.path.exists(self.settings_file):
@@ -50,15 +75,27 @@ class SettingsApp(SoftApp):
             json.dump(account, f)
 
     def on_focus(self):
-        self.speak(f"Settings. {self.options[self.index]}")
-        self.window.update_text("Settings: " + self.options[self.index])
+        item = self.menu.get_current_item()
+        title = item.title if item else "Settings"
+        self.speak("Settings. " + title)
+        self.window.update_text("Settings: " + title)
+
+    def _toggle_theme(self):
+        current = self.settings.get("theme", "Dark")
+        self.settings["theme"] = "Light" if current == "Dark" else "Dark"
+        self.save_settings()
+        self.speak(f"Theme set to {self.settings['theme']}")
+
+    def _about(self):
+        self.speak("Tech-Note. A self voicing keyboard driven interface for Windows.")
+        self.window.update_text("Tech-Note v1.0")
 
     def on_key(self, vk):
         if self.pin_mode:
             self._handle_pin_input(vk)
             return
 
-        if self.account_mode == "input":
+        if self.text_input is not None:
             self._handle_text_input(vk)
             return
 
@@ -68,55 +105,52 @@ class SettingsApp(SoftApp):
             elif vk == win32con.VK_ESCAPE:
                 self.confirm_mode = None
                 self.speak("Cancelled.")
-                self.window.update_text("Settings: " + self.options[self.index])
+                self._announce_main()
             return
 
-        if self.account_mode == "menu":
-            self._handle_account_menu(vk)
+        if self.account_menu:
+            if vk == win32con.VK_ESCAPE:
+                self._back_from_account()
+                return
+            if vk in (win32con.VK_BACK, win32con.VK_UP):
+                self.account_menu.previous()
+            elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+                self.account_menu.next()
+            elif vk == win32con.VK_RETURN:
+                self.account_menu.select()
+            item = self.account_menu.get_current_item()
+            if item:
+                self.window.update_text("Account: " + item.title)
             return
 
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
         elif vk in (win32con.VK_BACK, win32con.VK_UP):
-            self.index = (self.index - 1) % len(self.options)
-            self.speak(self.options[self.index])
-            self.window.update_text("Settings: " + self.options[self.index])
+            self.menu.previous()
         elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
-            self.index = (self.index + 1) % len(self.options)
-            self.speak(self.options[self.index])
-            self.window.update_text("Settings: " + self.options[self.index])
+            self.menu.next()
         elif vk == win32con.VK_RETURN:
-            self._select_current()
+            self.menu.select()
+        item = self.menu.get_current_item()
+        if item:
+            self.window.update_text("Settings: " + item.title)
 
-    def _select_current(self):
-        key = self.options[self.index].lower().replace(' ', '_')
-        if key == "account":
-            self._enter_account_menu()
-        elif key == "theme":
-            current = self.settings.get("theme", "Dark")
-            self.settings["theme"] = "Light" if current == "Dark" else "Dark"
-            self.save_settings()
-            self.speak(f"Theme set to {self.settings['theme']}")
-        elif key == "about_tech-note":
-            self.speak("Tech-Note. A self voicing keyboard driven interface for Windows.")
-            self.window.update_text("Tech-Note v1.0")
-        elif key == "check_for_updates":
-            self._check_for_updates()
-        elif key == "reset_technote":
-            self._reset_technote()
+    def _announce_main(self):
+        item = self.menu.get_current_item()
+        title = item.title if item else "Settings"
+        self.speak(title)
+        self.window.update_text("Settings: " + title)
 
     def _enter_account_menu(self):
-        self.account_mode = "menu"
-        self.account_index = 0
-        account = self._load_account()
-        self._current_lock_type = account.get("lock_type", "pin")
-        self._update_account_options()
-        self.speak("Account: " + self.account_options[self.account_index])
-        self.window.update_text("Account: " + self.account_options[self.account_index])
+        self._build_account_menu()
+        item = self.account_menu.get_current_item()
+        title = item.title if item else "Account"
+        self.speak("Account. " + title)
+        self.window.update_text("Account: " + title)
 
-    def _update_account_options(self):
-        lt = "PIN" if self._current_lock_type == "pin" else "Password"
-        self.account_options[3] = f"Lock Type ({lt})"
+    def _back_from_account(self):
+        self.account_menu = None
+        self._announce_main()
 
     def _toggle_lock_type(self):
         account = self._load_account()
@@ -126,55 +160,25 @@ class SettingsApp(SoftApp):
         self._save_account(account)
         self._current_lock_type = new_type
         lt_name = "PIN" if new_type == "pin" else "Password"
-        self._update_account_options()
+        self._build_account_menu()
+        item = self.account_menu.get_current_item()
+        title = item.title if item else "Account"
         self.speak(f"Lock type set to {lt_name}.")
-        self.window.update_text("Account: " + self.account_options[self.account_index])
-
-    def _handle_account_menu(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.account_mode = None
-            self.speak(self.options[self.index])
-            self.window.update_text("Settings: " + self.options[self.index])
-            return
-        if vk in (win32con.VK_BACK, win32con.VK_UP):
-            self.account_index = (self.account_index - 1) % len(self.account_options)
-            self.speak(self.account_options[self.account_index])
-            self.window.update_text("Account: " + self.account_options[self.account_index])
-        elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
-            self.account_index = (self.account_index + 1) % len(self.account_options)
-            self.speak(self.account_options[self.account_index])
-            self.window.update_text("Account: " + self.account_options[self.account_index])
-        elif vk == win32con.VK_RETURN:
-            self._select_account_option()
-
-    def _select_account_option(self):
-        option = self.account_options[self.account_index]
-        if option == "Back":
-            self.account_mode = None
-            self.speak(self.options[self.index])
-            self.window.update_text("Settings: " + self.options[self.index])
-        elif option == "Change Username":
-            self._start_text_input("username", "Enter new username.")
-        elif option == "Change Password":
-            self._start_text_input("password", "Enter new password.")
-        elif option == "Change PIN":
-            self._start_pin_reset()
-        elif option == "Lock Type":
-            self._toggle_lock_type()
+        self.window.update_text("Account: " + title)
 
     def _start_text_input(self, field, prompt):
-        self.account_mode = "input"
         self.text_input_field = field
         self.text_input = ""
-        self.text_input_label = field.capitalize()
         self.speak(prompt)
-        self.window.update_text(f"{self.text_input_label}: ")
+        self.window.update_text(f"{field.capitalize()}: ")
 
     def _handle_text_input(self, vk):
         if vk == win32con.VK_ESCAPE:
-            self.account_mode = "menu"
-            self.speak(self.account_options[self.account_index])
-            self.window.update_text("Account: " + self.account_options[self.account_index])
+            self.text_input = None
+            item = self.account_menu.get_current_item()
+            title = item.title if item else "Account"
+            self.speak(title)
+            self.window.update_text("Account: " + title)
             return
         if vk == win32con.VK_RETURN:
             val = self.text_input.strip()
@@ -190,10 +194,11 @@ class SettingsApp(SoftApp):
                 account["password"] = val
                 self._save_account(account)
                 self.speak("Password updated.")
-            self.text_input = ""
-            self.account_mode = "menu"
-            self.speak(self.account_options[self.account_index])
-            self.window.update_text("Account: " + self.account_options[self.account_index])
+            self.text_input = None
+            item = self.account_menu.get_current_item()
+            title = item.title if item else "Account"
+            self.speak(title)
+            self.window.update_text("Account: " + title)
             return
         if vk == win32con.VK_BACK:
             if self.text_input:
@@ -252,7 +257,7 @@ class SettingsApp(SoftApp):
             self.speak("Git not found.")
         except Exception:
             self.speak("Update error.")
-        self.window.update_text("Settings: " + self.options[self.index])
+        self._announce_main()
 
     def _install_requirements(self):
         req_path = os.path.join(BASE_DIR, 'requirements.txt')
@@ -353,12 +358,14 @@ class SettingsApp(SoftApp):
         self._return_from_pin()
 
     def _return_from_pin(self):
-        if self.account_mode == "menu":
-            self.speak(self.account_options[self.account_index])
-            self.window.update_text("Account: " + self.account_options[self.account_index])
+        if self.account_menu:
+            self._build_account_menu()
+            item = self.account_menu.get_current_item()
+            title = item.title if item else "Account"
+            self.speak(title)
+            self.window.update_text("Account: " + title)
         else:
-            self.speak(self.options[self.index])
-            self.window.update_text("Settings: " + self.options[self.index])
+            self._announce_main()
 
     def _reset_technote(self):
         self.confirm_mode = "confirm_reset"
