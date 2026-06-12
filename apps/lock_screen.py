@@ -60,9 +60,14 @@ class LockScreenApp(SoftApp):
         date_str = now.strftime("%A, %B %d")
         return f"{time_str}. {date_str}. "
 
+    def _announce_status(self):
+        info = self._time_info() + self._battery_info()
+        self.speak(info)
+
     def on_focus(self):
         self.state = STATE_MENU
-        self.window.update_text("Locked")
+        info = self._time_info() + self._battery_info()
+        self.window.update_text(info)
         self.speak("Lock Screen. " + self.menu.get_current_item().title)
 
     def _start_pin_entry(self):
@@ -72,6 +77,10 @@ class LockScreenApp(SoftApp):
         self.window.update_text("PIN:")
 
     def on_key(self, vk):
+        if vk == win32con.VK_F5:
+            self._announce_status()
+            return
+
         if self.state == STATE_MENU:
             if vk == win32con.VK_ESCAPE:
                 self.exit_app()
