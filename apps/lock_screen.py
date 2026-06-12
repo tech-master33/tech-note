@@ -53,10 +53,7 @@ class LockScreenApp(SoftApp):
         bat = self._battery_text()
         if bat:
             self.items.append(bat)
-        lock_label = "Unlock"
-        if self.lock_type == "password":
-            lock_label = "Unlock (password)"
-        self.items.append(lock_label)
+        self.items.append("Unlock")
 
     def _display_text(self):
         parts = []
