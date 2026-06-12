@@ -42,7 +42,9 @@ class StealthWindow:
         except:
             class_atom = 0 
             
-        ex_style = WS_EX_LAYERED | WS_EX_TOOLWINDOW
+        # WS_EX_APPWINDOW makes it show in Alt+Tab and Taskbar.
+        # Removing WS_EX_TOOLWINDOW as it hides it from Alt+Tab.
+        ex_style = WS_EX_LAYERED | win32con.WS_EX_APPWINDOW
         
         # Center the window
         screen_w = win32api.GetSystemMetrics(win32con.SM_CXSCREEN)
@@ -54,14 +56,13 @@ class StealthWindow:
         self.hwnd = win32gui.CreateWindowEx(
             ex_style,
             wc.lpszClassName,
-            " ", # Space title (hide from screen readers)
+            "Tech-Note", # Title helps with Alt+Tab visibility
             win32con.WS_POPUP | win32con.WS_VISIBLE,
             x, y, w, h,
             0, 0, wc.hInstance, None
         )
 
         win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 255, LWA_ALPHA)
-        win32gui.SetWindowText(self.hwnd, " ")
         
         # Initial set to topmost and foreground
         win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
@@ -122,18 +123,14 @@ class StealthWindow:
             return 0
         elif msg == win32con.WM_ACTIVATE:
             if wparam == win32con.WA_INACTIVE:
-                # When inactive, allow other windows to be on top
+                # When inactive, allow other windows to be on top.
+                # Crucial for Alt+Tab switcher to be visible.
                 win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
                                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
             else:
                 # When active, stay on top
                 win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
                                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
-            return 0
-        elif msg == win32con.WM_SETFOCUS:
-            # Ensure we are topmost when focused
-            win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0,
-                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
             return 0
         elif msg == win32con.WM_DESTROY:
             self.running = False
