@@ -16,6 +16,7 @@ class TechNoteSetup(SoftApp):
         self.voice_index = 0
         self.current_step = 0
         self.username = ""
+        self.password = ""
         self.pin = ""
         self.active = True
 
@@ -39,7 +40,8 @@ class TechNoteSetup(SoftApp):
             if vk == win32con.VK_RETURN:
                 if self.username:
                     self.current_step += 1
-                    self.speak("Enter 4 digit PIN.")
+                    self.speak("Enter password.")
+                    self.window.update_text("Password: ")
             elif vk == win32con.VK_BACK:
                 self.username = self.username[:-1]
                 self.window.update_text(self.username)
@@ -49,6 +51,18 @@ class TechNoteSetup(SoftApp):
                 self.speak(chr(vk))
 
         elif self.current_step == 2:
+            if vk == win32con.VK_RETURN:
+                if self.password:
+                    self.current_step += 1
+                    self.speak("Enter 4 digit PIN.")
+            elif vk == win32con.VK_BACK:
+                self.password = self.password[:-1]
+                self.window.update_text("*" * len(self.password))
+            elif (0x41 <= vk <= 0x5A) or (0x30 <= vk <= 0x39):
+                self.password += chr(vk).lower()
+                self.window.update_text("*" * len(self.password))
+
+        elif self.current_step == 3:
             if 0x30 <= vk <= 0x39:
                 self.pin += chr(vk)
                 self.window.update_text("*" * len(self.pin))
@@ -61,7 +75,7 @@ class TechNoteSetup(SoftApp):
                 self.pin = self.pin[:-1]
                 self.window.update_text("*" * len(self.pin))
 
-        elif self.current_step == 3:
+        elif self.current_step == 4:
             if vk == win32con.VK_DOWN or vk == win32con.VK_SPACE:
                 self.synth_index = (self.synth_index + 1) % len(self.available_synths)
                 self.window.update_text(self.available_synths[self.synth_index][0])
@@ -80,7 +94,7 @@ class TechNoteSetup(SoftApp):
                 else:
                     self.speak("No voices available. Press Enter to continue.")
 
-        elif self.current_step == 4:
+        elif self.current_step == 5:
             if not self.voices:
                 self.speak("No voices available. Press Enter to continue.")
                 if vk == win32con.VK_RETURN:
@@ -101,7 +115,7 @@ class TechNoteSetup(SoftApp):
                 self.current_step += 1
                 self.speak("Setup complete. Press Enter.")
 
-        elif self.current_step == 5:
+        elif self.current_step == 6:
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:
@@ -110,6 +124,7 @@ class TechNoteSetup(SoftApp):
     def save_account(self):
         config = {
             "username": self.username,
+            "password": self.password,
             "pin": self.pin,
             "synth_module": self.synth_module,
             "default_synth": self.voices[self.voice_index] if self.voices else "Default"
