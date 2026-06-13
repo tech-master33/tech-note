@@ -4,6 +4,7 @@ import subprocess
 import json
 import win32con
 import win32api
+import importlib.metadata
 from synths.nvda import Synth as NVDASynth
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -13,7 +14,8 @@ LOG_PATH = os.path.join(BASE_DIR, "recovery.log")
 def _log(message):
     try:
         with open(LOG_PATH, "a") as f:
-            f.write(message + "\n")
+            f.write(message + "
+")
         print(f"RecoveryMenu: {message}")
     except Exception as e:
         print(f"Logging failed: {e}")
@@ -37,8 +39,8 @@ def check_requirements():
                 continue
             pkg_name = pkg.split('==')[0].split('>=')[0].split('<=')[0].strip()
             try:
-                __import__(pkg_name)
-            except ImportError:
+                importlib.metadata.version(pkg_name)
+            except importlib.metadata.PackageNotFoundError:
                 missing.append(pkg_name)
     return missing
 
