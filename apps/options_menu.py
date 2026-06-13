@@ -17,12 +17,7 @@ class OptionsApp(SoftApp):
         root.add_child(MenuNode("Speech Rate", lambda: self._enter_adjust("speech_rate")))
         root.add_child(MenuNode("Volume", lambda: self._enter_adjust("volume")))
         root.add_child(MenuNode("Voice", lambda: self._enter_adjust("voice")))
-        ctx = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sounds', 'clicked.ogg')
-        def play():
-            if os.path.exists(ctx):
-                from core.audio_player import AudioPlayer
-                AudioPlayer().play_file(ctx)
-        self.menu = MenuSystem(root, self.speak, play_sound=play)
+        self.menu = MenuSystem(root, self.speak)
 
     def on_focus(self):
         item = self.menu.get_current_item()

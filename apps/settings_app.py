@@ -6,9 +6,7 @@ import win32con
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT, ACCOUNT_PATH, SETTINGS_PATH
-from core.audio_player import AudioPlayer
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLICK_PATH = os.path.join(BASE_DIR, 'sounds', 'clicked.ogg')
 
 class SettingsApp(SoftApp):
     def __init__(self, manager, window, on_reset_account=None):
@@ -23,10 +21,6 @@ class SettingsApp(SoftApp):
         self.account_menu = None
         self._build_main_menu()
 
-    def _play_click(self):
-        if os.path.exists(CLICK_PATH):
-            AudioPlayer().play_file(CLICK_PATH)
-
     def _build_main_menu(self):
         self.account_menu = None
         root = MenuNode("Settings")
@@ -35,7 +29,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Check for Updates", self._check_for_updates))
         root.add_child(MenuNode("About Tech-Note", self._about))
         root.add_child(MenuNode("Reset TechNote", self._reset_technote))
-        self.menu = MenuSystem(root, self.speak, play_sound=self._play_click)
+        self.menu = MenuSystem(root, self.speak)
 
     def _build_account_menu(self):
         account = self._load_account()
@@ -47,7 +41,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Change PIN", self._start_pin_reset))
         root.add_child(MenuNode(f"Lock Type ({lt})", self._toggle_lock_type))
         root.add_child(MenuNode("Back", self._back_from_account))
-        self.account_menu = MenuSystem(root, self.speak, play_sound=self._play_click)
+        self.account_menu = MenuSystem(root, self.speak)
 
     def load_settings(self):
         if os.path.exists(self.settings_file):

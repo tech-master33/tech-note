@@ -11,12 +11,7 @@ class PowerApp(SoftApp):
         root = MenuNode("Power Menu")
         root.add_child(MenuNode("Restart Tech-Note", self._do_restart))
         root.add_child(MenuNode("Shutdown Tech-Note", self._do_shutdown))
-        ctx = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sounds', 'clicked.ogg')
-        def play():
-            if os.path.exists(ctx):
-                from core.audio_player import AudioPlayer
-                AudioPlayer().play_file(ctx)
-        self.menu = MenuSystem(root, self.speak, play_sound=play)
+        self.menu = MenuSystem(root, self.speak)
 
     def on_focus(self):
         item = self.menu.get_current_item()

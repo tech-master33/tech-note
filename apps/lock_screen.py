@@ -11,7 +11,6 @@ from core.config import ACCOUNT_PATH
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UNLOCK_SOUND = os.path.join(BASE, 'sounds', 'unlock.mp3')
-CLICK_SOUND = os.path.join(BASE, 'sounds', 'clicked.ogg')
 
 class LockScreenApp(SoftApp):
     def __init__(self, manager, window, success_callback):
@@ -55,10 +54,7 @@ class LockScreenApp(SoftApp):
         if bat:
             root.add_child(MenuNode(bat))
         root.add_child(MenuNode("Unlock", self._start_entry))
-        def play():
-            if os.path.exists(CLICK_SOUND):
-                AudioPlayer().play_file(CLICK_SOUND)
-        self.menu = MenuSystem(root, self.speak, play_sound=play)
+        self.menu = MenuSystem(root, self.speak)
 
     def _display_text(self):
         children = self.menu.current_node.children
