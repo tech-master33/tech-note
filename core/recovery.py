@@ -13,8 +13,7 @@ LOG_PATH = os.path.join(BASE_DIR, "recovery.log")
 def _log(message):
     try:
         with open(LOG_PATH, "a") as f:
-            f.write(message + "
-")
+            f.write(message + "\n")
         print(f"RecoveryMenu: {message}")
     except Exception as e:
         print(f"Logging failed: {e}")
