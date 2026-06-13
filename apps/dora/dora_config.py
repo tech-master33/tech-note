@@ -1,5 +1,6 @@
 import os
 import json
+import shutil
 from core.config import TECH_SOFT, SETTINGS_PATH
 
 DORA_KEYS = [
@@ -18,6 +19,33 @@ DORA_DEFAULTS = {
     'language': 'en',
     'tts_rate': 0,
 }
+
+OLD_DORA_DIR = os.path.join(TECH_SOFT, 'dora')
+OLD_SETTINGS_FILE = os.path.join(OLD_DORA_DIR, 'settings.json')
+
+def _migrate_old_config():
+    if not os.path.exists(OLD_SETTINGS_FILE):
+        return
+    try:
+        with open(OLD_SETTINGS_FILE, 'r') as f:
+            old = json.load(f)
+        all_settings = _load_all_settings()
+        changed = False
+        for k in DORA_KEYS:
+            if k in old:
+                all_settings[k] = old[k]
+                changed = True
+        if changed:
+            _save_all_settings(all_settings)
+        os.remove(OLD_SETTINGS_FILE)
+        try:
+            os.rmdir(OLD_DORA_DIR)
+        except OSError:
+            pass
+    except Exception as e:
+        print(f"Migration error: {e}")
+
+_migrate_old_config()
 
 def _load_all_settings():
     if os.path.exists(SETTINGS_PATH):
