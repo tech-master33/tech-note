@@ -3,7 +3,7 @@ import win32con
 from core.app_base import SoftApp
 from core.audio_player import AudioPlayer
 from core.config import TECH_SOFT
-
+from core.menu import MenuNode, MenuSystem
 
 class MediaPlayerApp(SoftApp):
     def __init__(self, manager, window):
@@ -11,23 +11,42 @@ class MediaPlayerApp(SoftApp):
         self.media_path = os.path.join(TECH_SOFT, 'media')
         os.makedirs(self.media_path, exist_ok=True)
         self.player = AudioPlayer()
-        self.index = 0
-        self.refresh_tracks()
+        self.menu = None
+        self.tracks = []
 
-    def refresh_tracks(self):
+    def _build_menu(self):
         try:
-            self.tracks = [f for f in os.listdir(self.media_path)
-                          if f.lower().endswith(('.mp3', '.wav', '.flac', '.ogg', '.wma', '.m4a', '.aac'))]
+            self.tracks = sorted([f for f in os.listdir(self.media_path)
+                          if f.lower().endswith(('.mp3', '.wav', '.flac', '.ogg', '.wma', '.m4a', '.aac'))])
         except OSError:
             self.tracks = []
-        if self.index >= len(self.tracks):
-            self.index = 0
+            
+        root = MenuNode("Media Player")
+        for track in self.tracks:
+            root.add_child(MenuNode(track, lambda t=track: self._play_track(t)))
+        
+        if not self.tracks:
+            root.add_child(MenuNode("No media found"))
+            
+        self.menu = MenuSystem(root, self.speak)
+
+    def _play_track(self, filename):
+        file_path = os.path.join(self.media_path, filename)
+        if not os.path.exists(file_path):
+            self.speak("File not found.")
+            return
+        ok = self.player.play_file(file_path)
+        if ok:
+            self.speak("Playing " + filename)
+            self.window.update_text("Playing: " + filename)
+        else:
+            self.speak("Playback failed.")
 
     def on_focus(self):
-        self.refresh_tracks()
-        msg = self.tracks[self.index] if self.tracks else "No media found"
-        self.speak("Media Player. " + msg)
-        self.window.update_text("Media: " + msg)
+        self._build_menu()
+        item = self.menu.get_current_item()
+        self.speak("Media Player. " + item.title)
+        self.window.update_text("Media: " + item.title)
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
@@ -35,44 +54,29 @@ class MediaPlayerApp(SoftApp):
             self.exit_app()
             return
 
-        if not self.tracks:
-            self.speak("No media found in media folder")
+        if vk == win32con.VK_F1:
+            self.player.stop()
+            self.speak("Stopped")
             return
 
-        if vk == win32con.VK_SPACE or vk == win32con.VK_DOWN:
+        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
             self.player.stop()
-            self.index = (self.index + 1) % len(self.tracks)
-            self.announce()
-        elif vk == win32con.VK_BACK or vk == win32con.VK_UP:
+            self.menu.next()
+        elif vk in (win32con.VK_BACK, win32con.VK_UP):
             self.player.stop()
-            self.index = (self.index - 1) % len(self.tracks)
-            self.announce()
+            self.menu.previous()
         elif vk == win32con.VK_RETURN:
-            self._play_current()
-        elif vk == 0xBB:
-            vol = min(1.0, self.player.volume + 0.1)
-            self.player.set_volume(vol)
-            self.speak(f"Volume {int(vol * 100)}")
-        elif vk == 0xBD:
-            vol = max(0.0, self.player.volume - 0.1)
-            self.player.set_volume(vol)
-            self.speak(f"Volume {int(vol * 100)}")
+            self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            self.menu.first_letter_nav(chr(vk))
+        elif vk == 0xBB: # Plus key
+            self.speak("Volume control not available for this player.")
+        elif vk == 0xBD: # Minus key
+            self.speak("Volume control not available for this player.")
 
-    def _play_current(self):
-        if not self.tracks:
-            return
-        file_path = os.path.join(self.media_path, self.tracks[self.index])
-        if not os.path.exists(file_path):
-            self.speak("File not found.")
-            return
-        ok = self.player.play_file(file_path)
-        if ok:
-            self.speak("Playing " + self.tracks[self.index])
-            self.window.update_text("Now Playing: " + self.tracks[self.index])
-        else:
-            self.speak("Playback failed.")
-
-    def announce(self):
-        item = self.tracks[self.index]
-        self.speak(item)
-        self.window.update_text(item)
+        item = self.menu.get_current_item()
+        if item:
+            self.window.update_text("Media: " + item.title)
+            
+    def get_help_text(self):
+        return "Media Player. Space for next, Backspace for previous. Enter to play. F1 to stop. Press Escape to exit."

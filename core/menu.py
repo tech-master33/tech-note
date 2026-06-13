@@ -87,7 +87,10 @@ class MenuSystem:
     def announce_current(self):
         item = self.get_current_item()
         if item:
-            self.speak(item.title)
+            total = len(self.current_node.children)
+            pos = self.current_index + 1
+            # Shortcut for first-letter navigation or quick browsing: pos of total
+            self.speak(f"{item.title}. {pos} of {total}.")
         else:
             self.speak(self.current_node.title)
 

@@ -191,3 +191,6 @@ class TechEdit(SoftApp):
         if vk in sym_map:
             return sym_map[vk][1] if shift else sym_map[vk][0]
         return None
+
+    def get_help_text(self):
+        return "Word Processor. Type to enter text. F1 to Save, F2 for Save As, F3 to Open. Press Escape to exit."

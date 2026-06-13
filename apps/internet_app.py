@@ -150,13 +150,14 @@ class InternetApp(SoftApp):
 
     def _progress_ticker(self):
         while self.fetching:
-            # Subtle tick sound or message
-            # Since we don't have a small tick.wav yet, we can use a very short speak or print
-            # Or just wait for implementation of more sounds
-            time.sleep(1.5)
-            if self.fetching:
-                # We could play a sound here if we had a tick.wav
-                pass
+            # Subtle auditory feedback
+            self.speak("Working")
+            time.sleep(3.0)
+
+    def get_help_text(self):
+        if self.reading_mode:
+            return "Reading Mode. Space for next line, Backspace for previous. H for next heading. Escape to return to bookmarks."
+        return "Internet Browser. Space for next bookmark, Backspace for previous. Enter to open. O for Open URL. Press Escape to exit."
 
     def fetch_page(self, url):
         if not HAS_WEB_DEPS:

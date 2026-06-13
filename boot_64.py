@@ -180,6 +180,14 @@ class BrailleNoteApp:
             self.synth.speak(info)
             return
 
+        # Global Help (F1)
+        if vk == win32con.VK_F1:
+            if self.current_app and self.current_app.active:
+                self.synth.speak(self.current_app.get_help_text())
+            else:
+                self.synth.speak("Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. Backtick for power.")
+            return
+
         if self.current_app and self.current_app.active:
             self.current_app.on_key(vk)
             if not self.current_app.active:

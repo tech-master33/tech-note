@@ -15,6 +15,10 @@ class SoftApp:
         """Called when the app becomes active."""
         pass
 
+    def get_help_text(self):
+        """Return a string explaining the app's controls."""
+        return "No help available for this application."
+
     def exit_app(self):
         """Close the app and return to the main menu."""
         self.manager.reset_temp_params()
