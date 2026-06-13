@@ -35,10 +35,16 @@ class SettingsApp(SoftApp):
         account = self._load_account()
         self._current_lock_type = account.get("lock_type", "pin")
         lt = "PIN" if self._current_lock_type == "pin" else "Password"
+        
         root = MenuNode("Account")
         root.add_child(MenuNode("Change Username", lambda: self._start_text_input("username", "Enter new username.")))
-        root.add_child(MenuNode("Change Password", lambda: self._start_text_input("password", "Enter new password.")))
-        root.add_child(MenuNode("Change PIN", self._start_pin_reset))
+        
+        # Action depends on current lock type
+        if self._current_lock_type == "pin":
+            root.add_child(MenuNode("Change PIN", self._start_pin_reset))
+        else:
+            root.add_child(MenuNode("Change Password", lambda: self._start_text_input("password", "Enter new password.")))
+            
         root.add_child(MenuNode(f"Lock Type ({lt})", self._toggle_lock_type))
         root.add_child(MenuNode("Back", self._back_from_account))
         self.account_menu = MenuSystem(root, self.speak)
@@ -153,12 +159,15 @@ class SettingsApp(SoftApp):
         account["lock_type"] = new_type
         self._save_account(account)
         self._current_lock_type = new_type
+        
         lt_name = "PIN" if new_type == "pin" else "Password"
-        self._build_account_menu()
-        item = self.account_menu.get_current_item()
-        title = item.title if item else "Account"
         self.speak(f"Lock type set to {lt_name}.")
-        self.window.update_text("Account: " + title)
+        
+        # Immediately enter the corresponding reset/input mode
+        if new_type == "pin":
+            self._start_pin_reset()
+        else:
+            self._start_text_input("password", "Enter new password.")
 
     def _start_text_input(self, field, prompt):
         self.text_input_field = field
