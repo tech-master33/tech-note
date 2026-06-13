@@ -12,9 +12,8 @@ class DoraApp(SoftApp):
         super().__init__(manager, window)
         self.assistant = DoraAssistant(self.speak)
         self.voice_thread = None
+        self._setup_done = False
         self._build_menu()
-        if is_first_run():
-            self._run_setup()
 
     def _build_menu(self):
         root = MenuNode("Dora Assistant")
@@ -41,6 +40,10 @@ class DoraApp(SoftApp):
 
     def on_focus(self):
         self._build_menu()
+        if is_first_run() and not self._setup_done:
+            self._setup_done = True
+            self._run_setup()
+            self._build_menu()
         item = self.menu.get_current_item()
         title = item.title if item else "Dora Assistant"
         self.window.update_text(title)

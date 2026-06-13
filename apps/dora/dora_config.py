@@ -1,6 +1,5 @@
 import os
 import json
-import shutil
 from core.config import TECH_SOFT, SETTINGS_PATH
 
 DORA_KEYS = [
@@ -22,6 +21,23 @@ DORA_DEFAULTS = {
 
 OLD_DORA_DIR = os.path.join(TECH_SOFT, 'dora')
 OLD_SETTINGS_FILE = os.path.join(OLD_DORA_DIR, 'settings.json')
+
+def _load_all_settings():
+    if os.path.exists(SETTINGS_PATH):
+        try:
+            with open(SETTINGS_PATH, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_all_settings(data):
+    os.makedirs(TECH_SOFT, exist_ok=True)
+    try:
+        with open(SETTINGS_PATH, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Error saving settings: {e}")
 
 def _migrate_old_config():
     if not os.path.exists(OLD_SETTINGS_FILE):
@@ -46,23 +62,6 @@ def _migrate_old_config():
         print(f"Migration error: {e}")
 
 _migrate_old_config()
-
-def _load_all_settings():
-    if os.path.exists(SETTINGS_PATH):
-        try:
-            with open(SETTINGS_PATH, 'r') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {}
-
-def _save_all_settings(data):
-    os.makedirs(TECH_SOFT, exist_ok=True)
-    try:
-        with open(SETTINGS_PATH, 'w') as f:
-            json.dump(data, f, indent=2)
-    except Exception as e:
-        print(f"Error saving settings: {e}")
 
 def load_settings():
     all_settings = _load_all_settings()

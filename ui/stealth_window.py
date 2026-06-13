@@ -147,8 +147,6 @@ class StealthWindow:
                              win32con.DT_CENTER | win32con.DT_TOP | win32con.DT_WORDBREAK)
             
             win32gui.SelectObject(hdc, old_font)
-            if font_obj:
-                win32gui.DeleteObject(font)
             win32gui.EndPaint(hwnd, ps)
             return 0
         elif msg == win32con.WM_SYSCOMMAND:
@@ -156,6 +154,7 @@ class StealthWindow:
                 return 0
             return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
         elif msg == win32con.WM_CLOSE:
+            win32gui.DestroyWindow(hwnd)
             return 0
         elif msg == 0x003D:  # WM_GETOBJECT
             return 0
@@ -183,5 +182,5 @@ class StealthWindow:
 
     def close(self):
         self.running = False
-        if self.hwnd:
+        if self.hwnd and win32gui.IsWindow(self.hwnd):
             win32gui.PostMessage(self.hwnd, win32con.WM_CLOSE, 0, 0)

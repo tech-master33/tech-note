@@ -294,7 +294,6 @@ class BrailleNoteApp:
     def _open_dora_menu(self):
         self._typing_buffer = ""
         if isinstance(self.current_app, DoraApp):
-            self._typing_buffer = ""
             self.current_app = None
             if self.menu:
                 self.menu.announce_current()
@@ -315,7 +314,6 @@ class BrailleNoteApp:
 
     def _open_dora_voice(self):
         if isinstance(self.current_app, DoraApp):
-            from apps.dora.dora_app import DoraApp as DA
             self.current_app.assistant.run_voice_loop()
             return
         if self._dora_voice_thread and self._dora_voice_thread.is_alive():

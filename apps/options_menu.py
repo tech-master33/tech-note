@@ -343,6 +343,7 @@ class OptionsApp(SoftApp):
             for k in keys:
                 names.append(vk_name_map.get(k, f"VK_{k}"))
             display = f"{label} [{' '.join(names)}]"
+            root.add_child(MenuNode(display, lambda a=action: self._start_rebind(a)))
         root.add_child(MenuNode("Reset to Defaults", self._reset_bindings))
         root.add_child(MenuNode("Back", self._back_from_bindings))
         self.menu = MenuSystem(root, self.speak)

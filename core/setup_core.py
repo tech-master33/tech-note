@@ -57,7 +57,7 @@ class TechNoteSetup(SoftApp):
                 self.lock_type = "pin" if current_lock == 0 else "password"
                 self.window.update_text("Lock Type: " + lock_options[current_lock])
                 self.speak(lock_options[current_lock])
-            elif vk in (win32con.VK_UP, win32con.VK_BACK) and not self.username: # Allow backspace if empty? No, keep it simple.
+            elif vk in (win32con.VK_UP, win32con.VK_BACK): # Allow backspace if empty? No, keep it simple.
                 current_lock = (current_lock - 1) % 2
                 self.lock_type = "pin" if current_lock == 0 else "password"
                 self.window.update_text("Lock Type: " + lock_options[current_lock])

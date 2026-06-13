@@ -21,8 +21,7 @@ PACKAGE_MAP = {
 def _log(message):
     try:
         with open(LOG_PATH, "a") as f:
-            f.write(message + '
-')
+            f.write(message + '\n')
         print(f"RecoveryMenu: {message}")
     except Exception as e:
         print(f"Logging failed: {e}")
@@ -33,7 +32,14 @@ def check_requirements():
     missing = []
     
     # Get all installed distributions
-    installed_dists = {dist.metadata['Name'].lower() for dist in importlib.metadata.distributions()}
+    installed_dists = set()
+    for dist in importlib.metadata.distributions():
+        try:
+            name = dist.metadata.get('Name', '')
+            if name:
+                installed_dists.add(name.lower())
+        except Exception:
+            pass
     
     with open(REQ_PATH, 'r') as f:
         for line in f:
@@ -64,7 +70,7 @@ def repair_requirements():
             shell=True, 
             capture_output=True, 
             text=True, 
-            timeout=300, 
+            timeout=120, 
             startupinfo=startupinfo
         )
         if result.returncode != 0:
@@ -72,6 +78,9 @@ def repair_requirements():
             _log(f"Pip error stderr: {result.stderr}")
             return False
         return not check_requirements()
+    except subprocess.TimeoutExpired:
+        _log("Repair requirements timed out after 120 seconds.")
+        return False
     except Exception as e:
         _log(f"Repair requirements failed: {e}")
         return False
@@ -105,10 +114,7 @@ def run_auto_checks():
 
 def recreate_techsoft():
     from core.config import TECH_SOFT
-    import shutil
     _log("Recreating Tech-Soft directories.")
-    if os.path.exists(TECH_SOFT):
-        shutil.rmtree(TECH_SOFT)
     os.makedirs(TECH_SOFT, exist_ok=True)
     for folder in ['documents', 'downloads', 'contacts', 'desktop']:
         os.makedirs(os.path.join(TECH_SOFT, folder), exist_ok=True)
