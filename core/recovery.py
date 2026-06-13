@@ -11,6 +11,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQ_PATH = os.path.join(BASE_DIR, 'requirements.txt')
 LOG_PATH = os.path.join(BASE_DIR, "recovery.log")
 
+# Mapping from requirements.txt name to distribution name
+PACKAGE_MAP = {
+    "pywin32": "pywin32",
+    "pycryptodome": "pycryptodome",
+    "beautifulsoup4": "beautifulsoup4"
+}
+
 def _log(message):
     try:
         with open(LOG_PATH, "a") as f:
@@ -20,46 +27,27 @@ def _log(message):
     except Exception as e:
         print(f"Logging failed: {e}")
 
-def check_repo_integrity():
-    issues = []
-    for f in ['boot_64.py', 'core/menu.py', 'core/config.py']:
-        if not os.path.exists(os.path.join(BASE_DIR, f)):
-            issues.append(f"missing_file_{f}")
-    return issues
-
 def check_requirements():
     if not os.path.exists(REQ_PATH):
         return []
     missing = []
+    
+    # Get all installed distributions
+    installed_dists = {dist.metadata['Name'].lower() for dist in importlib.metadata.distributions()}
+    
     with open(REQ_PATH, 'r') as f:
         for line in f:
             pkg = line.strip()
             if not pkg or pkg.startswith('#'):
                 continue
-            pkg_name = pkg.split('==')[0].split('>=')[0].split('<=')[0].strip()
-            try:
-                importlib.metadata.version(pkg_name)
-            except importlib.metadata.PackageNotFoundError:
+            pkg_name = pkg.split('==')[0].split('>=')[0].split('<=')[0].strip().lower()
+            
+            # Map requirements name if needed
+            lookup_name = PACKAGE_MAP.get(pkg_name, pkg_name)
+            
+            if lookup_name not in installed_dists:
                 missing.append(pkg_name)
     return missing
-
-def check_techsoft():
-    from core.config import TECH_SOFT, SETTINGS_PATH
-    if not os.path.exists(TECH_SOFT):
-        return [("techsoft_missing", "Tech-soft directory not found.")]
-    issues = []
-    if not os.path.exists(SETTINGS_PATH):
-        issues.append(("settings_missing", "Settings file not found."))
-    return issues
-
-def run_auto_checks():
-    issues = []
-    issues.extend([("repo", i) for i in check_repo_integrity()])
-    missing_reqs = check_requirements()
-    if missing_reqs:
-        issues.append(("requirements", f"Missing: {', '.join(missing_reqs)}"))
-    issues.extend(check_techsoft())
-    return issues
 
 def repair_requirements():
     _log("Repairing requirements via cmd.")
@@ -87,6 +75,33 @@ def repair_requirements():
     except Exception as e:
         _log(f"Repair requirements failed: {e}")
         return False
+
+# ... (other functions remain the same)
+
+def check_repo_integrity():
+    issues = []
+    for f in ['boot_64.py', 'core/menu.py', 'core/config.py']:
+        if not os.path.exists(os.path.join(BASE_DIR, f)):
+            issues.append(f"missing_file_{f}")
+    return issues
+
+def check_techsoft():
+    from core.config import TECH_SOFT, SETTINGS_PATH
+    if not os.path.exists(TECH_SOFT):
+        return [("techsoft_missing", "Tech-soft directory not found.")]
+    issues = []
+    if not os.path.exists(SETTINGS_PATH):
+        issues.append(("settings_missing", "Settings file not found."))
+    return issues
+
+def run_auto_checks():
+    issues = []
+    issues.extend([("repo", i) for i in check_repo_integrity()])
+    missing_reqs = check_requirements()
+    if missing_reqs:
+        issues.append(("requirements", f"Missing: {', '.join(missing_reqs)}"))
+    issues.extend(check_techsoft())
+    return issues
 
 def recreate_techsoft():
     from core.config import TECH_SOFT
