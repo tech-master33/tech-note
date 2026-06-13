@@ -20,6 +20,7 @@ class TechNoteSetup(SoftApp):
         self.password = ""
         self.pin = ""
         self.lock_type = "pin"
+        self.keyboard_layout = "US"
         self.active = True
 
     def _load_voices_for_synth(self):
@@ -111,7 +112,7 @@ class TechNoteSetup(SoftApp):
 
         elif self.current_step == 5:
             if not self.voices:
-                self._complete_setup()
+                self._enter_layout_step()
                 return
             if vk in (win32con.VK_DOWN, win32con.VK_SPACE):
                 self.voice_index = (self.voice_index + 1) % len(self.voices)
@@ -122,9 +123,25 @@ class TechNoteSetup(SoftApp):
                 self.window.update_text(self.voices[self.voice_index])
                 self.speak(self.voices[self.voice_index])
             elif vk == win32con.VK_RETURN:
-                self._complete_setup()
+                self._enter_layout_step()
 
         elif self.current_step == 6:
+            layout_options = ["US", "UK"]
+            current = 0 if self.keyboard_layout == "US" else 1
+            if vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+                current = (current + 1) % 2
+                self.keyboard_layout = layout_options[current]
+                self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
+                self.speak(self.keyboard_layout)
+            elif vk in (win32con.VK_UP, win32con.VK_BACK):
+                current = (current - 1) % 2
+                self.keyboard_layout = layout_options[current]
+                self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
+                self.speak(self.keyboard_layout)
+            elif vk == win32con.VK_RETURN:
+                self._complete_setup()
+
+        elif self.current_step == 7:
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:
@@ -134,9 +151,14 @@ class TechNoteSetup(SoftApp):
         self.speak("TTS engine. Use arrows to select.")
         self.window.update_text(self.available_synths[self.synth_index][0])
 
+    def _enter_layout_step(self):
+        self.current_step = 6
+        self.speak("Keyboard layout. Use arrows to select. US or UK.")
+        self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
+
     def _complete_setup(self):
         self.save_account()
-        self.current_step = 6
+        self.current_step = 7
         self.speak("Setup complete. Press Enter to start.")
         self.window.update_text("Setup Complete")
 
@@ -181,4 +203,18 @@ class TechNoteSetup(SoftApp):
         os.makedirs(os.path.dirname(ACCOUNT_PATH), exist_ok=True)
         with open(ACCOUNT_PATH, 'w') as f:
             json.dump(config, f)
+        self._save_keyboard_layout()
         self.speak("Account saved.")
+
+    def _save_keyboard_layout(self):
+        settings_path = os.path.join(os.path.dirname(ACCOUNT_PATH), 'settings.json')
+        try:
+            s = {}
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+            s["keyboard_layout"] = self.keyboard_layout
+            with open(settings_path, 'w') as f:
+                json.dump(s, f)
+        except Exception:
+            pass

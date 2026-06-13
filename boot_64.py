@@ -64,17 +64,27 @@ class BrailleNoteApp:
         self._apply_visual_settings()
 
     def _detect_keyboard_layout(self):
-        hkl = win32api.GetKeyboardLayout(0)
-        lang_id = hkl & 0xFFFF
-        if lang_id == 0x0809:
-            self._keyboard_layout = "UK"
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        saved_layout = None
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+                saved_layout = s.get("keyboard_layout")
+            except:
+                pass
+        if saved_layout in ("US", "UK"):
+            self._keyboard_layout = saved_layout
+        else:
+            hkl = win32api.GetKeyboardLayout(0)
+            lang_id = hkl & 0xFFFF
+            self._keyboard_layout = "UK" if lang_id == 0x0809 else "US"
+        if self._keyboard_layout == "UK":
             self._power_vk = 0xDF
             self._power_key_name = "backtick (left of Z)"
         else:
-            self._keyboard_layout = "US"
             self._power_vk = 0xC0
             self._power_key_name = "backtick (above Tab)"
-        settings_path = os.path.join(self.tech_soft, 'settings.json')
         try:
             s = {}
             if os.path.exists(settings_path):
