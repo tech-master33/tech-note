@@ -5,6 +5,7 @@ import win32con
 import win32api
 import threading
 import time
+import pythoncom
 
 # Constants for Stealth UI
 WS_EX_LAYERED = 0x00080000
@@ -87,6 +88,7 @@ class StealthWindow:
         except:
             pass
 
+        pythoncom.CoInitialize()
         win32gui.PumpMessages()
 
     def _wnd_proc(self, hwnd, msg, wparam, lparam):
@@ -130,7 +132,7 @@ class StealthWindow:
             
             win32gui.SelectObject(hdc, old_font)
             if font_obj:
-                font_obj.DeleteObject()
+                win32gui.DeleteObject(font)
             win32gui.EndPaint(hwnd, ps)
             return 0
         elif msg == win32con.WM_SYSCOMMAND:

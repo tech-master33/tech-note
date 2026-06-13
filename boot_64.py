@@ -30,11 +30,11 @@ class BrailleNoteApp:
         self._apply_settings()
         self.window = StealthWindow(on_key_down=self.handle_key)
         
-        # Apply visual settings to window
-        self._apply_visual_settings()
-        
         self.menu = None
         self.current_app = None
+        
+        # Apply visual settings to window
+        self._apply_visual_settings()
 
         # Play startup sound only if enabled
         settings_path = os.path.join(self.tech_soft, 'settings.json')
