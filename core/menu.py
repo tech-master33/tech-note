@@ -1,3 +1,11 @@
+import os
+from core.audio_player import AudioPlayer
+
+# Standard sound path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CLICK_SOUND = os.path.join(BASE_DIR, 'sounds', 'clicked.ogg')
+_audio_player = AudioPlayer()
+
 class MenuNode:
     def __init__(self, title, action=None, shortcut=None):
         self.title = title
@@ -41,8 +49,12 @@ class MenuSystem:
         if not item:
             return
 
+        # Play sound if callback provided or default exists
         if self.play_sound:
             self.play_sound()
+        elif os.path.exists(CLICK_SOUND):
+            _audio_player.play_file(CLICK_SOUND)
+
         if item.children:
             self.current_node = item
             self.current_index = 0
