@@ -1,6 +1,7 @@
 import comtypes.client
 import re
 import time
+from core.audio_ducking import AudioDucker
 
 class SapiSynthBase:
     def __init__(self, voice_name=None, allowed_fragments=None):
@@ -9,6 +10,9 @@ class SapiSynthBase:
         self.allowed_fragments = allowed_fragments
         self.punctuation_level = "Some"
         self.speak_punctuation = False
+        self._pitch = 50
+        self._capital_pitch_change = "Off"
+        self._ducker = AudioDucker()
         
         if allowed_fragments:
             self._set_voice_by_fragments(allowed_fragments)
@@ -90,6 +94,19 @@ class SapiSynthBase:
     def set_punctuation_level(self, level):
         self.punctuation_level = level
 
+    def get_pitch(self):
+        return self._pitch
+
+    def set_pitch(self, value):
+        self._pitch = max(0, min(100, int(value)))
+
+    def get_capital_pitch_change(self):
+        return self._capital_pitch_change
+
+    def set_capital_pitch_change(self, value):
+        if value in ("Off", "Say Cap", "Raise Pitch"):
+            self._capital_pitch_change = value
+
     @staticmethod
     def _filter_punctuation(text, level):
         if level == "All":
@@ -102,18 +119,39 @@ class SapiSynthBase:
             return re.sub(r'[^\w\s.,!?;:\-\'\"()\[\]{}@#$%^&*+=<>/\\|~]', '', text)
         return text
 
+    def _apply_capital_pitch(self, text):
+        if self._capital_pitch_change == "Off":
+            return text, False
+        if self._capital_pitch_change == "Say Cap":
+            return re.sub(r'([A-Z])', r'cap \1', text), False
+        if self._capital_pitch_change == "Raise Pitch":
+            text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            text = re.sub(r'([A-Z]+)', r'<prosody pitch="+40%">\1</prosody>', text)
+            text = '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis">' + text + '</speak>'
+            return text, True
+        return text, False
+
+    def set_volume_ducking(self, enabled):
+        self._ducker.set_enabled(enabled)
+
     def speak(self, text, interrupt=True):
         if not self.engine:
             return
         
         text = self._filter_punctuation(text, self.punctuation_level)
+        text, use_xml = self._apply_capital_pitch(text)
+        self._ducker.duck()
         try:
             flags = 1
             if interrupt:
                 flags |= 2
+            if use_xml:
+                flags |= 8
             self.engine.Speak(text, flags)
+            self._ducker.schedule_unduck(text, self.engine.Rate if self.engine else 0)
         except Exception as e:
             print(f"Speech error: {e}")
+            self._ducker.unduck()
 
     def stop(self):
         if self.engine:

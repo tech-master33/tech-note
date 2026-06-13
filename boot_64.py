@@ -6,7 +6,7 @@ import win32con
 import time
 import comtypes.client
 import pythoncom
-from core.menu import MenuSystem, build_braillenote_menu
+from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUNDS_DIR, SOUND_SCHEME
 from ui.stealth_window import StealthWindow
 from synths.sapi_synth import SapiSynthBase
 from synths.registry import create_synth
@@ -43,6 +43,7 @@ class BrailleNoteApp:
         self._dora_voice_active = False
         self._dora_voice_thread = None
         self._last_f2_time = 0
+        self._state_keys = "Off"
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
@@ -59,7 +60,9 @@ class BrailleNoteApp:
             except: pass
 
         if play_startup:
-            startup_sound = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds', 'startup.mp3')
+            startup_sound = _get_sound_path('startup.mp3')
+            if not os.path.exists(startup_sound):
+                startup_sound = os.path.join(SOUNDS_DIR, 'startup.mp3')
             if os.path.exists(startup_sound):
                 player = AudioPlayer()
                 player.play_sound_blocking(startup_sound)
@@ -144,6 +147,12 @@ class BrailleNoteApp:
                 self._word_echo = s.get("word_echo", "Off")
                 self._key_bindings = s.get("key_bindings", {})
                 self._announce_position = s.get("announce_position", "On")
+                self._state_keys = s.get("state_keys", "Off")
+                self.synth.set_pitch(s.get("pitch", 50))
+                self.synth.set_capital_pitch_change(s.get("capital_pitch_change", "Off"))
+                self.synth.set_volume_ducking(s.get("volume_ducking", "Off") == "On")
+                import core.menu
+                core.menu.SOUND_SCHEME = s.get("sound_scheme", "Default")
             except Exception:
                 pass
         else:
@@ -344,6 +353,14 @@ class BrailleNoteApp:
         # Global Tutorial (Shift + F1)
         if vk == win32con.VK_F1 and (win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000):
             self._open_tutorial()
+            return
+
+        # State key announcements (before app delegation)
+        if self._state_keys == "On" and vk in (0x14, 0x90, 0x91):
+            state_map = {0x14: "Caps lock", 0x90: "Num lock", 0x91: "Scroll lock"}
+            name = state_map[vk]
+            is_on = win32api.GetKeyState(vk) & 1
+            self.synth.speak(f"{name} {'on' if is_on else 'off'}")
             return
 
         # --- Active App Delegation (apps get ALL keys first) ---
