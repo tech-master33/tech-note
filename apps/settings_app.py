@@ -15,7 +15,8 @@ class SettingsApp(SoftApp):
         self.settings_file = SETTINGS_PATH
         self.settings = {
             "theme": "Dark", "bg_color": "Black", "font_size": "Medium",
-            "time_format": "12h", "startup_sound": "On"
+            "time_format": "12h", "startup_sound": "On",
+            "keyboard_layout": "US"
         }
         self.load_settings()
         self.adjust_mode = None
@@ -54,6 +55,7 @@ class SettingsApp(SoftApp):
         root = MenuNode("System Settings")
         root.add_child(MenuNode("Time Format", lambda: self._enter_adjust("time_format")))
         root.add_child(MenuNode("Startup Sound", lambda: self._enter_adjust("startup_sound")))
+        root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_adjust("keyboard_layout")))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -251,6 +253,12 @@ class SettingsApp(SoftApp):
             curr = opts.index(self.settings[key])
             self.settings[key] = opts[(curr + direction) % 2]
             self.speak(self.settings[key])
+        elif key == "keyboard_layout":
+            opts = ["US", "UK"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 2]
+            self.speak(self.settings[key])
+            self._apply_keyboard_layout()
         elif key == "theme":
             opts = ["Dark", "Light"]
             curr = opts.index(self.settings[key])
@@ -277,6 +285,9 @@ class SettingsApp(SoftApp):
         bg = colors.get(self.settings.get("bg_color", "Black"), (0,0,0))
         fs = self.settings.get("font_size", "Medium")
         self.window.set_display_settings(bg_color=bg, font_size=fs)
+
+    def _apply_keyboard_layout(self):
+        self.speak("Restart to apply keyboard layout.")
 
     def _start_text_input(self, field, prompt):
         self.text_input_field = field
