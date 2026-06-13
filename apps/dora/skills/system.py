@@ -1,17 +1,21 @@
 import os
 import subprocess
 
+def _run_hidden(command):
+    creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+    subprocess.Popen(command, shell=True, creationflags=creationflags)
+
 def shutdown_computer(assistant, command):
     assistant.speak("Shutting down in 10 seconds.")
-    os.system("shutdown /s /t 10")
+    _run_hidden("shutdown /s /t 10")
 
 def restart_computer(assistant, command):
     assistant.speak("Restarting in 10 seconds.")
-    os.system("shutdown /r /t 10")
+    _run_hidden("shutdown /r /t 10")
 
 def cancel_shutdown(assistant, command):
     assistant.speak("Shutdown cancelled.")
-    os.system("shutdown /a")
+    _run_hidden("shutdown /a")
 
 def get_battery_status(assistant, command=None):
     try:
@@ -38,9 +42,15 @@ def open_application(assistant, command):
         'vlc': 'vlc.exe',
     }
     clean = command.lower().replace('open', '').replace('start', '').replace('launch', '').strip()
+    
+    # Helper to run an app safely
+    def run_app(cmd):
+        _run_hidden(cmd)
+        
     if clean in app_map:
         assistant.speak(f"Opening {clean}.")
-        subprocess.Popen(app_map[clean], shell=True)
+        run_app(app_map[clean])
     else:
         assistant.speak(f"Attempting to open {clean}.")
-        subprocess.Popen(f'start "" "{clean}"', shell=True)
+        # Use 'start' to open arbitrary files/programs, but do it hidden
+        run_app(f'start "" "{clean}"')
