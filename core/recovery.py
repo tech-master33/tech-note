@@ -7,6 +7,7 @@ import win32api
 from core.audio_player import AudioPlayer
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REQ_PATH = os.path.join(BASE_DIR, 'requirements.txt')
 RECOVERY_SOUNDS = os.path.join(BASE_DIR, 'sounds', 'recovery')
 
 PLAYER = AudioPlayer()
@@ -28,22 +29,12 @@ def _sam_speak(phrase):
     return False
 
 def _sam_announce(phrase):
-    if not _sam_speak(phrase):
-        pass
+    _sam_speak(phrase)
 
 def _play_click():
     path = os.path.join(RECOVERY_SOUNDS, 'click.wav')
     if os.path.exists(path):
         PLAYER.play_sound_blocking(path)
-
-def _check_result(label, passed, detail=""):
-    PLAYER.stop()
-    if passed:
-        _sam_announce("check passed " + label)
-    else:
-        _sam_announce("check failed " + label)
-        if detail:
-            _sam_announce(detail)
 
 def check_repo_integrity():
     issues = []
@@ -63,6 +54,22 @@ def check_sapi():
     except Exception:
         return False
 
+def check_requirements():
+    if not os.path.exists(REQ_PATH):
+        return []
+    missing = []
+    with open(REQ_PATH, 'r') as f:
+        for line in f:
+            pkg = line.strip()
+            if not pkg or pkg.startswith('#'):
+                continue
+            pkg_name = pkg.split('==')[0].split('>=')[0].split('<=')[0].strip()
+            try:
+                __import__(pkg_name)
+            except ImportError:
+                missing.append(pkg_name)
+    return missing
+
 def check_techsoft():
     from core.config import TECH_SOFT, SETTINGS_PATH, ACCOUNT_PATH
     if not os.path.exists(TECH_SOFT):
@@ -79,6 +86,9 @@ def run_auto_checks():
         issues.append(("repo", i))
     if not check_sapi():
         issues.append(("sapi", "Speech engine unavailable."))
+    missing_reqs = check_requirements()
+    if missing_reqs:
+        issues.append(("requirements", f"Missing: {', '.join(missing_reqs)}"))
     issues.extend(check_techsoft())
     return issues
 
@@ -156,28 +166,25 @@ def recreate_techsoft():
     _sam_announce("tech soft recreated")
 
 class RecoveryMenu:
-    def __init__(self):
+    def __init__(self, window=None):
         self.items = RECOVERY_MENU_ITEMS
         self.index = 0
         self.active = True
+        self.window = window
 
     def _announce_item(self):
         title = self.items[self.index][0]
         _sam_announce(title)
+        if self.window:
+            self.window.update_text("Tech-Note Recovery: " + title)
 
     def next(self):
-        if self.index < len(self.items) - 1:
-            self.index += 1
-        else:
-            self.index = 0
+        self.index = (self.index + 1) % len(self.items)
         _play_click()
         self._announce_item()
 
     def previous(self):
-        if self.index > 0:
-            self.index -= 1
-        else:
-            self.index = len(self.items) - 1
+        self.index = (self.index - 1) % len(self.items)
         _play_click()
         self._announce_item()
 
@@ -215,8 +222,10 @@ class RecoveryMenu:
         elif vk == win32con.VK_RETURN:
             self.select()
 
-def run_recovery():
-    menu = RecoveryMenu()
+def run_recovery(window):
+    menu = RecoveryMenu(window)
     _sam_announce("recovery mode")
+    if window:
+        window.update_text("Tech-Note Recovery")
     menu._announce_item()
     return menu

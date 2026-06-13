@@ -446,8 +446,8 @@ def _run_recovery_if_needed():
         return False
     window = StealthWindow(on_key_down=None)
     window.create()
-    window.update_text("Recovery Mode")
-    menu = run_recovery()
+    window.update_text("Tech-Note Recovery")
+    menu = run_recovery(window)
     def handle_key(vk):
         menu.handle_key(vk)
         if not menu.active:
