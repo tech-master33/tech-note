@@ -13,7 +13,7 @@ class SettingsApp(SoftApp):
         super().__init__(manager, window)
         self.on_reset_account = on_reset_account
         self.settings_file = SETTINGS_PATH
-        self.settings = {"voice_speed": 100, "theme": "Dark"}
+        self.settings = {"rate": 0, "volume": 100, "theme": "Dark"}
         self.load_settings()
         self.pin_mode = None
         self.confirm_mode = None
@@ -24,12 +24,18 @@ class SettingsApp(SoftApp):
     def _build_main_menu(self):
         self.account_menu = None
         root = MenuNode("Settings")
-        root.add_child(MenuNode("Account", self._enter_account_menu))
-        root.add_child(MenuNode("Theme", self._toggle_theme))
-        root.add_child(MenuNode("Check for Updates", self._check_for_updates))
-        root.add_child(MenuNode("About Tech-Note", self._about))
+        root.add_child(MenuNode("Account Management", self._enter_account_menu))
+        root.add_child(MenuNode("System Info and Updates", self._enter_info_menu))
         root.add_child(MenuNode("Reset TechNote", self._reset_technote))
         self.menu = MenuSystem(root, self.speak)
+
+    def _enter_info_menu(self):
+        root = MenuNode("System Info")
+        root.add_child(MenuNode("Check for Updates", self._check_for_updates))
+        root.add_child(MenuNode("About Tech-Note", self._about))
+        root.add_child(MenuNode("Back", self._build_main_menu))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
 
     def _build_account_menu(self):
         account = self._load_account()

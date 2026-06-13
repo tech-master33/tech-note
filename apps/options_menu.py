@@ -11,7 +11,12 @@ class OptionsApp(SoftApp):
         super().__init__(manager, window)
         self.adjust_mode = None
         self.settings_file = SETTINGS_PATH
-        self._load_voice_settings()
+        self.settings = {
+            "rate": 0, "volume": 100, "voice_index": 0,
+            "time_format": "12h", "startup_sound": "On",
+            "bg_color": "Black", "font_size": "Medium"
+        }
+        self._load_all_settings()
         self._build_main_menu()
 
     def _build_main_menu(self):
@@ -32,19 +37,17 @@ class OptionsApp(SoftApp):
         self.menu.announce_current()
 
     def _enter_system_menu(self):
-        # Placeholder for more system settings (Layout, Clock, etc.)
         root = MenuNode("System Settings")
-        root.add_child(MenuNode("Date and Time Format", lambda: self.speak("12 hour format set.")))
-        root.add_child(MenuNode("Startup Sound", lambda: self.speak("Startup sound enabled.")))
+        root.add_child(MenuNode("Time Format", lambda: self._enter_adjust("time_format")))
+        root.add_child(MenuNode("Startup Sound", lambda: self._enter_adjust("startup_sound")))
         root.add_child(MenuNode("Back", self._build_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
 
     def _enter_display_menu(self):
-        # Placeholder for display settings
         root = MenuNode("Display Settings")
-        root.add_child(MenuNode("Font Size", lambda: self.speak("Font size set to Large.")))
-        root.add_child(MenuNode("Theme Colors", lambda: self.speak("Theme set to High Contrast.")))
+        root.add_child(MenuNode("Background Color", lambda: self._enter_adjust("bg_color")))
+        root.add_child(MenuNode("Font Size", lambda: self._enter_adjust("font_size")))
         root.add_child(MenuNode("Back", self._build_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -73,7 +76,7 @@ class OptionsApp(SoftApp):
             self.menu.next()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
-        
+
         item = self.menu.get_current_item()
         if item:
             self.window.update_text(item.title)
@@ -83,40 +86,43 @@ class OptionsApp(SoftApp):
             return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
         return "Options Menu. Use arrows to navigate sub-menus. Enter to select. Press Escape to go back."
 
-    def _load_voice_settings(self):
+    def _load_all_settings(self):
         if os.path.exists(self.settings_file):
             try:
                 with open(self.settings_file, 'r') as f:
-                    settings = json.load(f)
-                rate = settings.get("rate")
-                volume = settings.get("volume")
-                voice_index = settings.get("voice_index")
-                if rate is not None:
-                    self.manager.set_rate(rate)
-                if volume is not None:
-                    self.manager.set_volume(volume)
-                if voice_index is not None:
-                    names = self.manager.get_voice_names()
-                    if 0 <= voice_index < len(names):
-                        self.manager.set_voice_by_index(voice_index)
+                    loaded = json.load(f)
+                self.settings.update(loaded)
+
+                # Apply voice settings immediately
+                self.manager.set_rate(self.settings.get("rate", 0))
+                self.manager.set_volume(self.settings.get("volume", 100))
+                names = self.manager.get_voice_names()
+                v_idx = self.settings.get("voice_index", 0)
+                if 0 <= v_idx < len(names):
+                    self.manager.set_voice_by_index(v_idx)
+
+                # Apply display settings immediately
+                self._apply_display_settings()
             except Exception:
                 pass
 
-    def _save_voice_settings(self):
+    def _save_all_settings(self):
         try:
-            settings = {}
-            if os.path.exists(self.settings_file):
-                with open(self.settings_file, 'r') as f:
-                    settings = json.load(f)
-            settings["rate"] = self.manager.get_rate()
-            settings["volume"] = self.manager.get_volume()
-            settings["voice_index"] = self.manager.get_voice_index()
             with open(self.settings_file, 'w') as f:
-                json.dump(settings, f)
+                json.dump(self.settings, f)
         except Exception:
             pass
 
+    def _apply_display_settings(self):
+        colors = {"Black": (0,0,0), "Blue": (0,0,128), "Gray": (64,64,64)}
+        bg = colors.get(self.settings.get("bg_color", "Black"), (0,0,0))
+        fs = self.settings.get("font_size", "Medium")
+        self.window.set_display_settings(bg_color=bg, font_size=fs)
+
     def _enter_adjust(self, key):
+        self.adjust_mode = key
+        val = self.settings.get(key)
+
         if key == "tts_engine":
             self.synth_list = get_available_synths()
             current_module = "sapi_synth"
@@ -124,43 +130,38 @@ class OptionsApp(SoftApp):
                 with open(ACCOUNT_PATH, 'r') as f:
                     account = json.load(f)
                 current_module = account.get("synth_module", "sapi_synth")
-            except Exception:
-                pass
+            except Exception: pass
             self.synth_index = 0
             for i, (name, mod) in enumerate(self.synth_list):
                 if mod == current_module:
                     self.synth_index = i
                     break
             name = self.synth_list[self.synth_index][0]
-            self.speak(f"TTS Engine. Current: {name}. Use plus and minus to change.")
+            self.speak(f"TTS Engine. Current: {name}.")
         elif key == "speech_rate":
-            val = self.manager.get_rate()
-            self.speak(f"Rate. Current: {val}. Use plus and minus to adjust.")
+            self.speak(f"Rate. Current: {self.settings['rate']}.")
         elif key == "volume":
-            val = self.manager.get_volume()
-            self.speak(f"Volume. Current: {val}. Use plus and minus to adjust.")
+            self.speak(f"Volume. Current: {self.settings['volume']}.")
         elif key == "voice":
             names = self.manager.get_voice_names()
-            idx = self.manager.get_voice_index()
-            self.speak(f"Voice. Current: {names[idx]}. Use plus and minus to change.")
-        self.adjust_mode = key
+            idx = self.settings.get("voice_index", 0)
+            self.speak(f"Voice. Current: {names[idx] if names else 'Default'}.")
+        elif key == "time_format":
+            self.speak(f"Time Format. Current: {val}.")
+        elif key == "startup_sound":
+            self.speak(f"Startup Sound. Current: {val}.")
+        elif key == "bg_color":
+            self.speak(f"Background Color. Current: {val}.")
+        elif key == "font_size":
+            self.speak(f"Font Size. Current: {val}.")
+
         self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
 
     def _get_current_display(self):
         key = self.adjust_mode
         if key == "tts_engine":
-            if self.synth_list:
-                return self.synth_list[self.synth_index][0]
-            return "None"
-        elif key == "speech_rate":
-            return self.manager.get_rate()
-        elif key == "volume":
-            return self.manager.get_volume()
-        elif key == "voice":
-            names = self.manager.get_voice_names()
-            idx = self.manager.get_voice_index()
-            return names[idx]
-        return ""
+            return self.synth_list[self.synth_index][0] if self.synth_list else "None"
+        return str(self.settings.get(key, ""))
 
     def _handle_adjust(self, vk):
         if vk == win32con.VK_BACK or vk == win32con.VK_ESCAPE:
@@ -168,11 +169,11 @@ class OptionsApp(SoftApp):
             item = self.menu.get_current_item()
             title = item.title if item else "Options"
             self.speak(title)
-            self.window.update_text("Options: " + title)
+            self.window.update_text(title)
             return
-        elif vk == 0xBB:
+        elif vk == 0xBB: # Plus
             self._adjust_value(1)
-        elif vk == 0xBD:
+        elif vk == 0xBD: # Minus
             self._adjust_value(-1)
         elif vk == win32con.VK_RETURN:
             if self.adjust_mode == "tts_engine":
@@ -182,32 +183,55 @@ class OptionsApp(SoftApp):
             self.adjust_mode = None
             item = self.menu.get_current_item()
             title = item.title if item else "Options"
-            self.window.update_text("Options: " + title)
+            self.window.update_text(title)
 
     def _adjust_value(self, direction):
         key = self.adjust_mode
-        if not key:
-            return
+        if not key: return
+
         if key == "tts_engine":
             if self.synth_list:
                 self.synth_index = (self.synth_index + direction) % len(self.synth_list)
                 self.speak(self.synth_list[self.synth_index][0])
         elif key == "speech_rate":
-            val = self.manager.get_rate() + direction
-            self.manager.set_rate(val)
-            self.speak(str(self.manager.get_rate()))
+            self.settings["rate"] = max(-10, min(10, self.settings["rate"] + direction))
+            self.manager.set_rate(self.settings["rate"])
+            self.speak(str(self.settings["rate"]))
         elif key == "volume":
-            val = self.manager.get_volume() + direction * 10
-            self.manager.set_volume(val)
-            self.speak(str(self.manager.get_volume()))
+            self.settings["volume"] = max(0, min(100, self.settings["volume"] + direction * 10))
+            self.manager.set_volume(self.settings["volume"])
+            self.speak(str(self.settings["volume"]))
         elif key == "voice":
             names = self.manager.get_voice_names()
-            idx = self.manager.get_voice_index()
-            idx = (idx + direction) % len(names)
+            idx = (self.settings.get("voice_index", 0) + direction) % len(names)
+            self.settings["voice_index"] = idx
             self.manager.set_voice_by_index(idx)
             self.speak(names[idx])
+        elif key == "time_format":
+            opts = ["12h", "24h"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 2]
+            self.speak(self.settings[key])
+        elif key == "startup_sound":
+            opts = ["On", "Off"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 2]
+            self.speak(self.settings[key])
+        elif key == "bg_color":
+            opts = ["Black", "Blue", "Gray"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 3]
+            self.speak(self.settings[key])
+            self._apply_display_settings()
+        elif key == "font_size":
+            opts = ["Small", "Medium", "Large"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 3]
+            self.speak(self.settings[key])
+            self._apply_display_settings()
+
         self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
-        self._save_voice_settings()
+        self._save_all_settings()
 
     def _save_synth_selection(self):
         name, module = self.synth_list[self.synth_index]
@@ -224,4 +248,4 @@ class OptionsApp(SoftApp):
         item = self.menu.get_current_item()
         title = item.title if item else "Options"
         self.speak(title)
-        self.window.update_text("Options: " + title)
+        self.window.update_text(title)

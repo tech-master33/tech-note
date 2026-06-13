@@ -29,14 +29,41 @@ class BrailleNoteApp:
         self.synth = SapiSynthBase()
         self._apply_settings()
         self.window = StealthWindow(on_key_down=self.handle_key)
+        
+        # Apply visual settings to window
+        self._apply_visual_settings()
+        
         self.menu = None
         self.current_app = None
 
-        # Play startup sound before any speech
-        startup_sound = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds', 'startup.mp3')
-        if os.path.exists(startup_sound):
-            player = AudioPlayer()
-            player.play_sound_blocking(startup_sound)
+        # Play startup sound only if enabled
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        play_startup = True
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+                if s.get("startup_sound") == "Off":
+                    play_startup = False
+            except: pass
+
+        if play_startup:
+            startup_sound = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds', 'startup.mp3')
+            if os.path.exists(startup_sound):
+                player = AudioPlayer()
+                player.play_sound_blocking(startup_sound)
+
+    def _apply_visual_settings(self):
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+                colors = {"Black": (0,0,0), "Blue": (0,0,128), "Gray": (64,64,64)}
+                bg = colors.get(s.get("bg_color", "Black"), (0,0,0))
+                fs = s.get("font_size", "Medium")
+                self.window.set_display_settings(bg_color=bg, font_size=fs)
+            except: pass
 
         account_path = os.path.join(self.tech_soft, 'account.json')
         if not os.path.exists(account_path):

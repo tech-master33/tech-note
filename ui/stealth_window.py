@@ -20,6 +20,11 @@ class StealthWindow:
         self.running = True
         self.current_text = "Main Menu"
         
+        # UI Settings
+        self.bg_color = win32api.RGB(0, 0, 0) # Default Black
+        self.font_height = 48
+        self.font_weight = 700
+        
         self.thread = threading.Thread(target=self._create_window)
         self.thread.daemon = True
         self.thread.start()
@@ -28,6 +33,16 @@ class StealthWindow:
         for _ in range(10):
             if self.hwnd: break
             time.sleep(0.1)
+
+    def set_display_settings(self, bg_color=None, font_size=None):
+        if bg_color is not None:
+            # bg_color should be (R, G, B) tuple
+            self.bg_color = win32api.RGB(*bg_color)
+        if font_size is not None:
+            sizes = {"Small": 24, "Medium": 48, "Large": 72}
+            self.font_height = sizes.get(font_size, 48)
+        if self.hwnd:
+            win32gui.InvalidateRect(self.hwnd, None, True)
 
     def _create_window(self):
         wc = win32gui.WNDCLASS()
@@ -88,7 +103,12 @@ class StealthWindow:
         elif msg == win32con.WM_PAINT:
             hdc, ps = win32gui.BeginPaint(hwnd)
             rect = win32gui.GetClientRect(hwnd)
-            win32gui.FillRect(hdc, rect, win32gui.GetStockObject(win32con.BLACK_BRUSH))
+            
+            # Create a solid brush for the background color
+            brush = win32gui.CreateSolidBrush(self.bg_color)
+            win32gui.FillRect(hdc, rect, brush)
+            win32gui.DeleteObject(brush)
+            
             win32gui.SetTextColor(hdc, win32api.RGB(255, 255, 255))
             win32gui.SetBkMode(hdc, win32con.TRANSPARENT)
             
@@ -97,8 +117,8 @@ class StealthWindow:
                 import win32ui
                 font_obj = win32ui.CreateFont({
                     "name": "Arial",
-                    "height": 48,
-                    "weight": 700,
+                    "height": self.font_height,
+                    "weight": self.font_weight,
                 })
                 font = font_obj.GetSafeHandle()
             except:
