@@ -131,6 +131,9 @@ class SapiSynthBase:
             return text, True
         return text, False
 
+    def get_volume_ducking(self):
+        return self._ducker.get_enabled()
+
     def set_volume_ducking(self, enabled):
         self._ducker.set_enabled(enabled)
 

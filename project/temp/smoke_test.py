@@ -4,6 +4,7 @@
 import os
 import sys
 import tempfile
+import importlib
 
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, BASE)
@@ -30,9 +31,9 @@ check("app_base import", lambda: __import__("core.app_base"))
 check("AudioPlayer instantiation", lambda: __import__("core.audio_player", fromlist=["AudioPlayer"]))
 check("AudioDucker instantiation", lambda: __import__("core.audio_ducking", fromlist=["AudioDucker"]))
 
-check("menu has SOUND_SCHEME", lambda: __import__("core.menu").SOUND_SCHEME)
-check("menu has ANNOUNCE_POSITION", lambda: __import__("core.menu").ANNOUNCE_POSITION)
-check("menu has _get_sound_path", lambda: __import__("core.menu")._get_sound_path)
+check("menu has SOUND_SCHEME", lambda: importlib.import_module("core.menu").SOUND_SCHEME)
+check("menu has ANNOUNCE_POSITION", lambda: importlib.import_module("core.menu").ANNOUNCE_POSITION)
+check("menu has _get_sound_path", lambda: importlib.import_module("core.menu")._get_sound_path)
 
 check("synths registry import", lambda: __import__("synths.registry"))
 check("synths sapi_synth import", lambda: __import__("synths.sapi_synth"))
