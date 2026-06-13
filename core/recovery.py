@@ -8,32 +8,6 @@ import win32api
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQ_PATH = os.path.join(BASE_DIR, 'requirements.txt')
 
-_SPEAKER = None
-
-def _get_speaker():
-    global _SPEAKER
-    if _SPEAKER is not None:
-        return _SPEAKER
-    try:
-        import comtypes.client
-        import pythoncom
-        pythoncom.CoInitialize()
-        _SPEAKER = comtypes.client.CreateObject("SAPI.SpVoice")
-    except Exception:
-        _SPEAKER = False
-    return _SPEAKER
-
-def _speak(text):
-    sp = _get_speaker()
-    if sp:
-        try:
-            sp.Speak(text, 1)
-        except Exception:
-            pass
-
-def _play_click():
-    pass
-
 RECOVERY_MENU_ITEMS = [
     ("Restore to Stable", "restore_stable"),
     ("Reinstall Requirements", "reinstall_reqs"),
@@ -50,15 +24,6 @@ def check_repo_integrity():
         if not os.path.exists(os.path.join(BASE_DIR, f)):
             issues.append(f"missing_file_{f}")
     return issues
-
-def check_sapi():
-    try:
-        import comtypes.client
-        engine = comtypes.client.CreateObject("SAPI.SpVoice")
-        voices = engine.GetVoices()
-        return voices.Count > 0
-    except Exception:
-        return False
 
 def check_requirements():
     if not os.path.exists(REQ_PATH):
@@ -87,11 +52,8 @@ def check_techsoft():
 
 def run_auto_checks():
     issues = []
-    repo_issues = check_repo_integrity()
-    for i in repo_issues:
+    for i in check_repo_integrity():
         issues.append(("repo", i))
-    if not check_sapi():
-        issues.append(("sapi", "Speech engine unavailable."))
     missing_reqs = check_requirements()
     if missing_reqs:
         issues.append(("requirements", f"Missing: {', '.join(missing_reqs)}"))
@@ -99,10 +61,8 @@ def run_auto_checks():
     return issues
 
 def repair_clone():
-    _speak("Restoring to stable.")
     remote = _get_remote_url()
     if not remote:
-        _speak("No remote configured.")
         return False
     parent = os.path.dirname(BASE_DIR)
     backup = BASE_DIR + "_bak"
@@ -116,14 +76,11 @@ def repair_clone():
             cwd=parent, capture_output=True, text=True, timeout=120
         )
         if result.returncode == 0:
-            _speak("Restore complete.")
             repair_requirements()
             return True
         os.rename(backup, BASE_DIR)
-        _speak("Restore failed.")
         return False
-    except Exception as e:
-        _speak("Restore error.")
+    except Exception:
         return False
 
 def _get_remote_url():
@@ -140,21 +97,14 @@ def _get_remote_url():
 
 def repair_requirements():
     if not os.path.exists(REQ_PATH):
-        _speak("No requirements file.")
         return False
-    _speak("Installing requirements.")
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-r", REQ_PATH],
             capture_output=True, text=True, timeout=120
         )
-        if result.returncode == 0:
-            _speak("Requirements installed.")
-            return True
-        _speak("Requirements failed.")
-        return False
+        return result.returncode == 0
     except Exception:
-        _speak("Requirements error.")
         return False
 
 def recreate_techsoft():
@@ -168,7 +118,6 @@ def recreate_techsoft():
     os.makedirs(TECH_SOFT, exist_ok=True)
     for folder in ['documents', 'downloads', 'contacts', 'desktop']:
         os.makedirs(os.path.join(TECH_SOFT, folder), exist_ok=True)
-    _speak("Tech soft recreated.")
 
 class RecoveryMenu:
     def __init__(self, window=None):
@@ -177,19 +126,18 @@ class RecoveryMenu:
         self.active = True
         self.window = window
 
-    def _announce_item(self):
-        title = self.items[self.index][0]
-        _speak(title)
+    def _update_display(self):
         if self.window:
+            title = self.items[self.index][0]
             self.window.update_text("Tech-Note Recovery: " + title)
 
     def next(self):
         self.index = (self.index + 1) % len(self.items)
-        self._announce_item()
+        self._update_display()
 
     def previous(self):
         self.index = (self.index - 1) % len(self.items)
-        self._announce_item()
+        self._update_display()
 
     def select(self):
         action = self.items[self.index][1]
@@ -203,21 +151,18 @@ class RecoveryMenu:
             recreate_techsoft()
         elif action == "exit_recovery":
             self.active = False
-            _speak("Exiting recovery.")
         if self.active:
-            self._announce_item()
-        else:
-            if self.window:
-                self.window.update_text("Tech-Note Recovery")
+            self._update_display()
+        elif self.window:
+            self.window.update_text("Tech-Note Recovery")
 
     def _run_integrity_check(self):
-        _speak("Running integrity check.")
         issues = run_auto_checks()
-        if not issues:
-            _speak("All checks passed.")
-        else:
-            for category, detail in issues:
-                _speak(category + ". " + detail)
+        if self.window:
+            if not issues:
+                self.window.update_text("All checks passed.")
+            else:
+                self.window.update_text("Issues: " + "; ".join(d for _, d in issues))
 
     def handle_key(self, vk):
         if vk in (win32con.VK_UP, win32con.VK_BACK):
@@ -229,8 +174,7 @@ class RecoveryMenu:
 
 def run_recovery(window):
     menu = RecoveryMenu(window)
-    _speak("Recovery mode.")
     if window:
         window.update_text("Tech-Note Recovery")
-    menu._announce_item()
+    menu._update_display()
     return menu
