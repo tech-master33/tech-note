@@ -436,10 +436,35 @@ class BrailleNoteApp:
         finally:
             self.window.close()
 
+def _run_recovery_if_needed():
+    from core.recovery import run_auto_checks, run_recovery
+    from ui.stealth_window import StealthWindow
+    import pythoncom
+    pythoncom.CoInitialize()
+    issues = run_auto_checks()
+    if not issues:
+        return False
+    window = StealthWindow(on_key_down=None)
+    window.create()
+    window.update_text("Recovery Mode")
+    menu = run_recovery()
+    def handle_key(vk):
+        menu.handle_key(vk)
+        if not menu.active:
+            window.close()
+    window.on_key_down = handle_key
+    try:
+        while window.running and menu.active:
+            time.sleep(0.1)
+    finally:
+        window.close()
+    return True
+
 if __name__ == "__main__":
     try:
-        app = BrailleNoteApp()
-        app.run()
+        if not _run_recovery_if_needed():
+            app = BrailleNoteApp()
+            app.run()
     except Exception:
         import traceback
         with open("crash.log", "w") as f:

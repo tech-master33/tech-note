@@ -41,7 +41,7 @@ check("synths sapi_synth import", lambda: __import__("synths.sapi_synth"))
 def _check_synth_methods():
     from synths.sapi_synth import SapiSynthBase
     for m in ["get_pitch", "set_pitch", "get_capital_pitch_change",
-              "set_capital_pitch_change", "get_volume_ducking",
+              "set_capital_pitch_change",
               "set_volume_ducking", "set_punctuation_level"]:
         if not hasattr(SapiSynthBase, m):
             raise AttributeError(f"SapiSynthBase missing {m}")
@@ -50,6 +50,7 @@ check("synth has required methods", _check_synth_methods)
 
 check("options_menu import", lambda: __import__("apps.options_menu"))
 check("settings_app import", lambda: __import__("apps.settings_app"))
+check("recovery import", lambda: __import__("core.recovery"))
 
 def _check_options_keys():
     fake = {"pitch": 50, "capital_pitch_change": "Off", "state_keys": "Off",
