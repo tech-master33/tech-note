@@ -437,10 +437,11 @@ class BrailleNoteApp:
             self.window.close()
 
 def _run_recovery_if_needed():
-    from core.recovery import run_auto_checks, run_recovery
+    from core.recovery import run_auto_checks, run_recovery, auto_repair_requirements
     from ui.stealth_window import StealthWindow
     import pythoncom
     pythoncom.CoInitialize()
+    auto_repair_requirements()
     issues = run_auto_checks()
     if not issues:
         return False

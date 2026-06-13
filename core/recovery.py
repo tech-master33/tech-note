@@ -92,6 +92,12 @@ def run_auto_checks():
     issues.extend(check_techsoft())
     return issues
 
+def auto_repair_requirements():
+    missing = check_requirements()
+    if not missing:
+        return True
+    return repair_requirements()
+
 def repair_clone():
     _sam_announce("restoring to stable")
     remote = _get_remote_url()
