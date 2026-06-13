@@ -80,6 +80,12 @@ class Synth:
     def set_capital_pitch_change(self, value):
         pass
 
+    def get_volume_ducking(self):
+        return False
+
+    def set_volume_ducking(self, enabled):
+        pass
+
     def reset_temp_params(self):
         pass
 

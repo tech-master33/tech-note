@@ -1,6 +1,7 @@
 import comtypes.client
 import re
 import time
+from core.audio_ducking import AudioDucker
 
 class SapiSynthBase:
     def __init__(self, voice_name=None, allowed_fragments=None):
@@ -11,6 +12,7 @@ class SapiSynthBase:
         self.speak_punctuation = False
         self._pitch = 50
         self._capital_pitch_change = "Off"
+        self._ducker = AudioDucker()
         
         if allowed_fragments:
             self._set_voice_by_fragments(allowed_fragments)
@@ -129,12 +131,16 @@ class SapiSynthBase:
             return text, True
         return text, False
 
+    def set_volume_ducking(self, enabled):
+        self._ducker.set_enabled(enabled)
+
     def speak(self, text, interrupt=True):
         if not self.engine:
             return
         
         text = self._filter_punctuation(text, self.punctuation_level)
         text, use_xml = self._apply_capital_pitch(text)
+        self._ducker.duck()
         try:
             flags = 1
             if interrupt:
@@ -142,8 +148,10 @@ class SapiSynthBase:
             if use_xml:
                 flags |= 8
             self.engine.Speak(text, flags)
+            self._ducker.schedule_unduck(text, self.engine.Rate if self.engine else 0)
         except Exception as e:
             print(f"Speech error: {e}")
+            self._ducker.unduck()
 
     def stop(self):
         if self.engine:

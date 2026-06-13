@@ -5,12 +5,9 @@ import win32con
 import win32api
 import psutil
 from core.app_base import SoftApp
-from core.menu import MenuNode, MenuSystem
+from core.menu import MenuNode, MenuSystem, _get_sound_path, SOUNDS_DIR
 from core.audio_player import AudioPlayer
 from core.config import ACCOUNT_PATH
-
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UNLOCK_SOUND = os.path.join(BASE, 'sounds', 'unlock.mp3')
 
 class LockScreenApp(SoftApp):
     def __init__(self, manager, window, success_callback):
@@ -186,6 +183,9 @@ class LockScreenApp(SoftApp):
         self.exit_app()
 
     def _play_unlock(self):
-        if os.path.exists(UNLOCK_SOUND):
-            AudioPlayer().play_sound_blocking(UNLOCK_SOUND)
+        unlock_sound = _get_sound_path('unlock.mp3')
+        if not os.path.exists(unlock_sound):
+            unlock_sound = os.path.join(SOUNDS_DIR, 'unlock.mp3')
+        if os.path.exists(unlock_sound):
+            AudioPlayer().play_sound_blocking(unlock_sound)
         self.speak("Unlocked.")

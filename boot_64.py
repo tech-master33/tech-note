@@ -6,7 +6,7 @@ import win32con
 import time
 import comtypes.client
 import pythoncom
-from core.menu import MenuSystem, build_braillenote_menu
+from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path
 from ui.stealth_window import StealthWindow
 from synths.sapi_synth import SapiSynthBase
 from synths.registry import create_synth
@@ -56,7 +56,9 @@ class BrailleNoteApp:
             except: pass
 
         if play_startup:
-            startup_sound = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds', 'startup.mp3')
+            startup_sound = _get_sound_path('startup.mp3')
+            if not os.path.exists(startup_sound):
+                startup_sound = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds', 'startup.mp3')
             if os.path.exists(startup_sound):
                 player = AudioPlayer()
                 player.play_sound_blocking(startup_sound)
@@ -144,6 +146,9 @@ class BrailleNoteApp:
                 self._state_keys = s.get("state_keys", "Off")
                 self.synth.set_pitch(s.get("pitch", 50))
                 self.synth.set_capital_pitch_change(s.get("capital_pitch_change", "Off"))
+                self.synth.set_volume_ducking(s.get("volume_ducking", "Off") == "On")
+                import core.menu
+                core.menu.SOUND_SCHEME = s.get("sound_scheme", "Default")
             except Exception:
                 pass
         else:

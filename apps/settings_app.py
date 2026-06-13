@@ -2,6 +2,7 @@ import os
 import json
 import subprocess
 import sys
+import shutil
 import win32con
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
@@ -491,10 +492,10 @@ class SettingsApp(SoftApp):
 
     def _do_reset_technote(self):
         self.confirm_mode = None
-        self.speak("Resetting TechNote. Deleting account.")
-        if os.path.exists(ACCOUNT_PATH):
+        self.speak("Resetting TechNote.")
+        if os.path.exists(TECH_SOFT):
             try:
-                os.remove(ACCOUNT_PATH)
+                shutil.rmtree(TECH_SOFT)
             except:
                 pass
         if self.on_reset_account:

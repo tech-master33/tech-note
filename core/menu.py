@@ -3,11 +3,33 @@ from core.audio_player import AudioPlayer
 
 # Standard sound path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLICK_SOUND = os.path.join(BASE_DIR, 'sounds', 'clicked.ogg')
-_audio_player = AudioPlayer()
+SOUNDS_DIR = os.path.join(BASE_DIR, 'sounds')
 
 # Global position announcement toggle
 ANNOUNCE_POSITION = True
+SOUND_SCHEME = "Default"
+
+_audio_player = AudioPlayer()
+
+def _get_sound_path(name):
+    scheme_dirs = {
+        "Default": SOUNDS_DIR,
+        "Classic": os.path.join(SOUNDS_DIR, 'classic'),
+        "Minimal": os.path.join(SOUNDS_DIR, 'minimal'),
+    }
+    base = scheme_dirs.get(SOUND_SCHEME, SOUNDS_DIR)
+    return os.path.join(base, name)
+
+def play_click():
+    if SOUND_SCHEME == "Minimal":
+        return
+    path = _get_sound_path('clicked.ogg')
+    if os.path.exists(path):
+        _audio_player.play_file(path)
+    elif SOUND_SCHEME != "Default":
+        fallback = os.path.join(SOUNDS_DIR, 'clicked.ogg')
+        if os.path.exists(fallback):
+            _audio_player.play_file(fallback)
 
 class MenuNode:
     def __init__(self, title, action=None, shortcut=None):
@@ -52,11 +74,11 @@ class MenuSystem:
         if not item:
             return
 
-        # Play sound if callback provided or default exists
+        # Play sound if callback provided or default
         if self.play_sound:
             self.play_sound()
-        elif os.path.exists(CLICK_SOUND):
-            _audio_player.play_file(CLICK_SOUND)
+        else:
+            play_click()
 
         if item.children:
             self.current_node = item

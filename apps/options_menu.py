@@ -106,6 +106,9 @@ class OptionsApp(SoftApp):
                 self.manager.set_punctuation_level(pl)
                 self.manager.set_pitch(self.settings.get("pitch", 50))
                 self.manager.set_capital_pitch_change(self.settings.get("capital_pitch_change", "Off"))
+                self.manager.set_volume_ducking(self.settings.get("volume_ducking", "Off") == "On")
+                import core.menu
+                core.menu.SOUND_SCHEME = self.settings.get("sound_scheme", "Default")
             except Exception:
                 pass
 
@@ -254,11 +257,14 @@ class OptionsApp(SoftApp):
             opts = ["Off", "On"]
             curr = opts.index(self.settings[key])
             self.settings[key] = opts[(curr + direction) % 2]
+            self.manager.set_volume_ducking(self.settings[key] == "On")
             self.speak(f"Volume Ducking {self.settings[key]}")
         elif key == "sound_scheme":
             opts = ["Default", "Classic", "Minimal"]
             curr = opts.index(self.settings[key])
             self.settings[key] = opts[(curr + direction) % len(opts)]
+            import core.menu
+            core.menu.SOUND_SCHEME = self.settings[key]
             self.speak(self.settings[key])
 
         self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
