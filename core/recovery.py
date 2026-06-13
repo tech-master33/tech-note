@@ -14,15 +14,14 @@ LOG_PATH = os.path.join(BASE_DIR, "recovery.log")
 def _log(message):
     try:
         with open(LOG_PATH, "a") as f:
-            f.write(message + "
-")
+            f.write(message + '
+')
         print(f"RecoveryMenu: {message}")
     except Exception as e:
         print(f"Logging failed: {e}")
 
 def check_repo_integrity():
     issues = []
-    # Simplified integrity check
     for f in ['boot_64.py', 'core/menu.py', 'core/config.py']:
         if not os.path.exists(os.path.join(BASE_DIR, f)):
             issues.append(f"missing_file_{f}")
@@ -65,12 +64,10 @@ def run_auto_checks():
 def repair_requirements():
     _log("Repairing requirements via cmd.")
     try:
-        # Using startupinfo to guarantee the cmd window is hidden
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
         
-        # Use absolute path to python executable
         command = f'cmd /c "{sys.executable}" -m pip install -r "{REQ_PATH}"'
         _log(f"Running command: {command}")
         
