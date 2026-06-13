@@ -112,6 +112,7 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.fm_radio import FMRadioApp
     from apps.chat_app import ChatApp
     from apps.tutorial_app import TutorialApp
+    from apps.dora.dora_app import DoraApp
     root = MenuNode("Main Menu")
     
     # Tutorial
@@ -150,5 +151,8 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     
     # File Manager
     root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
+    
+    # Dora Assistant
+    root.add_child(MenuNode("Dora Assistant", lambda: app_callback(DoraApp), "d"))
     
     return root
