@@ -65,6 +65,9 @@ class Synth:
     def get_voice_index(self):
         return 0
 
+    def set_punctuation_level(self, level):
+        pass
+
     def reset_temp_params(self):
         pass
 

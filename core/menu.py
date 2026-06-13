@@ -6,6 +6,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLICK_SOUND = os.path.join(BASE_DIR, 'sounds', 'clicked.ogg')
 _audio_player = AudioPlayer()
 
+# Global position announcement toggle
+ANNOUNCE_POSITION = True
+
 class MenuNode:
     def __init__(self, title, action=None, shortcut=None):
         self.title = title
@@ -87,10 +90,12 @@ class MenuSystem:
     def announce_current(self):
         item = self.get_current_item()
         if item:
-            total = len(self.current_node.children)
-            pos = self.current_index + 1
-            # Shortcut for first-letter navigation or quick browsing: pos of total
-            self.speak(f"{item.title}. {pos} of {total}.")
+            if ANNOUNCE_POSITION:
+                total = len(self.current_node.children)
+                pos = self.current_index + 1
+                self.speak(f"{item.title}. {pos} of {total}.")
+            else:
+                self.speak(item.title)
         else:
             self.speak(self.current_node.title)
 
@@ -106,7 +111,11 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.media_player import MediaPlayerApp
     from apps.fm_radio import FMRadioApp
     from apps.chat_app import ChatApp
+    from apps.tutorial_app import TutorialApp
     root = MenuNode("Main Menu")
+    
+    # Tutorial
+    root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
     
     # Word Processor
     root.add_child(MenuNode("Word Processor", lambda: app_callback(TechEdit), "w"))

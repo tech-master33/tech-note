@@ -1,4 +1,5 @@
 import comtypes.client
+import re
 import time
 
 class SapiSynthBase:
@@ -6,6 +7,8 @@ class SapiSynthBase:
         self.engine = comtypes.client.CreateObject("SAPI.SpVoice")
         self.is_valid = True
         self.allowed_fragments = allowed_fragments
+        self.punctuation_level = "Some"
+        self.speak_punctuation = False
         
         if allowed_fragments:
             self._set_voice_by_fragments(allowed_fragments)
@@ -84,10 +87,26 @@ class SapiSynthBase:
             pass
         return 0
 
+    def set_punctuation_level(self, level):
+        self.punctuation_level = level
+
+    @staticmethod
+    def _filter_punctuation(text, level):
+        if level == "All":
+            return text
+        if level == "None":
+            return re.sub(r'[^\w\s]', '', text)
+        if level == "Some":
+            return re.sub(r'[^\w\s.,!?;:\-\'"]', '', text)
+        if level == "Most":
+            return re.sub(r'[^\w\s.,!?;:\-\'\"()\[\]{}@#$%^&*+=<>/\\|~]', '', text)
+        return text
+
     def speak(self, text, interrupt=True):
         if not self.engine:
             return
         
+        text = self._filter_punctuation(text, self.punctuation_level)
         try:
             flags = 1
             if interrupt:

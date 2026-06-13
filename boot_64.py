@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import win32api
 import win32con
 import time
 import comtypes.client
@@ -12,6 +13,7 @@ from synths.registry import create_synth
 from apps.lock_screen import LockScreenApp
 from apps.options_menu import OptionsApp
 from apps.power_menu import PowerApp
+from apps.tutorial_app import TutorialApp
 from core.setup_core import TechNoteSetup
 from core.audio_player import AudioPlayer
 from core.config import TECH_SOFT
@@ -32,11 +34,16 @@ class BrailleNoteApp:
         
         self.menu = None
         self.current_app = None
+        self._typing_buffer = ""
+        self._char_echo = "Off"
+        self._word_echo = "Off"
+        self._key_bindings = {}
+        self._announce_position = True
         
         # Apply visual settings to window
         self._apply_visual_settings()
 
-        # Play startup sound only if enabled
+        # Play startup sound only if enabled (BEFORE any speech)
         settings_path = os.path.join(self.tech_soft, 'settings.json')
         play_startup = True
         if os.path.exists(settings_path):
@@ -91,8 +98,18 @@ class BrailleNoteApp:
                     names = self.synth.get_voice_names()
                     if 0 <= voice_index < len(names):
                         self.synth.set_voice_by_index(voice_index)
+                pl = s.get("punctuation_level", "Some")
+                self.synth.set_punctuation_level(pl)
+                self._char_echo = s.get("char_echo", "Off")
+                self._word_echo = s.get("word_echo", "Off")
+                self._key_bindings = s.get("key_bindings", {})
+                self._announce_position = s.get("announce_position", "On")
             except Exception:
                 pass
+        else:
+            self._char_echo = "Off"
+            self._word_echo = "Off"
+            self._key_bindings = {}
 
     def _start_setup(self):
         setup = TechNoteSetup(self.synth, self.window)
@@ -152,6 +169,8 @@ class BrailleNoteApp:
             self.load_main_menu()
 
     def load_main_menu(self):
+        import core.menu
+        core.menu.ANNOUNCE_POSITION = self._announce_position == "On"
         self.menu_root = build_braillenote_menu(
             self.synth, self.window, self.launch_app, self._reset_and_restart
         )
@@ -159,23 +178,33 @@ class BrailleNoteApp:
         self.synth.speak("Main Menu")
 
     def launch_app(self, app_class):
+        self._typing_buffer = ""
         self.current_app = app_class(self.synth, self.window)
         self.current_app.on_focus()
 
     def _open_options(self):
         if self.menu is None:
             return
+        self._typing_buffer = ""
         self.current_app = OptionsApp(self.synth, self.window)
         self.current_app.on_focus()
 
     def _open_power_menu(self):
         if self.menu is None:
             return
+        self._typing_buffer = ""
         self.current_app = PowerApp(
             self.synth, self.window,
             on_restart=self._reload_app,
             on_exit=self._exit_app
         )
+        self.current_app.on_focus()
+
+    def _open_tutorial(self):
+        if self.menu is None and not self.current_app:
+            return
+        self._typing_buffer = ""
+        self.current_app = TutorialApp(self.synth, self.window)
         self.current_app.on_focus()
 
     def _exit_app(self):
@@ -198,23 +227,30 @@ class BrailleNoteApp:
             pass
         return status
 
+    def _is_key_match(self, vk, action_name):
+        bindings = self._key_bindings.get(action_name, [])
+        if not bindings:
+            defaults = {
+                "next_item": [32, 40],
+                "prev_item": [8, 38],
+                "select": [13],
+                "back": [27],
+                "help": [112],
+                "status": [116],
+                "power_menu": [192],
+            }
+            bindings = defaults.get(action_name, [])
+        return vk in bindings
+
     def handle_key(self, vk):
         print(f"Key pressed: {vk}")
-        
-        # --- Truly Global Shortcuts (Always Work) ---
 
-        # Global Status Bar (F5)
-        if vk == win32con.VK_F5:
-            info = self._get_status_info()
-            self.synth.speak(info)
-            return
+        # --- Truly Global (always work, before app delegation) ---
 
-        # Global Help (F1)
-        if vk == win32con.VK_F1:
-            if self.current_app and self.current_app.active:
-                self.synth.speak(self.current_app.get_help_text())
-            else:
-                self.synth.speak("Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. Backtick for power.")
+        # Power menu backtick always works
+        if vk in (0xC0, 0xDF) or self._is_key_match(vk, "power_menu"):
+            print("Global Power menu")
+            self._open_power_menu()
             return
 
         # Global Options (Space + O)
@@ -223,14 +259,35 @@ class BrailleNoteApp:
             self._open_options()
             return
 
-        # Global Power Menu (Backtick / Grave)
-        if vk == 0xC0 or vk == 0xDF:
-            print("Global Power menu")
-            self._open_power_menu()
+        # Global Tutorial (Shift + F1)
+        if vk == win32con.VK_F1 and (win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000):
+            self._open_tutorial()
             return
 
-        # --- Active App Delegation ---
+        # --- Active App Delegation (apps get ALL keys first) ---
         if self.current_app and self.current_app.active:
+            # Character echo
+            if self._char_echo == "On" and 0x30 <= vk <= 0x5A:
+                try:
+                    shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
+                    caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
+                    if 0x41 <= vk <= 0x5A:
+                        upper = shift ^ caps
+                        ch = chr(vk) if upper else chr(vk).lower()
+                    else:
+                        ch = chr(vk)
+                    self.synth.speak(ch)
+                    self._typing_buffer += ch
+                except:
+                    self._typing_buffer += chr(vk) if 0x30 <= vk <= 0x5A else ""
+            # Word echo on Space
+            if self._word_echo == "On" and vk == win32con.VK_SPACE and self._typing_buffer:
+                self.synth.speak(self._typing_buffer)
+                self._typing_buffer = ""
+            # Clear buffer on Enter or Escape
+            if vk in (win32con.VK_RETURN, win32con.VK_ESCAPE):
+                self._typing_buffer = ""
+
             self.current_app.on_key(vk)
             if not self.current_app.active:
                 self.current_app = None
@@ -238,24 +295,29 @@ class BrailleNoteApp:
                     self.menu.announce_current()
             return
 
-        # --- Main Menu Navigation ---
+        # --- Main Menu / No App Active ---
         if not self.menu:
             print("Menu not loaded")
             return
 
-        if vk == win32con.VK_SPACE:
-            print("Space detected")
+        if self._is_key_match(vk, "help"):
+            self.synth.speak("Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. Backtick for power. Shift F1 for tutorial.")
+            return
+
+        if self._is_key_match(vk, "status"):
+            info = self._get_status_info()
+            self.synth.speak(info)
+            return
+
+        if self._is_key_match(vk, "next_item"):
+            print("Next item")
             self.menu.next()
-        elif vk == win32con.VK_BACK:
-            print("Backspace detected")
+        elif self._is_key_match(vk, "prev_item"):
+            print("Previous item")
             self.menu.previous()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-        elif vk == win32con.VK_UP:
-            self.menu.previous()
-        elif vk == win32con.VK_RETURN:
+        elif self._is_key_match(vk, "select"):
             self.menu.select()
-        elif vk == win32con.VK_ESCAPE:
+        elif self._is_key_match(vk, "back"):
             self.menu.back()
         elif 0x41 <= vk <= 0x5A:
             char = chr(vk)

@@ -14,8 +14,8 @@ class SettingsApp(SoftApp):
         self.on_reset_account = on_reset_account
         self.settings_file = SETTINGS_PATH
         self.settings = {
-            "time_format": "12h", "startup_sound": "On",
-            "bg_color": "Black", "font_size": "Medium"
+            "theme": "Dark", "bg_color": "Black", "font_size": "Medium",
+            "time_format": "12h", "startup_sound": "On"
         }
         self.load_settings()
         self.adjust_mode = None
@@ -23,42 +23,48 @@ class SettingsApp(SoftApp):
         self.confirm_mode = None
         self.text_input = None
         self.account_menu = None
+        self._in_sub_menu = False
         self._build_main_menu()
 
     def _build_main_menu(self):
         self.account_menu = None
         self.adjust_mode = None
+        self._in_sub_menu = False
         root = MenuNode("Settings")
         root.add_child(MenuNode("Account Management", self._enter_account_menu))
-        root.add_child(MenuNode("System Settings", self._enter_system_menu))
         root.add_child(MenuNode("Display Settings", self._enter_display_menu))
-        root.add_child(MenuNode("System Info and Updates", self._enter_info_menu))
+        root.add_child(MenuNode("System Settings", self._enter_system_menu))
+        root.add_child(MenuNode("Check for Updates", self._check_for_updates))
+        root.add_child(MenuNode("About Tech-Note", self._about))
         root.add_child(MenuNode("Reset TechNote", self._reset_technote))
         self.menu = MenuSystem(root, self.speak)
 
+    def _enter_display_menu(self):
+        self._in_sub_menu = True
+        root = MenuNode("Display Settings")
+        root.add_child(MenuNode("Theme", lambda: self._enter_adjust("theme")))
+        root.add_child(MenuNode("Background Color", lambda: self._enter_adjust("bg_color")))
+        root.add_child(MenuNode("Font Size", lambda: self._enter_adjust("font_size")))
+        root.add_child(MenuNode("Back", self._back_to_main_menu))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
     def _enter_system_menu(self):
+        self._in_sub_menu = True
         root = MenuNode("System Settings")
         root.add_child(MenuNode("Time Format", lambda: self._enter_adjust("time_format")))
         root.add_child(MenuNode("Startup Sound", lambda: self._enter_adjust("startup_sound")))
-        root.add_child(MenuNode("Back", self._build_main_menu))
+        root.add_child(MenuNode("Back", self._back_to_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
 
-    def _enter_display_menu(self):
-        root = MenuNode("Display Settings")
-        root.add_child(MenuNode("Background Color", lambda: self._enter_adjust("bg_color")))
-        root.add_child(MenuNode("Font Size", lambda: self._enter_adjust("font_size")))
-        root.add_child(MenuNode("Back", self._build_main_menu))
-        self.menu = MenuSystem(root, self.speak)
-        self.menu.announce_current()
+    def _back_to_main_menu(self):
+        self._build_main_menu()
+        self._announce_main()
 
-    def _enter_info_menu(self):
-        root = MenuNode("System Info")
-        root.add_child(MenuNode("Check for Updates", self._check_for_updates))
-        root.add_child(MenuNode("About Tech-Note", self._about))
-        root.add_child(MenuNode("Back", self._build_main_menu))
-        self.menu = MenuSystem(root, self.speak)
-        self.menu.announce_current()
+    def _about(self):
+        self.speak("Tech-Note. A self voicing keyboard driven interface for Windows.")
+        self.window.update_text("Tech-Note v1.0")
 
     def load_settings(self):
         if os.path.exists(self.settings_file):
@@ -100,10 +106,6 @@ class SettingsApp(SoftApp):
         self.speak("Settings. " + title)
         self.window.update_text("Settings: " + title)
 
-    def _about(self):
-        self.speak("Tech-Note. A self voicing keyboard driven interface for Windows.")
-        self.window.update_text("Tech-Note v1.0")
-
     def on_key(self, vk):
         if self.adjust_mode:
             self._handle_adjust(vk)
@@ -142,19 +144,19 @@ class SettingsApp(SoftApp):
             return
 
         if vk == win32con.VK_ESCAPE:
-            if self.menu.current_node.parent:
-                self.menu.back()
+            if self._in_sub_menu:
+                self._back_to_main_menu()
             else:
                 self.exit_app()
             return
-            
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+
+        if vk in (win32con.VK_BACK, win32con.VK_UP):
             self.menu.previous()
         elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
             self.menu.next()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
-            
+
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Settings: " + item.title)
@@ -180,15 +182,15 @@ class SettingsApp(SoftApp):
         account = self._load_account()
         self._current_lock_type = account.get("lock_type", "pin")
         lt = "PIN" if self._current_lock_type == "pin" else "Password"
-        
+
         root = MenuNode("Account")
         root.add_child(MenuNode("Change Username", lambda: self._start_text_input("username", "Enter new username.")))
-        
+
         if self._current_lock_type == "pin":
             root.add_child(MenuNode("Change PIN", self._start_pin_reset))
         else:
             root.add_child(MenuNode("Change Password", lambda: self._start_text_input("password", "Enter new password.")))
-            
+
         root.add_child(MenuNode(f"Lock Type ({lt})", self._toggle_lock_type))
         root.add_child(MenuNode("Back", self._back_from_account))
         self.account_menu = MenuSystem(root, self.speak)
@@ -200,10 +202,10 @@ class SettingsApp(SoftApp):
         account["lock_type"] = new_type
         self._save_account(account)
         self._current_lock_type = new_type
-        
+
         lt_name = "PIN" if new_type == "pin" else "Password"
         self.speak(f"Lock type set to {lt_name}.")
-        
+
         if new_type == "pin":
             self._start_pin_reset()
         else:
@@ -218,21 +220,27 @@ class SettingsApp(SoftApp):
     def _handle_adjust(self, vk):
         if vk == win32con.VK_BACK or vk == win32con.VK_ESCAPE:
             self.adjust_mode = None
-            self._announce_main()
+            self._in_sub_menu = True
+            item = self.menu.get_current_item()
+            title = item.title if item else "Display Settings"
+            self.window.update_text("Settings: " + title)
+            self.menu.announce_current()
             return
-        elif vk == 0xBB: # Plus
+        elif vk == 0xBB:
             self._adjust_value(1)
-        elif vk == 0xBD: # Minus
+        elif vk == 0xBD:
             self._adjust_value(-1)
         elif vk == win32con.VK_RETURN:
-            self.speak("Set.")
             self.adjust_mode = None
-            self._announce_main()
+            item = self.menu.get_current_item()
+            title = item.title if item else "Display Settings"
+            self.window.update_text("Settings: " + title)
+            self.speak("Set.")
 
     def _adjust_value(self, direction):
         key = self.adjust_mode
         if not key: return
-        
+
         if key == "time_format":
             opts = ["12h", "24h"]
             curr = opts.index(self.settings[key])
@@ -240,6 +248,11 @@ class SettingsApp(SoftApp):
             self.speak(self.settings[key])
         elif key == "startup_sound":
             opts = ["On", "Off"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 2]
+            self.speak(self.settings[key])
+        elif key == "theme":
+            opts = ["Dark", "Light"]
             curr = opts.index(self.settings[key])
             self.settings[key] = opts[(curr + direction) % 2]
             self.speak(self.settings[key])
@@ -255,7 +268,7 @@ class SettingsApp(SoftApp):
             self.settings[key] = opts[(curr + direction) % 3]
             self.speak(self.settings[key])
             self._apply_display_settings()
-            
+
         self.window.update_text(key.replace('_', ' ').title() + ": " + str(self.settings[key]))
         self.save_settings()
 
@@ -482,4 +495,4 @@ class SettingsApp(SoftApp):
             return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
         if self.account_menu:
             return "Account Management. Use arrows to navigate options. Enter to select. Escape to go back."
-        return "Settings App. Use arrows to navigate sub-menus. Enter to select. Escape to exit."
+        return "Settings App. Use arrows to navigate. Enter to select. Escape to exit."
