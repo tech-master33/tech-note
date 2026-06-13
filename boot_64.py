@@ -40,10 +40,7 @@ class BrailleNoteApp:
         self._key_bindings = {}
         self._announce_position = True
         
-        # Apply visual settings to window
-        self._apply_visual_settings()
-
-        # Play startup sound only if enabled (BEFORE any speech)
+        # Play startup sound before any speech
         settings_path = os.path.join(self.tech_soft, 'settings.json')
         play_startup = True
         if os.path.exists(settings_path):
@@ -59,6 +56,9 @@ class BrailleNoteApp:
             if os.path.exists(startup_sound):
                 player = AudioPlayer()
                 player.play_sound_blocking(startup_sound)
+
+        # Apply visual settings to window (may trigger speech)
+        self._apply_visual_settings()
 
     def _apply_visual_settings(self):
         settings_path = os.path.join(self.tech_soft, 'settings.json')
