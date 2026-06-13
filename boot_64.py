@@ -6,7 +6,7 @@ import win32con
 import time
 import comtypes.client
 import pythoncom
-from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUNDS_DIR
+from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUNDS_DIR, SOUND_SCHEME
 from ui.stealth_window import StealthWindow
 from synths.sapi_synth import SapiSynthBase
 from synths.registry import create_synth
