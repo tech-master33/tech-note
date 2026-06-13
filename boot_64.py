@@ -174,6 +174,8 @@ class BrailleNoteApp:
     def handle_key(self, vk):
         print(f"Key pressed: {vk}")
         
+        # --- Truly Global Shortcuts (Always Work) ---
+
         # Global Status Bar (F5)
         if vk == win32con.VK_F5:
             info = self._get_status_info()
@@ -188,6 +190,19 @@ class BrailleNoteApp:
                 self.synth.speak("Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. Backtick for power.")
             return
 
+        # Global Options (Space + O)
+        if self.window.space_down and vk == 0x4F:
+            print("Global Chord: Space + O")
+            self._open_options()
+            return
+
+        # Global Power Menu (Backtick / Grave)
+        if vk == 0xC0 or vk == 0xDF:
+            print("Global Power menu")
+            self._open_power_menu()
+            return
+
+        # --- Active App Delegation ---
         if self.current_app and self.current_app.active:
             self.current_app.on_key(vk)
             if not self.current_app.active:
@@ -196,18 +211,9 @@ class BrailleNoteApp:
                     self.menu.announce_current()
             return
 
+        # --- Main Menu Navigation ---
         if not self.menu:
             print("Menu not loaded")
-            return
-
-        if self.window.space_down and vk == 0x4F:
-            print("Chord detected: Space + O")
-            self._open_options()
-            return
-
-        if vk == 0xC0 or vk == 0xDF:
-            print("Power menu")
-            self._open_power_menu()
             return
 
         if vk == win32con.VK_SPACE:

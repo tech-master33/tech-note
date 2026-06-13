@@ -12,12 +12,42 @@ class OptionsApp(SoftApp):
         self.adjust_mode = None
         self.settings_file = SETTINGS_PATH
         self._load_voice_settings()
+        self._build_main_menu()
+
+    def _build_main_menu(self):
         root = MenuNode("Options")
+        root.add_child(MenuNode("Voice Settings", self._enter_voice_menu))
+        root.add_child(MenuNode("System Settings", self._enter_system_menu))
+        root.add_child(MenuNode("Display Settings", self._enter_display_menu))
+        self.menu = MenuSystem(root, self.speak)
+
+    def _enter_voice_menu(self):
+        root = MenuNode("Voice Settings")
         root.add_child(MenuNode("TTS Engine", lambda: self._enter_adjust("tts_engine")))
         root.add_child(MenuNode("Speech Rate", lambda: self._enter_adjust("speech_rate")))
         root.add_child(MenuNode("Volume", lambda: self._enter_adjust("volume")))
-        root.add_child(MenuNode("Voice", lambda: self._enter_adjust("voice")))
+        root.add_child(MenuNode("Voice Selection", lambda: self._enter_adjust("voice")))
+        root.add_child(MenuNode("Back", self._build_main_menu))
         self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _enter_system_menu(self):
+        # Placeholder for more system settings (Layout, Clock, etc.)
+        root = MenuNode("System Settings")
+        root.add_child(MenuNode("Date and Time Format", lambda: self.speak("12 hour format set.")))
+        root.add_child(MenuNode("Startup Sound", lambda: self.speak("Startup sound enabled.")))
+        root.add_child(MenuNode("Back", self._build_main_menu))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _enter_display_menu(self):
+        # Placeholder for display settings
+        root = MenuNode("Display Settings")
+        root.add_child(MenuNode("Font Size", lambda: self.speak("Font size set to Large.")))
+        root.add_child(MenuNode("Theme Colors", lambda: self.speak("Theme set to High Contrast.")))
+        root.add_child(MenuNode("Back", self._build_main_menu))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
 
     def on_focus(self):
         item = self.menu.get_current_item()
@@ -31,16 +61,27 @@ class OptionsApp(SoftApp):
             return
 
         if vk == win32con.VK_ESCAPE:
-            self.exit_app()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            if self.menu.current_node.parent:
+                self.menu.back()
+            else:
+                self.exit_app()
+            return
+
+        if vk in (win32con.VK_BACK, win32con.VK_UP):
             self.menu.previous()
         elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
             self.menu.next()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
+        
         item = self.menu.get_current_item()
         if item:
-            self.window.update_text("Options: " + item.title)
+            self.window.update_text(item.title)
+
+    def get_help_text(self):
+        if self.adjust_mode:
+            return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
+        return "Options Menu. Use arrows to navigate sub-menus. Enter to select. Press Escape to go back."
 
     def _load_voice_settings(self):
         if os.path.exists(self.settings_file):
