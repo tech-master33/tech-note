@@ -64,8 +64,11 @@ def run_auto_checks():
 def repair_requirements():
     _log("Repairing requirements via cmd.")
     try:
-        # Using cmd /c to execute through command prompt as requested
-        # CREATE_NO_WINDOW hides the console window
+        # Using startupinfo to guarantee the cmd window is hidden
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        
         command = f'cmd /c {sys.executable} -m pip install -r "{REQ_PATH}"'
         result = subprocess.run(
             command, 
@@ -73,7 +76,7 @@ def repair_requirements():
             capture_output=True, 
             text=True, 
             timeout=300, 
-            creationflags=subprocess.CREATE_NO_WINDOW
+            startupinfo=startupinfo
         )
         if result.returncode != 0:
             _log(f"Pip error: {result.stderr}")
