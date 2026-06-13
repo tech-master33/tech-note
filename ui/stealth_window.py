@@ -31,9 +31,11 @@ class StealthWindow:
         self.thread.start()
         
         # Wait for hwnd to be created
-        for _ in range(10):
+        for i in range(50):
             if self.hwnd: break
             time.sleep(0.1)
+        if not self.hwnd:
+            print("StealthWindow: ERROR: Window hwnd not created after 5 seconds")
 
     def set_display_settings(self, bg_color=None, font_size=None):
         if bg_color is not None:
@@ -59,10 +61,8 @@ class StealthWindow:
             print("StealthWindow: RegisterClass succeeded")
         except Exception as e:
             print(f"StealthWindow: RegisterClass failed: {e}")
-            class_atom = 0 
+            return # Can't continue
             
-        # WS_EX_APPWINDOW makes it show in Alt+Tab and Taskbar.
-        # Removing WS_EX_TOOLWINDOW as it hides it from Alt+Tab.
         ex_style = WS_EX_LAYERED | win32con.WS_EX_APPWINDOW
         
         # Center the window
@@ -75,26 +75,37 @@ class StealthWindow:
         self.hwnd = win32gui.CreateWindowEx(
             ex_style,
             wc.lpszClassName,
-            "Tech-Note", # Title helps with Alt+Tab visibility
+            "Tech-Note",
             win32con.WS_POPUP | win32con.WS_VISIBLE,
             x, y, w, h,
             0, 0, wc.hInstance, None
         )
         print(f"StealthWindow: CreateWindowEx returned {self.hwnd}")
-        win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
-
-        win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 255, LWA_ALPHA)
         
-        # Initial set to topmost and foreground
-        win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
-                             win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
-        try:
-            win32gui.SetForegroundWindow(self.hwnd)
-        except:
-            pass
+        if self.hwnd:
+            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
+            win32gui.UpdateWindow(self.hwnd)
+            win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 255, LWA_ALPHA)
+            win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
+                                 win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+            try:
+                win32gui.SetForegroundWindow(self.hwnd)
+                print("StealthWindow: SetForegroundWindow succeeded")
+            except Exception as e:
+                print(f"StealthWindow: SetForegroundWindow failed: {e}")
+        else:
+            print("StealthWindow: ERROR: CreateWindowEx failed to return a valid hwnd")
 
         pythoncom.CoInitialize()
         win32gui.PumpMessages()
+
+    def show(self):
+        if self.hwnd:
+            print(f"StealthWindow: Explicitly showing window {self.hwnd}")
+            win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
+            win32gui.UpdateWindow(self.hwnd)
+        else:
+            print("StealthWindow: ERROR: show() called but hwnd is None")
 
     def _wnd_proc(self, hwnd, msg, wparam, lparam):
         if msg == win32con.WM_KEYDOWN:
