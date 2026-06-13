@@ -366,10 +366,19 @@ class SettingsApp(SoftApp):
                 ["git", "checkout", branch], cwd=BASE_DIR,
                 capture_output=True, text=True, timeout=30
             )
+            if result.returncode != 0:
+                self.speak(f"Failed to switch to {branch}.")
+                return
+            result = subprocess.run(
+                ["git", "pull"], cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=60
+            )
             if result.returncode == 0:
                 self.speak(f"Switched to {branch} channel.")
+                if "Already up to date" not in result.stdout.strip():
+                    self._install_requirements()
             else:
-                self.speak(f"Failed to switch to {branch}.")
+                self.speak(f"Switched to {branch} but pull failed.")
         except Exception:
             self.speak("Could not switch branch.")
 
