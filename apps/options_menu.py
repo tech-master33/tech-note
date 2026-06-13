@@ -14,9 +14,14 @@ class OptionsApp(SoftApp):
         self.settings = {
             "rate": 0, "volume": 100, "voice_index": 0,
             "punctuation_level": "Some",
+            "pitch": 50,
+            "capital_pitch_change": "Off",
             "char_echo": "Off",
             "word_echo": "Off",
-            "announce_position": "On"
+            "announce_position": "On",
+            "state_keys": "Off",
+            "volume_ducking": "Off",
+            "sound_scheme": "Default"
         }
         self._load_voice_settings()
         self._build_main_menu()
@@ -30,12 +35,19 @@ class OptionsApp(SoftApp):
         tts.add_child(MenuNode("Volume", lambda: self._enter_adjust("volume")))
         tts.add_child(MenuNode("Voice Selection", lambda: self._enter_adjust("voice")))
         tts.add_child(MenuNode("Punctuation Level", lambda: self._enter_adjust("punctuation_level")))
+        tts.add_child(MenuNode("Pitch", lambda: self._enter_adjust("pitch")))
+        tts.add_child(MenuNode("Capital Pitch Change", lambda: self._enter_adjust("capital_pitch_change")))
 
         kb = root.add_child(MenuNode("Keyboard Menu"))
         kb.add_child(MenuNode("Character Echo", lambda: self._enter_adjust("char_echo")))
         kb.add_child(MenuNode("Word Echo", lambda: self._enter_adjust("word_echo")))
         kb.add_child(MenuNode("Position Announcement", lambda: self._enter_adjust("announce_position")))
+        kb.add_child(MenuNode("State Keys", lambda: self._enter_adjust("state_keys")))
         kb.add_child(MenuNode("Key Bindings", self._enter_key_bindings))
+
+        audio = root.add_child(MenuNode("Audio Menu"))
+        audio.add_child(MenuNode("Volume Ducking", lambda: self._enter_adjust("volume_ducking")))
+        audio.add_child(MenuNode("Sound Scheme", lambda: self._enter_adjust("sound_scheme")))
 
         self.menu = MenuSystem(root, self.speak)
 
@@ -92,6 +104,8 @@ class OptionsApp(SoftApp):
                     self.manager.set_voice_by_index(v_idx)
                 pl = self.settings.get("punctuation_level", "Some")
                 self.manager.set_punctuation_level(pl)
+                self.manager.set_pitch(self.settings.get("pitch", 50))
+                self.manager.set_capital_pitch_change(self.settings.get("capital_pitch_change", "Off"))
             except Exception:
                 pass
 
@@ -141,6 +155,16 @@ class OptionsApp(SoftApp):
             self.speak(f"Word Echo. Current: {self.settings['word_echo']}.")
         elif key == "announce_position":
             self.speak(f"Position Announcement. Current: {self.settings['announce_position']}.")
+        elif key == "pitch":
+            self.speak(f"Pitch. Current: {self.settings['pitch']}.")
+        elif key == "capital_pitch_change":
+            self.speak(f"Capital Pitch Change. Current: {self.settings['capital_pitch_change']}.")
+        elif key == "state_keys":
+            self.speak(f"State Keys. Current: {self.settings['state_keys']}.")
+        elif key == "volume_ducking":
+            self.speak(f"Volume Ducking. Current: {self.settings['volume_ducking']}.")
+        elif key == "sound_scheme":
+            self.speak(f"Sound Scheme. Current: {self.settings['sound_scheme']}.")
 
         self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
 
@@ -211,6 +235,31 @@ class OptionsApp(SoftApp):
             self.speak(f"Position Announcement {self.settings[key]}")
             import core.menu
             core.menu.ANNOUNCE_POSITION = self.settings[key] == "On"
+        elif key == "pitch":
+            self.settings["pitch"] = max(0, min(100, self.settings["pitch"] + direction * 10))
+            self.manager.set_pitch(self.settings["pitch"])
+            self.speak(str(self.settings["pitch"]))
+        elif key == "capital_pitch_change":
+            opts = ["Off", "Say Cap", "Raise Pitch"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % len(opts)]
+            self.manager.set_capital_pitch_change(self.settings[key])
+            self.speak(self.settings[key])
+        elif key == "state_keys":
+            opts = ["Off", "On"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 2]
+            self.speak(f"State Keys {self.settings[key]}")
+        elif key == "volume_ducking":
+            opts = ["Off", "On"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 2]
+            self.speak(f"Volume Ducking {self.settings[key]}")
+        elif key == "sound_scheme":
+            opts = ["Default", "Classic", "Minimal"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % len(opts)]
+            self.speak(self.settings[key])
 
         self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
         self._save_settings()

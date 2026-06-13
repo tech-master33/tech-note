@@ -85,6 +85,18 @@ class Synth:
     def set_punctuation_level(self, level):
         pass
 
+    def get_pitch(self):
+        return 50
+
+    def set_pitch(self, value):
+        pass
+
+    def get_capital_pitch_change(self):
+        return "Off"
+
+    def set_capital_pitch_change(self, value):
+        pass
+
     def reset_temp_params(self):
         pass
 

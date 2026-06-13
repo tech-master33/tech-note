@@ -39,6 +39,7 @@ class BrailleNoteApp:
         self._word_echo = "Off"
         self._key_bindings = {}
         self._announce_position = True
+        self._state_keys = "Off"
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
@@ -140,6 +141,9 @@ class BrailleNoteApp:
                 self._word_echo = s.get("word_echo", "Off")
                 self._key_bindings = s.get("key_bindings", {})
                 self._announce_position = s.get("announce_position", "On")
+                self._state_keys = s.get("state_keys", "Off")
+                self.synth.set_pitch(s.get("pitch", 50))
+                self.synth.set_capital_pitch_change(s.get("capital_pitch_change", "Off"))
             except Exception:
                 pass
         else:
@@ -298,6 +302,14 @@ class BrailleNoteApp:
         # Global Tutorial (Shift + F1)
         if vk == win32con.VK_F1 and (win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000):
             self._open_tutorial()
+            return
+
+        # State key announcements (before app delegation)
+        if self._state_keys == "On" and vk in (0x14, 0x90, 0x91):
+            state_map = {0x14: "Caps lock", 0x90: "Num lock", 0x91: "Scroll lock"}
+            name = state_map[vk]
+            is_on = win32api.GetKeyState(vk) & 1
+            self.synth.speak(f"{name} {'on' if is_on else 'off'}")
             return
 
         # --- Active App Delegation (apps get ALL keys first) ---
