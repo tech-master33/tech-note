@@ -445,7 +445,7 @@ def _run_recovery_if_needed():
     if not issues:
         return False
     window = StealthWindow(on_key_down=None)
-    window.create()
+
     window.update_text("Tech-Note Recovery")
     menu = run_recovery(window)
     def handle_key(vk):
@@ -461,12 +461,37 @@ def _run_recovery_if_needed():
     return True
 
 if __name__ == "__main__":
+    # Redirect all stdout and stderr to out.log in the project root
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    out_log_path = os.path.join(project_root, "out.log")
+    try:
+        log_file = open(out_log_path, "a", buffering=1)
+        sys.stdout = log_file
+        sys.stderr = log_file
+    except Exception as e:
+        print(f"Failed to redirect output to {out_log_path}: {e}", file=sys.stderr)
+
     try:
         if not _run_recovery_if_needed():
             app = BrailleNoteApp()
             app.run()
-    except Exception:
+    except Exception as e: # Catch the exception object
         import traceback
-        with open("crash.log", "w") as f:
-            traceback.print_exc(file=f)
-        input("Application crashed. Check crash.log for details. Press Enter to exit.")
+        import sys # Import sys for stderr
+        print("\n--- APPLICATION CRASH ---", file=sys.stderr)
+        print("An unhandled exception occurred:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr) # Print to stderr
+        
+        # Ensure crash.log is written to the project root explicitly
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        crash_log_path = os.path.join(project_root, "crash.log")
+        
+        try:
+            with open(crash_log_path, "w") as f:
+                traceback.print_exc(file=f)
+            print(f"Crash details saved to {crash_log_path}", file=sys.stderr)
+        except Exception as file_e: # Catch exception during file write
+            print(f"ERROR: Could not write to {crash_log_path}: {file_e}", file=sys.stderr)
+            print("Please check file permissions or disk space.", file=sys.stderr)
+        
+        input("Application crashed. Check out.log and crash.log for details. Press Enter to exit.")
