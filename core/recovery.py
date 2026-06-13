@@ -70,7 +70,10 @@ def repair_requirements():
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
         
-        command = f'cmd /c {sys.executable} -m pip install -r "{REQ_PATH}"'
+        # Use absolute path to python executable
+        command = f'cmd /c "{sys.executable}" -m pip install -r "{REQ_PATH}"'
+        _log(f"Running command: {command}")
+        
         result = subprocess.run(
             command, 
             shell=True, 
@@ -80,7 +83,8 @@ def repair_requirements():
             startupinfo=startupinfo
         )
         if result.returncode != 0:
-            _log(f"Pip error: {result.stderr}")
+            _log(f"Pip error stdout: {result.stdout}")
+            _log(f"Pip error stderr: {result.stderr}")
             return False
         return not check_requirements()
     except Exception as e:
