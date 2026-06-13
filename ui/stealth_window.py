@@ -46,6 +46,7 @@ class StealthWindow:
             win32gui.InvalidateRect(self.hwnd, None, True)
 
     def _create_window(self):
+        print("StealthWindow: _create_window started")
         wc = win32gui.WNDCLASS()
         wc.lpfnWndProc = self._wnd_proc
         wc.lpszClassName = "BrailleNoteStealthUI"
@@ -55,7 +56,9 @@ class StealthWindow:
         
         try:
             class_atom = win32gui.RegisterClass(wc)
-        except:
+            print("StealthWindow: RegisterClass succeeded")
+        except Exception as e:
+            print(f"StealthWindow: RegisterClass failed: {e}")
             class_atom = 0 
             
         # WS_EX_APPWINDOW makes it show in Alt+Tab and Taskbar.
@@ -77,6 +80,8 @@ class StealthWindow:
             x, y, w, h,
             0, 0, wc.hInstance, None
         )
+        print(f"StealthWindow: CreateWindowEx returned {self.hwnd}")
+        win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
 
         win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 255, LWA_ALPHA)
         
