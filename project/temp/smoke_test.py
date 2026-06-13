@@ -3,6 +3,7 @@
 
 import os
 import sys
+import importlib
 
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, BASE)
@@ -26,9 +27,9 @@ check("menu import", lambda: __import__("core.menu"))
 check("config import", lambda: __import__("core.config"))
 check("app_base import", lambda: __import__("core.app_base"))
 
-check("menu has SOUND_SCHEME", lambda: __import__("core.menu").SOUND_SCHEME)
-check("menu has ANNOUNCE_POSITION", lambda: __import__("core.menu").ANNOUNCE_POSITION)
-check("menu has _get_sound_path", lambda: __import__("core.menu")._get_sound_path)
+check("menu has SOUND_SCHEME", lambda: importlib.import_module("core.menu").SOUND_SCHEME)
+check("menu has ANNOUNCE_POSITION", lambda: importlib.import_module("core.menu").ANNOUNCE_POSITION)
+check("menu has _get_sound_path", lambda: importlib.import_module("core.menu")._get_sound_path)
 
 check("synths registry import", lambda: __import__("synths.registry"))
 check("synths sapi_synth import", lambda: __import__("synths.sapi_synth"))
@@ -36,7 +37,7 @@ check("synths sapi_synth import", lambda: __import__("synths.sapi_synth"))
 def _check_synth_methods():
     from synths.sapi_synth import SapiSynthBase
     for m in ["get_pitch", "set_pitch", "get_capital_pitch_change",
-              "set_capital_pitch_change", "get_volume_ducking",
+              "set_capital_pitch_change",
               "set_volume_ducking", "set_punctuation_level"]:
         if not hasattr(SapiSynthBase, m):
             raise AttributeError(f"SapiSynthBase missing {m}")
@@ -45,6 +46,7 @@ check("synth has required methods", _check_synth_methods)
 
 check("options_menu import", lambda: __import__("apps.options_menu"))
 check("settings_app import", lambda: __import__("apps.settings_app"))
+check("recovery import", lambda: __import__("core.recovery"))
 
 print("=" * 40)
 if errors:

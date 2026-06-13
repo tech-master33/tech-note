@@ -17,7 +17,7 @@ class SettingsApp(SoftApp):
         self.settings = {
             "theme": "Dark", "bg_color": "Black", "font_size": "Medium",
             "time_format": "12h", "startup_sound": "On",
-            "keyboard_layout": "US"
+            "keyboard_layout": "US", "update_channel": "stable"
         }
         self.load_settings()
         self.adjust_mode = None
@@ -57,6 +57,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Time Format", lambda: self._enter_adjust("time_format")))
         root.add_child(MenuNode("Startup Sound", lambda: self._enter_adjust("startup_sound")))
         root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_adjust("keyboard_layout")))
+        root.add_child(MenuNode("Update Channel", lambda: self._enter_adjust("update_channel")))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -260,6 +261,12 @@ class SettingsApp(SoftApp):
             self.settings[key] = opts[(curr + direction) % 2]
             self.speak(self.settings[key])
             self._apply_keyboard_layout()
+        elif key == "update_channel":
+            opts = ["stable", "unstable"]
+            curr = opts.index(self.settings[key])
+            self.settings[key] = opts[(curr + direction) % 2]
+            self.speak(self.settings[key])
+            self._switch_branch()
         elif key == "theme":
             opts = ["Dark", "Light"]
             curr = opts.index(self.settings[key])
@@ -352,10 +359,38 @@ class SettingsApp(SoftApp):
             return sym_map[vk][1] if shift else sym_map[vk][0]
         return None
 
+    def _switch_branch(self):
+        branch = "main" if self.settings.get("update_channel") == "stable" else "testing"
+        try:
+            result = subprocess.run(
+                ["git", "checkout", branch], cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=30
+            )
+            if result.returncode != 0:
+                self.speak(f"Failed to switch to {branch}.")
+                return
+            result = subprocess.run(
+                ["git", "pull"], cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=60
+            )
+            if result.returncode == 0:
+                self.speak(f"Switched to {branch} channel.")
+                if "Already up to date" not in result.stdout.strip():
+                    self._install_requirements()
+            else:
+                self.speak(f"Switched to {branch} but pull failed.")
+        except Exception:
+            self.speak("Could not switch branch.")
+
     def _check_for_updates(self):
         self.speak("Checking for updates. Please wait.")
         self.window.update_text("Updating...")
         try:
+            branch = "main" if self.settings.get("update_channel") == "stable" else "testing"
+            subprocess.run(
+                ["git", "checkout", branch], cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=30
+            )
             result = subprocess.run(
                 ["git", "pull"], cwd=BASE_DIR,
                 capture_output=True, text=True, timeout=60
