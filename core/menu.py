@@ -2,8 +2,7 @@ import os
 from core.audio_player import AudioPlayer
 
 # Standard sound path
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOUNDS_DIR = os.path.join(BASE_DIR, 'sounds')
+SOUNDS_DIR = r'C:\tech\nsound'
 
 # Global position announcement toggle
 ANNOUNCE_POSITION = True
@@ -12,24 +11,24 @@ SOUND_SCHEME = "Default"
 _audio_player = AudioPlayer()
 
 def _get_sound_path(name):
-    scheme_dirs = {
-        "Default": SOUNDS_DIR,
-        "Classic": os.path.join(SOUNDS_DIR, 'classic'),
-        "Minimal": os.path.join(SOUNDS_DIR, 'minimal'),
-    }
-    base = scheme_dirs.get(SOUND_SCHEME, SOUNDS_DIR)
-    return os.path.join(base, name)
+    if SOUND_SCHEME == "Default":
+        return os.path.join(SOUNDS_DIR, name)
+    scheme_dir = os.path.join(SOUNDS_DIR, SOUND_SCHEME.lower())
+    path = os.path.join(scheme_dir, name)
+    if os.path.exists(path):
+        return path
+    return os.path.join(SOUNDS_DIR, name)
 
 def play_click():
     if SOUND_SCHEME == "Minimal":
         return
     path = _get_sound_path('clicked.ogg')
+    if not os.path.exists(path):
+        path = _get_sound_path('clicked.wav')
+    if not os.path.exists(path):
+        path = _get_sound_path('Focus.wav')
     if os.path.exists(path):
         _audio_player.play_file(path)
-    elif SOUND_SCHEME != "Default":
-        fallback = os.path.join(SOUNDS_DIR, 'clicked.ogg')
-        if os.path.exists(fallback):
-            _audio_player.play_file(fallback)
 
 class MenuNode:
     def __init__(self, title, action=None, shortcut=None):
