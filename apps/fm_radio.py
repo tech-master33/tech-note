@@ -1,7 +1,7 @@
 import win32con
 from core.app_base import SoftApp
 from core.audio_player import AudioPlayer
-
+from core.menu import MenuNode, MenuSystem
 
 class FMRadioApp(SoftApp):
     def __init__(self, manager, window):
@@ -15,10 +15,17 @@ class FMRadioApp(SoftApp):
             ("Absolute Radio", "https://edge-bauerall-01-gos2.sharp-stream.com/absoluteradiohigh"),
             ("Smooth Radio", "https://media-ssl.musicradio.com/SmoothUK"),
         ]
-        self.index = 0
+        self.menu = None
+
+    def _build_menu(self):
+        root = MenuNode("Radio")
+        for name, url in self.stations:
+            root.add_child(MenuNode(name, lambda n=name, u=url: self._tune(n, u)))
+        self.menu = MenuSystem(root, self.speak)
 
     def on_focus(self):
-        name = self.stations[self.index][0]
+        self._build_menu()
+        name = self.menu.get_current_item().title
         self.speak("FM Radio. " + name)
         self.window.update_text("Radio: " + name)
 
@@ -26,22 +33,29 @@ class FMRadioApp(SoftApp):
         if vk == win32con.VK_ESCAPE:
             self.player.stop()
             self.exit_app()
-        elif vk == win32con.VK_BACK or vk == win32con.VK_UP:
-            self.player.stop()
-            self.index = (self.index - 1) % len(self.stations)
-            self._announce()
-        elif vk == win32con.VK_SPACE or vk == win32con.VK_DOWN:
-            self.player.stop()
-            self.index = (self.index + 1) % len(self.stations)
-            self._announce()
-        elif vk == win32con.VK_RETURN:
-            self._tune()
-        elif vk == win32con.VK_F1:
+            return
+        
+        if vk == win32con.VK_F1:
             self.player.stop()
             self.speak("Stopped")
+            return
 
-    def _tune(self):
-        name, url = self.stations[self.index]
+        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+            self.player.stop()
+            self.menu.next()
+        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            self.player.stop()
+            self.menu.previous()
+        elif vk == win32con.VK_RETURN:
+            self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            self.menu.first_letter_nav(chr(vk))
+
+        item = self.menu.get_current_item()
+        if item:
+            self.window.update_text("Radio: " + item.title)
+
+    def _tune(self, name, url):
         self.speak("Tuning to " + name)
         ok = self.player.play_url(url)
         if ok:
@@ -49,8 +63,3 @@ class FMRadioApp(SoftApp):
             self.window.update_text("Now Playing: " + name)
         else:
             self.speak("Playback failed. Check internet connection.")
-
-    def _announce(self):
-        name = self.stations[self.index][0]
-        self.speak(name)
-        self.window.update_text("Radio: " + name)

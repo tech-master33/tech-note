@@ -3,15 +3,15 @@ import json
 import win32con
 from core.app_base import SoftApp
 from core.config import TECH_SOFT
+from core.menu import MenuNode, MenuSystem
 
 class AddressListApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.data_file = os.path.join(TECH_SOFT, 'contacts', 'contacts.json')
         self.contacts = {}
+        self.menu = None
         self.load_contacts()
-        self.keys = list(self.contacts.keys())
-        self.index = 0
 
     def load_contacts(self):
         if os.path.exists(self.data_file):
@@ -30,33 +30,37 @@ class AddressListApp(SoftApp):
         with open(self.data_file, 'w') as f:
             json.dump(self.contacts, f)
 
+    def _build_menu(self):
+        root = MenuNode("Address List")
+        keys = sorted(self.contacts.keys())
+        for name in keys:
+            phone = self.contacts[name]
+            root.add_child(MenuNode(name, lambda n=name, p=phone: self.speak(f"{n}, {p}")))
+        
+        if not keys:
+            root.add_child(MenuNode("No contacts"))
+            
+        self.menu = MenuSystem(root, self.speak)
+
     def on_focus(self):
-        self.keys = list(self.contacts.keys())
-        if self.index >= len(self.keys):
-            self.index = 0
-        self.speak("Address List. " + (self.keys[self.index] if self.keys else "No contacts"))
-        self.window.update_text("Contacts: " + (self.keys[self.index] if self.keys else "Empty"))
+        self._build_menu()
+        self.speak("Address List. " + self.menu.get_current_item().title)
+        self.window.update_text("Contacts: " + self.menu.get_current_item().title)
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
             return
-        
-        if not self.keys:
-            self.speak("No contacts")
-            return
 
-        if vk == win32con.VK_SPACE or vk == win32con.VK_DOWN:
-            self.index = (self.index + 1) % len(self.keys)
-            self.announce()
-        elif vk == win32con.VK_BACK or vk == win32con.VK_UP:
-            self.index = (self.index - 1) % len(self.keys)
-            self.announce()
+        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+            self.menu.next()
+        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            self.menu.previous()
         elif vk == win32con.VK_RETURN:
-            name = self.keys[self.index]
-            self.speak(f"{name}, {self.contacts[name]}")
+            self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            self.menu.first_letter_nav(chr(vk))
 
-    def announce(self):
-        name = self.keys[self.index]
-        self.speak(name)
-        self.window.update_text(name)
+        item = self.menu.get_current_item()
+        if item:
+            self.window.update_text("Contacts: " + item.title)

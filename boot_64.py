@@ -154,8 +154,32 @@ class BrailleNoteApp:
     def _exit_app(self):
         self.window.close()
 
+    def _get_status_info(self):
+        import datetime
+        import psutil
+        now = datetime.datetime.now()
+        time_str = now.strftime("%I:%M %p").lstrip("0")
+        date_str = now.strftime("%A, %B %d")
+        status = f"{time_str}. {date_str}. "
+        try:
+            bat = psutil.sensors_battery()
+            if bat:
+                pct = int(bat.percent)
+                plugged = "charging" if bat.power_plugged else "on battery"
+                status += f"Battery {pct} percent, {plugged}."
+        except:
+            pass
+        return status
+
     def handle_key(self, vk):
         print(f"Key pressed: {vk}")
+        
+        # Global Status Bar (F5)
+        if vk == win32con.VK_F5:
+            info = self._get_status_info()
+            self.synth.speak(info)
+            return
+
         if self.current_app and self.current_app.active:
             self.current_app.on_key(vk)
             if not self.current_app.active:

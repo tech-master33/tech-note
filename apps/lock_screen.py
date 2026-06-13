@@ -78,12 +78,7 @@ class LockScreenApp(SoftApp):
             self._handle_input(vk)
             return
 
-        if vk == win32con.VK_F5:
-            self._build_menu()
-            titles = [c.title for c in self.menu.current_node.children[:-2]]
-            self.speak(" ".join(titles))
-            self.window.update_text(self._display_text())
-        elif vk == win32con.VK_ESCAPE:
+        if vk == win32con.VK_ESCAPE:
             self.speak("Locked.")
         elif vk in (win32con.VK_SPACE, win32con.VK_DOWN):
             self.menu.next()
