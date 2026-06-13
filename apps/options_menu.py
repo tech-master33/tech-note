@@ -230,15 +230,6 @@ class OptionsApp(SoftApp):
         self.menu.announce_current()
 
     # --- Key Bindings ---
-    DEFAULT_BINDINGS = {
-        "next_item": [32, 40],
-        "prev_item": [8, 38],
-        "select": [13],
-        "back": [27],
-        "help": [112],
-        "status": [116],
-        "power_menu": [192],
-    }
     BIND_NAMES = {
         "next_item": "Next Item (Space/Down)",
         "prev_item": "Previous Item (Backspace/Up)",
@@ -246,13 +237,36 @@ class OptionsApp(SoftApp):
         "back": "Back (Escape)",
         "help": "Help (F1)",
         "status": "Status (F5)",
-        "power_menu": "Power Menu (Backtick)",
+        "power_menu": "Power Menu",
     }
     VK_NAMES = {
         8: "Backspace", 13: "Enter", 27: "Escape", 32: "Space",
-        38: "Up", 40: "Down", 112: "F1", 116: "F5", 192: "Backtick",
+        38: "Up", 40: "Down", 112: "F1", 116: "F5",
         0xBB: "Equals", 0xBD: "Minus",
     }
+
+    def _get_power_key_vk(self):
+        try:
+            if os.path.exists(self.settings_file):
+                with open(self.settings_file, 'r') as f:
+                    s = json.load(f)
+                if s.get("keyboard_layout") == "UK":
+                    return 0xDF
+        except Exception:
+            pass
+        return 0xC0
+
+    def _get_default_bindings(self):
+        pk = self._get_power_key_vk()
+        return {
+            "next_item": [32, 40],
+            "prev_item": [8, 38],
+            "select": [13],
+            "back": [27],
+            "help": [112],
+            "status": [116],
+            "power_menu": [pk],
+        }
 
     def _enter_key_bindings(self):
         self.adjust_mode = None
@@ -262,14 +276,18 @@ class OptionsApp(SoftApp):
         self.adjust_mode = None
         root = MenuNode("Key Bindings")
         bindings = self._load_bindings()
+        defaults = self._get_default_bindings()
+        power_vk = self._get_power_key_vk()
+        vk_name_map = dict(self.VK_NAMES)
+        vk_name_map[0xC0] = "Backtick (US)" if power_vk == 0xC0 else "Backtick (UK)"
+        vk_name_map[0xDF] = "Backtick (UK)" if power_vk == 0xDF else "Backtick (US)"
         for action in sorted(self.BIND_NAMES.keys()):
-            keys = bindings.get(action, self.DEFAULT_BINDINGS[action])
+            keys = bindings.get(action, defaults[action])
             label = self.BIND_NAMES[action]
-            vk_names = []
+            names = []
             for k in keys:
-                vk_names.append(self.VK_NAMES.get(k, f"VK_{k}"))
-            display = f"{label} [{', '.join(vk_names)}]"
-            root.add_child(MenuNode(display, lambda a=action: self._start_rebind(a)))
+                names.append(vk_name_map.get(k, f"VK_{k}"))
+            display = f"{label} [{' '.join(names)}]"
         root.add_child(MenuNode("Reset to Defaults", self._reset_bindings))
         root.add_child(MenuNode("Back", self._back_from_bindings))
         self.menu = MenuSystem(root, self.speak)

@@ -39,6 +39,9 @@ class BrailleNoteApp:
         self._word_echo = "Off"
         self._key_bindings = {}
         self._announce_position = True
+
+        # Detect keyboard layout for power key assignment
+        self._detect_keyboard_layout()
         
         # Play startup sound before any speech
         settings_path = os.path.join(self.tech_soft, 'settings.json')
@@ -59,6 +62,29 @@ class BrailleNoteApp:
 
         # Apply visual settings to window (may trigger speech)
         self._apply_visual_settings()
+
+    def _detect_keyboard_layout(self):
+        hkl = win32api.GetKeyboardLayout(0)
+        lang_id = hkl & 0xFFFF
+        if lang_id == 0x0809:
+            self._keyboard_layout = "UK"
+            self._power_vk = 0xDF
+            self._power_key_name = "backtick (left of Z)"
+        else:
+            self._keyboard_layout = "US"
+            self._power_vk = 0xC0
+            self._power_key_name = "backtick (above Tab)"
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        try:
+            s = {}
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+            s["keyboard_layout"] = self._keyboard_layout
+            with open(settings_path, 'w') as f:
+                json.dump(s, f)
+        except Exception:
+            pass
 
     def _apply_visual_settings(self):
         settings_path = os.path.join(self.tech_soft, 'settings.json')
@@ -237,7 +263,7 @@ class BrailleNoteApp:
                 "back": [27],
                 "help": [112],
                 "status": [116],
-                "power_menu": [192],
+                "power_menu": [self._power_vk],
             }
             bindings = defaults.get(action_name, [])
         return vk in bindings
@@ -247,8 +273,8 @@ class BrailleNoteApp:
 
         # --- Truly Global (always work, before app delegation) ---
 
-        # Power menu backtick always works
-        if vk in (0xC0, 0xDF) or self._is_key_match(vk, "power_menu"):
+        # Power menu (layout-aware backtick)
+        if vk == self._power_vk or self._is_key_match(vk, "power_menu"):
             print("Global Power menu")
             self._open_power_menu()
             return
@@ -301,7 +327,7 @@ class BrailleNoteApp:
             return
 
         if self._is_key_match(vk, "help"):
-            self.synth.speak("Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. Backtick for power. Shift F1 for tutorial.")
+            self.synth.speak(f"Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. {self._power_key_name} for power. Shift F1 for tutorial.")
             return
 
         if self._is_key_match(vk, "status"):
