@@ -5,7 +5,6 @@ from core.menu import MenuNode, MenuSystem
 from apps.dora.dora_core import DoraAssistant
 from apps.dora.dora_config import load_settings, save_settings, is_first_run
 from apps.dora.dora_setup import DoraSetup
-from apps.dora.skills import timer as timer_skill
 
 class DoraApp(SoftApp):
     def __init__(self, manager, window):
@@ -100,7 +99,8 @@ class DoraApp(SoftApp):
         self.speak("How many minutes?")
         response = self.assistant.listen()
         if response and any(c.isdigit() for c in response):
-            timer_skill.start_timer(self.assistant, response)
+            from apps.dora.skills.timer import start_timer
+            start_timer(self.assistant, response)
         else:
             self.speak("No time specified.")
 

@@ -5,13 +5,21 @@ import inspect
 from apps.dora.dora_config import load_settings, save_settings
 
 _sr = None
+_skills = None
+
 def _get_sr():
     global _sr
     if _sr is None:
         import speech_recognition as sr_mod
         _sr = sr_mod
     return _sr
-from apps.dora.skills import information, system, timer as timer_skill, conversation
+
+def _get_skills():
+    global _skills
+    if _skills is None:
+        from apps.dora.skills import information, system, timer as timer_skill, conversation
+        _skills = {'information': information, 'system': system, 'timer': timer_skill, 'conversation': conversation}
+    return _skills
 
 class DoraAssistant:
     def __init__(self, synth_speak):
@@ -25,37 +33,41 @@ class DoraAssistant:
         self.input_queue = queue.Queue()
 
     def _build_commands(self):
+        sk = _get_skills()
         return {
-            'what time is it': information.tell_time,
-            'time': information.tell_time,
-            'what is the date': information.tell_date,
-            'date': information.tell_date,
-            'shut down': system.shutdown_computer,
-            'turn off': system.shutdown_computer,
-            'restart': system.restart_computer,
-            'reboot': system.restart_computer,
-            'cancel shutdown': system.cancel_shutdown,
-            'battery': system.get_battery_status,
-            'battery status': system.get_battery_status,
-            'open': system.open_application,
-            'start': system.open_application,
-            'launch': system.open_application,
-            'set timer': timer_skill.start_timer,
-            'timer': timer_skill.start_timer,
-            'stop timer': timer_skill.stop_timer,
-            'stop alarm': timer_skill.stop_timer,
+            'what time is it': sk['information'].tell_time,
+            'time': sk['information'].tell_time,
+            'what is the date': sk['information'].tell_date,
+            'date': sk['information'].tell_date,
+            'shut down': sk['system'].shutdown_computer,
+            'turn off': sk['system'].shutdown_computer,
+            'restart': sk['system'].restart_computer,
+            'reboot': sk['system'].restart_computer,
+            'cancel shutdown': sk['system'].cancel_shutdown,
+            'battery': sk['system'].get_battery_status,
+            'battery status': sk['system'].get_battery_status,
+            'open': sk['system'].open_application,
+            'start': sk['system'].open_application,
+            'launch': sk['system'].open_application,
+            'set timer': sk['timer'].start_timer,
+            'timer': sk['timer'].start_timer,
+            'stop timer': sk['timer'].stop_timer,
+            'stop alarm': sk['timer'].stop_timer,
         }
 
     def speak(self, text):
         self.speak_func(text)
 
-    def listen(self, timeout=5):
+    def listen(self, timeout=5, source=None):
         try:
             sr = _get_sr()
             r = sr.Recognizer()
-            with sr.Microphone() as source:
-                r.adjust_for_ambient_noise(source, duration=0.3)
+            if source is not None:
                 audio = r.listen(source, timeout=timeout)
+            else:
+                with sr.Microphone() as mic:
+                    r.adjust_for_ambient_noise(mic, duration=0.3)
+                    audio = r.listen(mic, timeout=timeout)
             command = r.recognize_google(audio)
             return command.lower()
         except sr.WaitTimeoutError:
@@ -84,7 +96,8 @@ class DoraAssistant:
                     func(self)
                 return
         if self.ai_mode:
-            conversation.chat_with_ai(self, command)
+            sk = _get_skills()
+            sk['conversation'].chat_with_ai(self, command)
         else:
             self.speak("I don't know that command.")
 
@@ -103,7 +116,8 @@ class DoraAssistant:
                 query = r.recognize_google(audio).lower().strip()
                 if wake_word in query:
                     self.speak("Yes?")
-                    command = self.listen()
+                    with sr.Microphone() as source:
+                        command = self.listen(source=source)
                     self.process_command(command)
             except sr.WaitTimeoutError:
                 continue
