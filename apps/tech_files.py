@@ -154,7 +154,7 @@ class TechFiles(SoftApp):
             self._show_drive_menu()
             return
 
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+        if vk == win32con.VK_DOWN:
             self.menu.next()
         elif vk in (win32con.VK_BACK, win32con.VK_UP):
             self.menu.previous()
@@ -185,4 +185,4 @@ class TechFiles(SoftApp):
                 self.speak("Delete failed.")
 
     def get_help_text(self):
-        return "File Manager. Space for next, Backspace for previous. Enter to open. Space+D for next drive. F1 to delete. Escape to exit."
+        return "File Manager. Down for next, Backspace for previous. Enter to open. Space+D for drive menu. F1 to delete. Escape to exit."
