@@ -162,8 +162,8 @@ class StealthWindow:
             win32gui.EndPaint(hwnd, ps)
             return 0
         elif msg == win32con.WM_SYSCOMMAND:
-            if wparam == win32con.SC_CLOSE:
-                win32gui.DestroyWindow(hwnd)
+            if wparam & 0xFFF0 == win32con.SC_CLOSE:
+                win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
                 return 0
             return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
         elif msg == win32con.WM_CLOSE:

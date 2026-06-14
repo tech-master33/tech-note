@@ -95,15 +95,24 @@ class BrailleNoteApp:
                 saved_layout = s.get("keyboard_layout")
             except:
                 pass
-        if saved_layout in ("US", "UK"):
+        if saved_layout in ("US", "UK", "Arabic"):
             self._keyboard_layout = saved_layout
         else:
             hkl = win32api.GetKeyboardLayout(0)
             lang_id = hkl & 0xFFFF
-            self._keyboard_layout = "UK" if lang_id == 0x0809 else "US"
+            primary_lang = lang_id & 0x3FF
+            if primary_lang == 0x01: # LANG_ARABIC
+                self._keyboard_layout = "Arabic"
+            else:
+                self._keyboard_layout = "UK" if lang_id == 0x0809 else "US"
+
         if self._keyboard_layout == "UK":
             self._power_vk = 0xDF
             self._power_key_name = "backtick (left of Z)"
+        elif self._keyboard_layout == "Arabic":
+            # Arabic keyboards usually have backtick at 0xC0 like US
+            self._power_vk = 0xC0
+            self._power_key_name = "backtick (above Tab)"
         else:
             self._power_vk = 0xC0
             self._power_key_name = "backtick (above Tab)"
@@ -349,6 +358,12 @@ class BrailleNoteApp:
         print(f"Key pressed: {vk}")
 
         # --- Truly Global (always work, before app delegation) ---
+
+        # Alt+F4 to exit
+        if vk == win32con.VK_F4 and (win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000):
+            print("Global Alt+F4: Exiting")
+            self._exit_app()
+            return
 
         # Voice Assistant (F2)
         if vk == win32con.VK_F2:
