@@ -60,8 +60,7 @@ class StealthWindow:
             class_atom = win32gui.RegisterClass(wc)
             print("StealthWindow: RegisterClass succeeded")
         except Exception as e:
-            print(f"StealthWindow: RegisterClass failed: {e}")
-            return # Can't continue
+            print(f"StealthWindow: RegisterClass (may already be registered): {e}")
             
         ex_style = WS_EX_LAYERED | win32con.WS_EX_APPWINDOW
         
@@ -151,6 +150,7 @@ class StealthWindow:
             return 0
         elif msg == win32con.WM_SYSCOMMAND:
             if wparam == win32con.SC_CLOSE:
+                win32gui.DestroyWindow(hwnd)
                 return 0
             return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
         elif msg == win32con.WM_CLOSE:
