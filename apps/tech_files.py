@@ -1,6 +1,8 @@
 import os
 import string
 import win32con
+import win32file
+import win32api
 from core.app_base import SoftApp
 from core.config import TECH_SOFT
 from core.menu import MenuNode, MenuSystem
@@ -10,34 +12,62 @@ def _get_techsoft_drive():
     return os.path.splitdrive(TECH_SOFT)[0].upper()
 
 
+def _get_volume_label(root):
+    try:
+        info = win32api.GetVolumeInformation(root)
+        return info[0]
+    except Exception:
+        return ""
+
+
+def _get_drive_type(root):
+    return win32file.GetDriveTypeW(root)
+
+
 def _get_drive_list():
     tech_drive = _get_techsoft_drive()
     drives = []
-    hd_num = 1
     for letter in string.ascii_uppercase:
         root = f"{letter}:\\"
-        if os.path.exists(root):
-            if root.upper().startswith(tech_drive):
-                drives.append(("TechNote 0", root))
+        if not os.path.exists(root):
+            continue
+        drv_type = _get_drive_type(root)
+        if root.upper().startswith(tech_drive):
+            drives.append(("HardDisk", root))
+        elif drv_type == win32file.DRIVE_REMOVABLE:
+            drives.append(("External", root))
+        elif drv_type == win32file.DRIVE_CDROM:
+            drives.append(("CD-ROM", root))
+        elif drv_type == win32file.DRIVE_REMOTE:
+            drives.append(("Network", root))
+        else:
+            label = _get_volume_label(root)
+            if label:
+                drives.append((label, root))
             else:
-                drives.append((f"HardDisk {hd_num}", root))
-                hd_num += 1
+                drives.append((f"HardDisk {letter}", root))
     return drives
 
 
 class TechFiles(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
+        self.drives = _get_drive_list()
+        self.drive_index = 0
         self.path = None
-        self._show_drives()
+        self._open_drive(0)
 
-    def _show_drives(self):
-        self.path = None
-        root = MenuNode("Drives")
-        for name, root_path in _get_drive_list():
-            root.add_child(MenuNode(name, lambda p=root_path: self._open_dir(p)))
-        self.menu = MenuSystem(root, self.speak)
-        self.speak("File Manager. Drives.")
+    def _open_drive(self, index):
+        if 0 <= index < len(self.drives):
+            self.drive_index = index
+            name, root_path = self.drives[index]
+            self.path = root_path
+            self.speak(f"File Manager. {name}")
+            self.refresh()
+
+    def _switch_drive(self):
+        idx = (self.drive_index + 1) % len(self.drives)
+        self._open_drive(idx)
 
     def _open_dir(self, path):
         self.path = path
@@ -69,32 +99,24 @@ class TechFiles(SoftApp):
 
     def _go_up(self):
         if self.path is None:
-            self.speak("Already at drives.")
             return
         parent = os.path.dirname(self.path)
         if parent != self.path:
             self.path = parent
             self.refresh()
         else:
-            self._show_drives()
+            self.speak("Root of drive.")
 
     def _open_file(self, path):
         filename = os.path.basename(path)
         self.speak(f"File: {filename}")
 
-    def _go_techsoft(self):
-        self._open_dir(TECH_SOFT)
-        self.speak("TechNote 0.")
-
     def on_focus(self):
-        if self.path is None:
-            self._show_drives()
-        else:
-            self._build_menu()
+        self._build_menu()
         item = self.menu.get_current_item()
         title = item.title if item else "File Manager"
-        self.speak("File Manager. " + title)
         self.window.update_text("Files: " + title)
+        self.speak("File Manager. " + title)
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
@@ -106,7 +128,7 @@ class TechFiles(SoftApp):
             return
 
         if self.window.space_down and vk == 0x44:
-            self._go_techsoft()
+            self._switch_drive()
             return
 
         if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
@@ -124,7 +146,7 @@ class TechFiles(SoftApp):
 
     def _delete_current(self):
         item = self.menu.get_current_item()
-        if item and item.title not in ("Parent Folder", "Empty Folder", "Drives"):
+        if item and item.title not in ("Parent Folder", "Empty Folder"):
             clean = item.title.replace("Folder: ", "")
             full = os.path.join(self.path, clean)
             try:
@@ -140,4 +162,4 @@ class TechFiles(SoftApp):
                 self.speak("Delete failed.")
 
     def get_help_text(self):
-        return "File Manager. Space for next, Backspace for previous. Enter to open. Space+D for TechNote. F1 to delete. Escape to exit."
+        return "File Manager. Space for next, Backspace for previous. Enter to open. Space+D for next drive. F1 to delete. Escape to exit."
