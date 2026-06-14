@@ -13,8 +13,10 @@ def _get_sr():
 
 
 class VoiceAssistant:
-    def __init__(self, speak_func):
+    def __init__(self, speak_func, on_shutdown=None, on_restart=None):
         self.speak = speak_func
+        self.on_shutdown = on_shutdown
+        self.on_restart = on_restart
         self.listening = False
 
     def listen(self, timeout=5):
@@ -42,14 +44,15 @@ class VoiceAssistant:
         elif "battery" in c:
             self._battery()
         elif "shut" in c or "turn off" in command:
-            self.speak("Shutting down in 10 seconds.")
-            subprocess.Popen("shutdown /s /t 10", shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            self.speak("Shutting down Tech-Note.")
+            if self.on_shutdown:
+                self.on_shutdown()
         elif "restart" in c or "reboot" in c:
-            self.speak("Restarting in 10 seconds.")
-            subprocess.Popen("shutdown /r /t 10", shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            self.speak("Restarting Tech-Note.")
+            if self.on_restart:
+                self.on_restart()
         elif "cancel" in c:
-            subprocess.Popen("shutdown /a", shell=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            self.speak("Cancelled.")
+            self.speak("Nothing to cancel.")
         elif "open" in command or "launch" in command or "start" in command:
             self._open_app(command)
         else:

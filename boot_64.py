@@ -265,7 +265,11 @@ class BrailleNoteApp:
     def _activate_assistant(self):
         if self.assistant is None:
             from core.assistant import VoiceAssistant
-            self.assistant = VoiceAssistant(self.synth.speak)
+            self.assistant = VoiceAssistant(
+                self.synth.speak,
+                on_shutdown=self._exit_app,
+                on_restart=self._reload_app,
+            )
         threading.Thread(target=self.assistant.run, daemon=True).start()
 
     def _get_status_info(self):
