@@ -276,13 +276,32 @@ class ChatApp(SoftApp):
         elif self.state == STATE_CONFIRM:
             self._handle_confirm(vk)
 
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if getattr(self.manager, 'space_used_in_chord', False):
+                return
+            if self.state in (STATE_MENU, STATE_ROOM_LIST, STATE_USER_LIST, STATE_ADMIN_PANEL, STATE_LOGIN, STATE_REGISTER):
+                if self.menu:
+                    self.menu.next()
+                    item = self.menu.get_current_item()
+                    title = item.title if item else self.menu.current_node.title
+                    self.window.update_text(title)
+            elif self.state == STATE_ROOM_CHAT:
+                if self.messages:
+                    self.msg_index = (self.msg_index + 1) % len(self.messages)
+                    m = self.messages[self.msg_index]
+                    self.speak(f"{m['sender']}: {m['text']}")
+                    self.window.update_text(f"{m['sender']}: {m['text']}")
+
     def _handle_menu(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
             return
-        if vk in (win32con.VK_SPACE):
+        if vk == win32con.VK_BACK:
+            self.menu.previous()
+        elif vk == win32con.VK_DOWN:
             self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -299,9 +318,11 @@ class ChatApp(SoftApp):
             if self.menu:
                 self.menu.announce_current()
             return
-        if vk in (win32con.VK_SPACE):
+        if vk == win32con.VK_BACK:
+            self.menu.previous()
+        elif vk == win32con.VK_DOWN:
             self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -330,13 +351,7 @@ class ChatApp(SoftApp):
                 self.speak("Leave room? Enter to confirm, Escape to cancel.")
                 self.window.update_text("Leave room?")
             return
-        if vk in (win32con.VK_SPACE):
-            if self.messages:
-                self.msg_index = (self.msg_index + 1) % len(self.messages)
-                m = self.messages[self.msg_index]
-                self.speak(f"{m['sender']}: {m['text']}")
-                self.window.update_text(f"{m['sender']}: {m['text']}")
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             if self.messages:
                 self.msg_index = (self.msg_index - 1) % len(self.messages)
                 m = self.messages[self.msg_index]
@@ -670,9 +685,7 @@ class ChatApp(SoftApp):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
             return
-        if vk in (win32con.VK_SPACE):
-            self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -685,9 +698,7 @@ class ChatApp(SoftApp):
         if vk == win32con.VK_ESCAPE:
             self._show_login_menu()
             return
-        if vk in (win32con.VK_SPACE):
-            self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()

@@ -181,9 +181,11 @@ class EmailApp(SoftApp):
             self._handle_compose(vk)
 
     def _handle_menu(self, vk):
-        if vk in (win32con.VK_SPACE):
+        if vk == win32con.VK_BACK:
+            self.menu.previous()
+        elif vk == win32con.VK_DOWN:
             self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -194,14 +196,28 @@ class EmailApp(SoftApp):
             if item: self.window.update_text("Email: " + item.title)
 
     def _handle_inbox(self, vk):
-        if vk in (win32con.VK_SPACE):
+        if vk == win32con.VK_BACK:
+            self.menu.previous()
+        elif vk == win32con.VK_DOWN:
             self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
         item = self.menu.get_current_item()
         if item: self.window.update_text("Inbox: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if getattr(self.manager, 'space_used_in_chord', False):
+                return
+            if self.state in (STATE_MENU, STATE_INBOX):
+                if self.menu:
+                    self.menu.next()
+                    item = self.menu.get_current_item()
+                    if item:
+                        label = "Email: " if self.state == STATE_MENU else "Inbox: "
+                        self.window.update_text(label + item.title)
 
     def _handle_setup(self, vk):
         if vk == win32con.VK_RETURN:

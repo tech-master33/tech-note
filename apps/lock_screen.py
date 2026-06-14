@@ -75,16 +75,25 @@ class LockScreenApp(SoftApp):
             self._handle_input(vk)
             return
 
-        if vk == win32con.VK_ESCAPE:
+        elif vk == win32con.VK_ESCAPE:
             self.speak("Locked.")
-        elif vk in (win32con.VK_SPACE):
-            self.menu.next()
-            self.window.update_text(self._display_text())
-        elif vk in (win32con.VK_BACK):
-            self.menu.previous()
-            self.window.update_text(self._display_text())
         elif vk == win32con.VK_RETURN:
             self.menu.select()
+        elif vk == win32con.VK_DOWN:
+            self.menu.next()
+            self.window.update_text(self._display_text())
+        elif vk == win32con.VK_UP:
+            self.menu.previous()
+            self.window.update_text(self._display_text())
+
+    def on_key_up(self, vk):
+        if self.pin_mode:
+            return
+        if getattr(self.manager, 'space_used_in_chord', False):
+            return
+        if vk == win32con.VK_SPACE:
+            self.menu.next()
+            self.window.update_text(self._display_text())
 
     def _start_entry(self):
         self.pin_mode = True
@@ -105,17 +114,22 @@ class LockScreenApp(SoftApp):
     def _handle_pin(self, vk):
         if 0x30 <= vk <= 0x39:
             if len(self.input_buf) < 4:
-                self.input_buf += chr(vk)
+                char = chr(vk)
+                self.input_buf += char
+                self.speak("star")
                 self.window.update_text("*" * len(self.input_buf))
                 if len(self.input_buf) == 4:
                     self._check_pin()
         elif vk == win32con.VK_BACK:
             if self.input_buf:
                 self.input_buf = self.input_buf[:-1]
+                self.speak("Deleted")
                 text = "*" * len(self.input_buf) if self.input_buf else "PIN:"
                 self.window.update_text(text)
             else:
                 self._cancel_entry()
+        elif vk == win32con.VK_SPACE:
+            self.speak("Space")
         elif vk == win32con.VK_ESCAPE:
             self._cancel_entry()
 
@@ -139,6 +153,7 @@ class LockScreenApp(SoftApp):
         if vk == win32con.VK_BACK:
             if self.input_buf:
                 self.input_buf = self.input_buf[:-1]
+                self.speak("Deleted")
                 self.window.update_text("*" * len(self.input_buf) if self.input_buf else "Password:")
             else:
                 self._cancel_entry()
@@ -146,9 +161,15 @@ class LockScreenApp(SoftApp):
         if vk == win32con.VK_ESCAPE:
             self._cancel_entry()
             return
+        if vk == win32con.VK_SPACE:
+            self.input_buf += " "
+            self.speak("Space")
+            self.window.update_text("*" * len(self.input_buf))
+            return
         ch = self._vk_to_char(vk)
-        if ch is not None:
+        if ch is not None and ch != " ":
             self.input_buf += ch
+            self.speak("star")
             self.window.update_text("*" * len(self.input_buf))
 
     def _vk_to_char(self, vk):

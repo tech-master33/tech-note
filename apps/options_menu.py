@@ -72,16 +72,32 @@ class OptionsApp(SoftApp):
                 self.exit_app()
             return
 
-        if vk in (win32con.VK_BACK):
+        if vk == win32con.VK_BACK:
             self.menu.previous()
-        elif vk in (win32con.VK_SPACE):
+        elif vk == win32con.VK_DOWN:
             self.menu.next()
+        elif vk == win32con.VK_UP:
+            self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            char = chr(vk)
+            self.menu.first_letter_nav(char)
 
         item = self.menu.get_current_item()
         if item:
             self.window.update_text(item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if getattr(self.manager, 'space_used_in_chord', False):
+                return
+            if self.adjust_mode:
+                return
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text(item.title)
 
     def get_help_text(self):
         if self.adjust_mode == "key_bind":
@@ -314,8 +330,8 @@ class OptionsApp(SoftApp):
     def _get_default_bindings(self):
         pk = self._get_power_key_vk()
         return {
-            "next_item": [32, 40],
-            "prev_item": [8, 38],
+            "next_item": [32],
+            "prev_item": [8],
             "select": [13],
             "back": [27],
             "help": [112],

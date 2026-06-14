@@ -11,11 +11,11 @@ class VoiceAssistant:
         self.on_restart = on_restart
         self.listening = False
 
-    def listen(self, timeout=5):
+    def listen(self, timeout=10):
         try:
             r = _sr.Recognizer()
             with _sr.Microphone() as source:
-                audio = r.listen(source, timeout=timeout, phrase_time_limit=timeout)
+                audio = r.listen(source, timeout=timeout, phrase_time_limit=10)
             text = r.recognize_google(audio)
             return text.lower()
         except Exception:
@@ -25,6 +25,11 @@ class VoiceAssistant:
         if not command:
             self.speak("No command heard.")
             return
+        
+        if command.startswith("say "):
+            self.speak(command[4:])
+            return
+
         c = command.replace(" ", "")
         if "time" in c:
             now = datetime.datetime.now()

@@ -49,16 +49,30 @@ class TutorialApp(SoftApp):
             self.exit_app()
             return
 
-        if vk in (win32con.VK_BACK):
+        if vk == win32con.VK_BACK:
             self.menu.previous()
-        elif vk in (win32con.VK_SPACE):
+        elif vk == win32con.VK_DOWN:
             self.menu.next()
+        elif vk == win32con.VK_UP:
+            self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            char = chr(vk)
+            self.menu.first_letter_nav(char)
 
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Tutorial: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if self._topic_mode:
+                return
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text("Tutorial: " + item.title)
 
     def get_help_text(self):
         return "Tutorial. Select a topic to learn about TechNote navigation. Press Escape to exit."

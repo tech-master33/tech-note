@@ -92,14 +92,9 @@ class TechEdit(SoftApp):
                 self.speak("Deleted")
             return
 
-        if vk == win32con.VK_SPACE:
-            self.text += " "
-            self.speak("Space")
-            return
-
         # Simple text input for demo (can be expanded)
         ch = self._vk_to_char(vk)
-        if ch:
+        if ch and ch != " ":
             self.text += ch
             self.speak(ch)
 
@@ -112,15 +107,25 @@ class TechEdit(SoftApp):
         if not self.file_list:
             return
 
-        if vk in (win32con.VK_SPACE):
-            self.file_index = (self.file_index + 1) % len(self.file_list)
-            self._announce_file()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.file_index = (self.file_index - 1) % len(self.file_list)
             self._announce_file()
         elif vk == win32con.VK_RETURN:
             filename = self.file_list[self.file_index]
             self._load_file(filename)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if self.manager.space_used_in_chord:
+                return
+            
+            if self.state == STATE_EDIT:
+                self.text += " "
+                self.speak("Space")
+            elif self.state == STATE_OPEN:
+                if self.file_list:
+                    self.file_index = (self.file_index + 1) % len(self.file_list)
+                    self._announce_file()
 
     def _announce_file(self):
         f = self.file_list[self.file_index]

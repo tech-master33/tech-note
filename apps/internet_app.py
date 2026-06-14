@@ -65,17 +65,13 @@ class InternetApp(SoftApp):
             return
 
         if self.reading_mode:
-            if vk in (win32con.VK_SPACE):
-                self._next_content()
-            elif vk in (win32con.VK_BACK):
+            if vk in (win32con.VK_BACK):
                 self._previous_content()
             elif vk == 0x48: # 'H' for headings
                 self._next_heading()
             return
 
-        if vk in (win32con.VK_SPACE):
-            self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -86,6 +82,18 @@ class InternetApp(SoftApp):
             item = self.menu.get_current_item()
             if item:
                 self.window.update_text("Internet: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if self.url_input_mode:
+                return
+            if self.reading_mode:
+                self._next_content()
+            else:
+                self.menu.next()
+                item = self.menu.get_current_item()
+                if item:
+                    self.window.update_text("Internet: " + item.title)
 
     def _handle_url_input(self, vk):
         if vk == win32con.VK_ESCAPE:

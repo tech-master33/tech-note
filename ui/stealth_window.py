@@ -14,9 +14,10 @@ WS_EX_TOOLWINDOW = 0x00000080
 LWA_ALPHA = 0x2
 
 class StealthWindow:
-    def __init__(self, on_key_down=None):
+    def __init__(self, on_key_down=None, on_key_up=None):
         self.hwnd = None
         self.on_key_down = on_key_down
+        self.on_key_up = on_key_up
         self.space_down = False
         self.running = True
         self.current_text = "Main Menu"
@@ -85,10 +86,13 @@ class StealthWindow:
             win32gui.ShowWindow(self.hwnd, win32con.SW_SHOW)
             win32gui.UpdateWindow(self.hwnd)
             win32gui.SetLayeredWindowAttributes(self.hwnd, 0, 255, LWA_ALPHA)
-            win32gui.SetWindowPos(self.hwnd, win32con.HWND_TOPMOST, 0, 0, 0, 0, 
+            win32gui.SetWindowPos(self.hwnd, -1, 0, 0, 0, 0, 
                                  win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
             try:
+                # Common trick: send ALT to allow SetForegroundWindow
+                win32api.keybd_event(win32con.VK_MENU, 0, 0, 0)
                 win32gui.SetForegroundWindow(self.hwnd)
+                win32api.keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
                 print("StealthWindow: SetForegroundWindow succeeded")
             except Exception as e:
                 print(f"StealthWindow: SetForegroundWindow failed: {e}")
@@ -120,6 +124,11 @@ class StealthWindow:
         elif msg == win32con.WM_KEYUP:
             if wparam == win32con.VK_SPACE:
                 self.space_down = False
+            if self.on_key_up:
+                try:
+                    self.on_key_up(wparam)
+                except Exception as e:
+                    print(f"StealthWindow: on_key_up error: {e}")
             return 0
         elif msg == win32con.WM_PAINT:
             hdc, ps = win32gui.BeginPaint(hwnd)

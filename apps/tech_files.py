@@ -154,9 +154,7 @@ class TechFiles(SoftApp):
             self._show_drive_menu()
             return
 
-        if vk == win32con.VK_SPACE:
-            self.menu.next()
-        elif vk == win32con.VK_BACK:
+        if vk == win32con.VK_BACK:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -166,6 +164,15 @@ class TechFiles(SoftApp):
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Files: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if getattr(self.manager, 'space_used_in_chord', False):
+                return
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text("Files: " + item.title)
 
     def _delete_current(self):
         item = self.menu.get_current_item()

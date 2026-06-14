@@ -31,7 +31,7 @@ class BrailleNoteApp:
 
         self.synth = SapiSynthBase()
         self._apply_settings()
-        self.window = StealthWindow(on_key_down=self.handle_key)
+        self.window = StealthWindow(on_key_down=self.handle_key, on_key_up=self.handle_key_up)
 
         self.menu = None
         self.current_app = None
@@ -41,6 +41,7 @@ class BrailleNoteApp:
         self._key_bindings = {}
         self._announce_position = True
         self._state_keys = "Off"
+        self.space_used_in_chord = False
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
@@ -50,6 +51,22 @@ class BrailleNoteApp:
 
         # Apply visual settings to window (may trigger speech)
         self._apply_visual_settings()
+
+    def speak(self, text, interrupt=True):
+        if self.synth:
+            self.synth.speak(text, interrupt)
+
+    def stop(self):
+        if self.synth:
+            self.synth.stop()
+
+    def reset_temp_params(self):
+        if self.synth:
+            self.synth.reset_temp_params()
+
+    def set_temp_params(self, **kwargs):
+        if self.synth:
+            self.synth.set_temp_params(**kwargs)
 
     def _play_startup_sound(self):
         settings_path = os.path.join(self.tech_soft, 'settings.json')
@@ -144,9 +161,6 @@ class BrailleNoteApp:
                 self._char_echo = s.get("char_echo", "Off")
                 self._word_echo = s.get("word_echo", "Off")
                 self._key_bindings = s.get("key_bindings", {})
-                for action in ("next_item", "prev_item"):
-                    keys = self._key_bindings.get(action, [])
-                    self._key_bindings[action] = [k for k in keys if k not in (38, 40)]
                 self._announce_position = s.get("announce_position", "On")
                 self._state_keys = s.get("state_keys", "Off")
                 self.synth.set_pitch(s.get("pitch", 50))
@@ -162,7 +176,7 @@ class BrailleNoteApp:
             self._key_bindings = {}
 
     def _start_setup(self):
-        setup = TechNoteSetup(self.synth, self.window)
+        setup = TechNoteSetup(self, self.window)
         setup.finish_callback = self.on_setup_complete
         self.current_app = setup
         setup.run_setup()
@@ -194,7 +208,7 @@ class BrailleNoteApp:
             with open(path, 'r') as f:
                 self.account = json.load(f)
         except (json.JSONDecodeError, IOError):
-            self.synth.speak("Account corrupted. Re-running setup.")
+            self.speak("Account corrupted. Re-running setup.")
             self._start_setup()
             return
 
@@ -218,25 +232,25 @@ class BrailleNoteApp:
         import core.menu
         core.menu.ANNOUNCE_POSITION = self._announce_position == "On"
         self.menu_root = build_braillenote_menu(
-            self.synth, self.window, self.launch_app, self._reset_and_restart
+            self, self.window, self.launch_app, self._reset_and_restart
         )
-        self.menu = MenuSystem(self.menu_root, self.synth.speak)
-        self.synth.speak("Main Menu")
+        self.menu = MenuSystem(self.menu_root, self.speak)
+        self.speak("Main Menu")
 
-    def _create_lock_screen(self, synth, window):
+    def _create_lock_screen(self, manager, window):
         from apps.lock_screen import LockScreenApp
-        return LockScreenApp(synth, window, self.load_main_menu)
+        return LockScreenApp(manager, window, self.load_main_menu)
 
     def launch_app(self, app_class_or_callable):
         self._typing_buffer = ""
-        self.current_app = app_class_or_callable(self.synth, self.window)
+        self.current_app = app_class_or_callable(self, self.window)
         self.current_app.on_focus()
 
     def _open_options(self):
         if self.menu is None:
             return
         self._typing_buffer = ""
-        self.current_app = OptionsApp(self.synth, self.window)
+        self.current_app = OptionsApp(self, self.window)
         self.current_app.on_focus()
 
     def _open_power_menu(self):
@@ -244,7 +258,7 @@ class BrailleNoteApp:
             return
         self._typing_buffer = ""
         self.current_app = PowerApp(
-            self.synth, self.window,
+            self, self.window,
             on_restart=self._reload_app,
             on_exit=self._exit_app
         )
@@ -254,7 +268,7 @@ class BrailleNoteApp:
         if self.menu is None and not self.current_app:
             return
         self._typing_buffer = ""
-        self.current_app = TutorialApp(self.synth, self.window)
+        self.current_app = TutorialApp(self, self.window)
         self.current_app.on_focus()
 
     def _restart_process(self):
@@ -293,19 +307,43 @@ class BrailleNoteApp:
         return status
 
     def _is_key_match(self, vk, action_name):
+        # Arrows always work for next/prev
+        if action_name == "next_item" and vk == 40: return True
+        if action_name == "prev_item" and vk == 38: return True
+
         bindings = self._key_bindings.get(action_name, [])
         if not bindings:
             defaults = {
-                "next_item": [32],
-                "prev_item": [8],
-                "select": [13],
-                "back": [27],
-                "help": [112],
-                "status": [116],
+                "next_item": [32, 40], # Space, Down Arrow
+                "prev_item": [8, 38],  # Backspace, Up Arrow
+                "select": [13],    # Enter
+                "back": [27],      # Escape
+                "help": [112],     # F1
+                "status": [116],    # F5
                 "power_menu": [self._power_vk],
             }
             bindings = defaults.get(action_name, [])
         return vk in bindings
+
+    def handle_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            space_chord = self.space_used_in_chord
+            self.space_used_in_chord = False
+
+        if self.current_app and self.current_app.active:
+            try:
+                self.current_app.on_key_up(vk)
+            except Exception as e:
+                print(f"App on_key_up error: {e}")
+            return
+
+        if vk == win32con.VK_SPACE:
+            if not space_chord:
+                # If no chord was used, trigger next_item on Space release
+                if not (self.current_app and self.current_app.active):
+                    if self.menu and self._is_key_match(vk, "next_item"):
+                        self.menu.next()
+                        self.window.update_text(self.menu.get_current_item().title)
 
     def handle_key(self, vk):
         print(f"Key pressed: {vk}")
@@ -326,6 +364,7 @@ class BrailleNoteApp:
         # Global Options (Space + O)
         if self.window.space_down and vk == 0x4F:
             print("Global Chord: Space + O")
+            self.space_used_in_chord = True
             self._open_options()
             return
 
@@ -345,23 +384,29 @@ class BrailleNoteApp:
         # --- Active App Delegation (apps get ALL keys first) ---
         if self.current_app and self.current_app.active:
             # Character echo
-            if self._char_echo == "On" and 0x30 <= vk <= 0x5A:
+            if self._char_echo == "On" and (0x30 <= vk <= 0x5A or vk == win32con.VK_SPACE):
                 try:
-                    shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-                    caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
-                    if 0x41 <= vk <= 0x5A:
-                        upper = shift ^ caps
-                        ch = chr(vk) if upper else chr(vk).lower()
+                    if vk == win32con.VK_SPACE:
+                        ch = " "
+                        self.synth.speak("Space")
                     else:
-                        ch = chr(vk)
-                    self.synth.speak(ch)
+                        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
+                        caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
+                        if 0x41 <= vk <= 0x5A:
+                            upper = shift ^ caps
+                            ch = chr(vk) if upper else chr(vk).lower()
+                        else:
+                            ch = chr(vk)
+                        self.synth.speak(ch)
                     self._typing_buffer += ch
                 except:
                     self._typing_buffer += chr(vk) if 0x30 <= vk <= 0x5A else ""
+            
             # Word echo on Space
             if self._word_echo == "On" and vk == win32con.VK_SPACE and self._typing_buffer:
                 self.synth.speak(self._typing_buffer)
                 self._typing_buffer = ""
+            
             # Clear buffer on Enter or Escape
             if vk in (win32con.VK_RETURN, win32con.VK_ESCAPE):
                 self._typing_buffer = ""
@@ -390,7 +435,7 @@ class BrailleNoteApp:
             self.synth.speak(info)
             return
 
-        if self._is_key_match(vk, "next_item"):
+        if vk != win32con.VK_SPACE and self._is_key_match(vk, "next_item"):
             print("Next item")
             self.menu.next()
         elif self._is_key_match(vk, "prev_item"):
@@ -423,7 +468,7 @@ if __name__ == "__main__":
     project_root = os.path.dirname(os.path.abspath(__file__))
     out_log_path = os.path.join(project_root, "out.log")
     try:
-        log_file = open(out_log_path, "a", buffering=1)
+        log_file = open(out_log_path, "w", buffering=1)
         sys.stdout = log_file
         sys.stderr = log_file
     except Exception as e:
@@ -432,14 +477,13 @@ if __name__ == "__main__":
     try:
         app = BrailleNoteApp()
         app.run()
-    except Exception as e: # Catch the exception object
+    except Exception as e:
         import traceback
-        import sys # Import sys for stderr
+        import sys
         print("\n--- APPLICATION CRASH ---", file=sys.stderr)
         print("An unhandled exception occurred:", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr) # Print to stderr
+        traceback.print_exc(file=sys.stderr)
         
-        # Ensure crash.log is written to the project root explicitly
         project_root = os.path.dirname(os.path.abspath(__file__))
         crash_log_path = os.path.join(project_root, "crash.log")
         
@@ -447,8 +491,7 @@ if __name__ == "__main__":
             with open(crash_log_path, "w") as f:
                 traceback.print_exc(file=f)
             print(f"Crash details saved to {crash_log_path}", file=sys.stderr)
-        except Exception as file_e: # Catch exception during file write
+        except Exception as file_e:
             print(f"ERROR: Could not write to {crash_log_path}: {file_e}", file=sys.stderr)
-            print("Please check file permissions or disk space.", file=sys.stderr)
         
         input("Application crashed. Check out.log and crash.log for details. Press Enter to exit.")
