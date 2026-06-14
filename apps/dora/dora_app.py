@@ -12,8 +12,10 @@ class DoraApp(SoftApp):
         super().__init__(manager, window)
         self.assistant = DoraAssistant(self.speak)
         self.voice_thread = None
-        self._setup_done = False
+        self._setup = None
         self._build_menu()
+        if is_first_run():
+            self._run_setup()
 
     def _build_menu(self):
         root = MenuNode("Dora Assistant")
@@ -40,16 +42,21 @@ class DoraApp(SoftApp):
 
     def on_focus(self):
         self._build_menu()
-        if is_first_run() and not self._setup_done:
-            self._setup_done = True
-            self._run_setup()
-            self._build_menu()
         item = self.menu.get_current_item()
         title = item.title if item else "Dora Assistant"
         self.window.update_text(title)
         self.speak("Dora Assistant. " + title)
 
     def on_key(self, vk):
+        if self._setup and self._setup.active:
+            self._setup.on_key(vk)
+            if not self._setup.active:
+                self._setup = None
+                self.assistant.settings = load_settings()
+                self.assistant.username = self.assistant.settings.get('username', 'User')
+                self._build_menu()
+                self.speak("Setup complete. Dora is ready.")
+            return
         if self.menu is None:
             return
         if vk == win32con.VK_SPACE:
@@ -144,12 +151,8 @@ class DoraApp(SoftApp):
         self.menu.announce_current()
 
     def _run_setup(self):
-        setup = DoraSetup(self.assistant, self.speak)
-        setup.run()
-        self.assistant.settings = load_settings()
-        self.assistant.username = self.assistant.settings.get('username', 'User')
-        self._build_menu()
-        self.speak("Setup complete. Dora is ready.")
+        self._setup = DoraSetup(self.assistant, self.speak)
+        self._setup.run()
 
     def _exit_dora(self):
         self.assistant.stop_voice_loop()

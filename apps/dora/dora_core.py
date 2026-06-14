@@ -2,8 +2,15 @@ import threading
 import time
 import queue
 import inspect
-import speech_recognition as sr
 from apps.dora.dora_config import load_settings, save_settings
+
+_sr = None
+def _get_sr():
+    global _sr
+    if _sr is None:
+        import speech_recognition as sr_mod
+        _sr = sr_mod
+    return _sr
 from apps.dora.skills import information, system, timer as timer_skill, conversation
 
 class DoraAssistant:
@@ -44,6 +51,7 @@ class DoraAssistant:
 
     def listen(self, timeout=5):
         try:
+            sr = _get_sr()
             r = sr.Recognizer()
             with sr.Microphone() as source:
                 r.adjust_for_ambient_noise(source, duration=0.3)
@@ -81,6 +89,7 @@ class DoraAssistant:
             self.speak("I don't know that command.")
 
     def run_voice_loop(self):
+        sr = _get_sr()
         self.listening = True
         wake_word = self.settings.get('wake_word', 'computer').lower()
         r = sr.Recognizer()
