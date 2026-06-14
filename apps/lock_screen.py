@@ -167,29 +167,10 @@ class LockScreenApp(SoftApp):
             self.window.update_text("*" * len(self.input_buf))
             return
         ch = self._vk_to_char(vk)
-        if ch is not None and ch != " ":
+        if ch is not None:
             self.input_buf += ch
             self.speak("star")
             self.window.update_text("*" * len(self.input_buf))
-
-    def _vk_to_char(self, vk):
-        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-        caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
-        if 0x41 <= vk <= 0x5A:
-            upper = shift ^ caps
-            return chr(vk).upper() if upper else chr(vk).lower()
-        if 0x30 <= vk <= 0x39:
-            return chr(vk) if not shift else chr(vk)
-        if vk == win32con.VK_SPACE:
-            return ' '
-        sym_map = {
-            0xBD: '-', 0xBB: '=', 0xC0: '`',
-            0xDB: '[', 0xDD: ']', 0xDC: '\\', 0xBA: ';', 0xDE: "'",
-            0xBC: ',', 0xBE: '.', 0xBF: '/',
-        }
-        if vk in sym_map:
-            return sym_map[vk] if not shift else sym_map.get(vk, '')
-        return None
 
     def _cancel_entry(self):
         self.pin_mode = False

@@ -256,15 +256,11 @@ class BrailleNoteApp:
         self.current_app.on_focus()
 
     def _open_options(self):
-        if self.menu is None:
-            return
         self._typing_buffer = ""
         self.current_app = OptionsApp(self, self.window)
         self.current_app.on_focus()
 
     def _open_power_menu(self):
-        if self.menu is None:
-            return
         self._typing_buffer = ""
         self.current_app = PowerApp(
             self, self.window,
@@ -274,8 +270,6 @@ class BrailleNoteApp:
         self.current_app.on_focus()
 
     def _open_tutorial(self):
-        if self.menu is None and not self.current_app:
-            return
         self._typing_buffer = ""
         self.current_app = TutorialApp(self, self.window)
         self.current_app.on_focus()
@@ -371,7 +365,8 @@ class BrailleNoteApp:
             return
 
         # Power menu (layout-aware backtick)
-        if vk == self._power_vk or self._is_key_match(vk, "power_menu"):
+        is_setup = isinstance(self.current_app, TechNoteSetup)
+        if vk == self._power_vk or (is_setup and vk in (0xC0, 0xDF)) or self._is_key_match(vk, "power_menu"):
             print("Global Power menu")
             self._open_power_menu()
             return

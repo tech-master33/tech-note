@@ -191,16 +191,6 @@ class TechNoteSetup(SoftApp):
             return True
         return False
 
-    def _vk_to_char(self, vk):
-        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-        if 0x41 <= vk <= 0x5A:
-            return chr(vk).upper() if shift else chr(vk).lower()
-        if 0x30 <= vk <= 0x39:
-            return chr(vk)
-        if vk == win32con.VK_SPACE:
-            return ' '
-        return None
-
     def save_account(self):
         config = {
             "username": self.username,
