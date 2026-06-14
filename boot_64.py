@@ -4,19 +4,18 @@ import json
 import win32api
 import win32con
 import time
-import comtypes.client
 import pythoncom
 from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUNDS_DIR, SOUND_SCHEME
 from ui.stealth_window import StealthWindow
 from synths.sapi_synth import SapiSynthBase
 from synths.registry import create_synth
-from apps.lock_screen import LockScreenApp
 from apps.options_menu import OptionsApp
 from apps.power_menu import PowerApp
 from apps.tutorial_app import TutorialApp
 from core.setup_core import TechNoteSetup
 from core.audio_player import AudioPlayer
 from core.config import TECH_SOFT
+
 pythoncom.CoInitialize()
 
 class BrailleNoteApp:
@@ -213,7 +212,7 @@ class BrailleNoteApp:
             self.synth.set_voice(voice_name)
 
         if self.account.get("pin"):
-            self.launch_app(lambda m, w: LockScreenApp(m, w, self.load_main_menu))
+            self.launch_app(lambda m, w: self._create_lock_screen(m, w))
         else:
             self.load_main_menu()
 
@@ -226,9 +225,13 @@ class BrailleNoteApp:
         self.menu = MenuSystem(self.menu_root, self.synth.speak)
         self.synth.speak("Main Menu")
 
-    def launch_app(self, app_class):
+    def _create_lock_screen(self, synth, window):
+        from apps.lock_screen import LockScreenApp
+        return LockScreenApp(synth, window, self.load_main_menu)
+
+    def launch_app(self, app_class_or_callable):
         self._typing_buffer = ""
-        self.current_app = app_class(self.synth, self.window)
+        self.current_app = app_class_or_callable(self.synth, self.window)
         self.current_app.on_focus()
 
     def _open_options(self):
@@ -261,12 +264,12 @@ class BrailleNoteApp:
 
     def _get_status_info(self):
         import datetime
-        import psutil
         now = datetime.datetime.now()
         time_str = now.strftime("%I:%M %p").lstrip("0")
         date_str = now.strftime("%A, %B %d")
         status = f"{time_str}. {date_str}. "
         try:
+            import psutil
             bat = psutil.sensors_battery()
             if bat:
                 pct = int(bat.percent)
@@ -449,8 +452,10 @@ def _run_recovery_if_needed():
     pythoncom.CoInitialize()
     issues = run_auto_checks()
 
-    # Separate techsoft issues — delete and restart to trigger setup
-    techsoft_issues = [i for i in issues if i[0] in ("techsoft_missing", "settings_missing")]
+    # techsoft_missing only — delete and restart to trigger fresh setup
+    techsoft_issues = [i for i in issues if i[0] == "techsoft_missing"]
+
+    # settings_missing alone is handled by the app (triggers setup)
     other_issues = [i for i in issues if i[0] not in ("techsoft_missing", "settings_missing")]
 
     if techsoft_issues:
@@ -475,7 +480,8 @@ def _run_recovery_if_needed():
             time.sleep(0.1)
     finally:
         window.close()
-    return True
+    # Always let the app boot, even if user exits recovery
+    return False
 
 if __name__ == "__main__":
     # Redirect all stdout and stderr to out.log in the project root
