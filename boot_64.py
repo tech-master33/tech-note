@@ -61,8 +61,7 @@ class BrailleNoteApp:
             if not os.path.exists(startup_sound):
                 startup_sound = os.path.join(SOUNDS_DIR, 'startup.mp3')
             if os.path.exists(startup_sound):
-                player = AudioPlayer()
-                player.play_file(startup_sound)
+                AudioPlayer().play_sound_blocking(startup_sound)
 
         # Apply visual settings to window (may trigger speech)
         self._apply_visual_settings()
@@ -211,7 +210,7 @@ class BrailleNoteApp:
         if hasattr(self.synth, 'set_voice'):
             self.synth.set_voice(voice_name)
 
-        if self.account.get("pin"):
+        if self.account.get("pin") or self.account.get("password"):
             self.launch_app(lambda m, w: self._create_lock_screen(m, w))
         else:
             self.load_main_menu()
