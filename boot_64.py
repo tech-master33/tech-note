@@ -363,7 +363,10 @@ class BrailleNoteApp:
             if vk in (win32con.VK_RETURN, win32con.VK_ESCAPE):
                 self._typing_buffer = ""
 
-            self.current_app.on_key(vk)
+            try:
+                self.current_app.on_key(vk)
+            except Exception as e:
+                print(f"App on_key error: {e}")
             if not self.current_app.active:
                 self.current_app = None
                 if self.menu:
