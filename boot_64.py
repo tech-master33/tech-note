@@ -3,6 +3,7 @@ import sys
 import json
 import win32api
 import win32con
+import threading
 import time
 import pythoncom
 from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUNDS_DIR, SOUND_SCHEME
@@ -21,6 +22,7 @@ pythoncom.CoInitialize()
 class BrailleNoteApp:
     def __init__(self):
         self.tech_soft = TECH_SOFT
+        self.assistant = None
         if not os.path.exists(self.tech_soft):
             os.makedirs(self.tech_soft)
             for folder in ['documents', 'downloads', 'contacts', 'desktop']:
@@ -260,6 +262,12 @@ class BrailleNoteApp:
     def _exit_app(self):
         self.window.close()
 
+    def _activate_assistant(self):
+        if self.assistant is None:
+            from core.assistant import VoiceAssistant
+            self.assistant = VoiceAssistant(self.synth.speak)
+        threading.Thread(target=self.assistant.run, daemon=True).start()
+
     def _get_status_info(self):
         import datetime
         now = datetime.datetime.now()
@@ -296,6 +304,11 @@ class BrailleNoteApp:
         print(f"Key pressed: {vk}")
 
         # --- Truly Global (always work, before app delegation) ---
+
+        # Voice Assistant (F2)
+        if vk == win32con.VK_F2:
+            self._activate_assistant()
+            return
 
         # Power menu (layout-aware backtick)
         if vk == self._power_vk or self._is_key_match(vk, "power_menu"):
