@@ -87,5 +87,5 @@ class VoiceAssistant:
 
     def run(self):
         self.speak("Listening.")
-        cmd = self.listen(timeout=5)
+        cmd = self.listen(timeout=10)
         self.handle_command(cmd)
