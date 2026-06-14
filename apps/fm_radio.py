@@ -40,10 +40,10 @@ class FMRadioApp(SoftApp):
             self.speak("Stopped")
             return
 
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+        if vk in (win32con.VK_SPACE):
             self.player.stop()
             self.menu.next()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+        elif vk in (win32con.VK_BACK):
             self.player.stop()
             self.menu.previous()
         elif vk == win32con.VK_RETURN:

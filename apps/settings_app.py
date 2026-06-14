@@ -136,9 +136,9 @@ class SettingsApp(SoftApp):
             if vk == win32con.VK_ESCAPE:
                 self._back_from_account()
                 return
-            if vk in (win32con.VK_BACK, win32con.VK_UP):
+            if vk in (win32con.VK_BACK):
                 self.account_menu.previous()
-            elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+            elif vk in (win32con.VK_SPACE):
                 self.account_menu.next()
             elif vk == win32con.VK_RETURN:
                 self.account_menu.select()
@@ -154,9 +154,9 @@ class SettingsApp(SoftApp):
                 self.exit_app()
             return
 
-        if vk in (win32con.VK_BACK, win32con.VK_UP):
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
-        elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+        elif vk in (win32con.VK_SPACE):
             self.menu.next()
         elif vk == win32con.VK_RETURN:
             self.menu.select()

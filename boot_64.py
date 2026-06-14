@@ -293,8 +293,8 @@ class BrailleNoteApp:
         bindings = self._key_bindings.get(action_name, [])
         if not bindings:
             defaults = {
-                "next_item": [32, 40],
-                "prev_item": [8, 38],
+                "next_item": [32],
+                "prev_item": [8],
                 "select": [13],
                 "back": [27],
                 "help": [112],
