@@ -370,6 +370,15 @@ class SettingsApp(SoftApp):
                 ["git", "pull"], cwd=BASE_DIR,
                 capture_output=True, text=True, timeout=60
             )
+            if result.returncode != 0:
+                subprocess.run(
+                    ["git", "branch", "--set-upstream-to", f"origin/{branch}", branch],
+                    cwd=BASE_DIR, capture_output=True, text=True, timeout=30
+                )
+                result = subprocess.run(
+                    ["git", "pull"], cwd=BASE_DIR,
+                    capture_output=True, text=True, timeout=60
+                )
             if result.returncode == 0 and "Already up to date" not in result.stdout.strip():
                 self._install_requirements()
             self.speak(f"Switched to {branch}. Restarting.")
@@ -390,6 +399,15 @@ class SettingsApp(SoftApp):
                 ["git", "pull"], cwd=BASE_DIR,
                 capture_output=True, text=True, timeout=60
             )
+            if result.returncode != 0:
+                subprocess.run(
+                    ["git", "branch", "--set-upstream-to", f"origin/{branch}", branch],
+                    cwd=BASE_DIR, capture_output=True, text=True, timeout=30
+                )
+                result = subprocess.run(
+                    ["git", "pull"], cwd=BASE_DIR,
+                    capture_output=True, text=True, timeout=60
+                )
             if result.returncode == 0:
                 out = result.stdout.strip()
                 if "Already up to date" in out:
