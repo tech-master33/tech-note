@@ -1,91 +1,40 @@
 import os
 import sys
 import subprocess
-import json
 import win32con
-import win32api
-import importlib.metadata
-from synths.nvda import Synth as NVDASynth
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQ_PATH = os.path.join(BASE_DIR, 'requirements.txt')
-LOG_PATH = os.path.join(BASE_DIR, "recovery.log")
 
-# Mapping from requirements.txt name to distribution name
-PACKAGE_MAP = {
-    "pywin32": "pywin32",
-    "pycryptodome": "pycryptodome",
-    "beautifulsoup4": "beautifulsoup4"
-}
+_SPEAKER = None
 
-def _log(message):
+def _get_speaker():
+    global _SPEAKER
+    if _SPEAKER is not None:
+        return _SPEAKER
     try:
-        with open(LOG_PATH, "a") as f:
-            f.write(message + '\n')
-        print(f"RecoveryMenu: {message}")
-    except Exception as e:
-        print(f"Logging failed: {e}")
+        import comtypes.client
+        import pythoncom
+        pythoncom.CoInitialize()
+        _SPEAKER = comtypes.client.CreateObject("SAPI.SpVoice")
+    except Exception:
+        _SPEAKER = False
+    return _SPEAKER
 
-def check_requirements():
-    if not os.path.exists(REQ_PATH):
-        return []
-    missing = []
-    
-    # Get all installed distributions
-    installed_dists = set()
-    for dist in importlib.metadata.distributions():
+def _speak(text):
+    sp = _get_speaker()
+    if sp:
         try:
-            name = dist.metadata.get('Name', '')
-            if name:
-                installed_dists.add(name.lower())
+            sp.Speak(text, 1)
         except Exception:
             pass
-    
-    with open(REQ_PATH, 'r') as f:
-        for line in f:
-            pkg = line.strip()
-            if not pkg or pkg.startswith('#'):
-                continue
-            pkg_name = pkg.split('==')[0].split('>=')[0].split('<=')[0].strip().lower()
-            
-            # Map requirements name if needed
-            lookup_name = PACKAGE_MAP.get(pkg_name, pkg_name)
-            
-            if lookup_name not in installed_dists:
-                missing.append(pkg_name)
-    return missing
 
-def repair_requirements():
-    _log("Repairing requirements via cmd.")
-    try:
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = subprocess.SW_HIDE
-        
-        command = f'cmd /c "{sys.executable}" -m pip install -r "{REQ_PATH}"'
-        _log(f"Running command: {command}")
-        
-        result = subprocess.run(
-            command, 
-            shell=True, 
-            capture_output=True, 
-            text=True, 
-            timeout=120, 
-            startupinfo=startupinfo
-        )
-        if result.returncode != 0:
-            _log(f"Pip error stdout: {result.stdout}")
-            _log(f"Pip error stderr: {result.stderr}")
-            return False
-        return not check_requirements()
-    except subprocess.TimeoutExpired:
-        _log("Repair requirements timed out after 120 seconds.")
-        return False
-    except Exception as e:
-        _log(f"Repair requirements failed: {e}")
-        return False
-
-# ... (other functions remain the same)
+RECOVERY_MENU_ITEMS = [
+    ("Reinstall Requirements", "reinstall_reqs"),
+    ("Check Integrity", "check_integrity"),
+    ("Recreate Tech-Soft", "recreate_techsoft"),
+    ("Exit Recovery", "exit_recovery"),
+]
 
 def check_repo_integrity():
     issues = []
@@ -93,6 +42,31 @@ def check_repo_integrity():
         if not os.path.exists(os.path.join(BASE_DIR, f)):
             issues.append(f"missing_file_{f}")
     return issues
+
+def check_requirements():
+    if not os.path.exists(REQ_PATH):
+        return []
+    missing = []
+    import importlib.metadata
+    installed = set()
+    for dist in importlib.metadata.distributions():
+        try:
+            name = dist.metadata.get('Name', '')
+            if name:
+                installed.add(name.lower())
+        except Exception:
+            pass
+    PACKAGE_MAP = {"pywin32": "pywin32", "pycryptodome": "pycryptodome", "beautifulsoup4": "beautifulsoup4"}
+    with open(REQ_PATH, 'r') as f:
+        for line in f:
+            pkg = line.strip()
+            if not pkg or pkg.startswith('#'):
+                continue
+            pkg_name = pkg.split('==')[0].split('>=')[0].split('<=')[0].strip().lower()
+            lookup = PACKAGE_MAP.get(pkg_name, pkg_name)
+            if lookup not in installed:
+                missing.append(pkg_name)
+    return missing
 
 def check_techsoft():
     from core.config import TECH_SOFT, SETTINGS_PATH
@@ -112,9 +86,26 @@ def run_auto_checks():
     issues.extend(check_techsoft())
     return issues
 
+def repair_requirements():
+    if not os.path.exists(REQ_PATH):
+        return False
+    try:
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = subprocess.SW_HIDE
+        result = subprocess.run(
+            f'cmd /c "{sys.executable}" -m pip install -r "{REQ_PATH}"',
+            shell=True, capture_output=True, text=True, timeout=120, startupinfo=si
+        )
+        return result.returncode == 0 and not check_requirements()
+    except Exception:
+        return False
+
 def recreate_techsoft():
     from core.config import TECH_SOFT
-    _log("Recreating Tech-Soft directories.")
+    import shutil
+    if os.path.exists(TECH_SOFT):
+        shutil.rmtree(TECH_SOFT)
     os.makedirs(TECH_SOFT, exist_ok=True)
     for folder in ['documents', 'downloads', 'contacts', 'desktop']:
         os.makedirs(os.path.join(TECH_SOFT, folder), exist_ok=True)
@@ -124,73 +115,44 @@ class RecoveryMenu:
         self.index = 0
         self.active = True
         self.window = window
-        self.synth = NVDASynth()
+        self.items = RECOVERY_MENU_ITEMS
 
-        self.items = [
-            ("Reinstall Requirements", "reinstall_reqs"),
-            ("Check Integrity", "check_integrity"),
-            ("Recreate Tech-Soft", "recreate_techsoft"),
-            ("Exit Recovery", "exit_recovery"),
-        ]
-
-    def _log(self, message):
-        _log(message)
-
-    def _speak(self, text):
-        self._log(f"Speaking: {text}")
-        if self.synth and self.synth.is_valid:
-            self.synth.speak(text)
-
-    def _update_display(self):
-        title = self.items[self.index][0]
-        display_text = f"Recovery: {title}"
-        
+    def _announce(self, text):
+        _speak(text)
         if self.window:
-            self.window.update_text(display_text)
-        
-        self._speak(title)
-        self._log(f"Displaying: {display_text}")
+            self.window.update_text("Tech-Note Recovery: " + text)
 
     def next(self):
         self.index = (self.index + 1) % len(self.items)
-        self._update_display()
+        self._announce(self.items[self.index][0])
 
     def previous(self):
         self.index = (self.index - 1) % len(self.items)
-        self._update_display()
+        self._announce(self.items[self.index][0])
 
     def select(self):
         action = self.items[self.index][1]
-        self._log(f"Selected action: {action}")
-        
         if action == "reinstall_reqs":
-            self._speak("Reinstalling requirements.")
-            self._speak("Success" if repair_requirements() else "Failed")
+            self._announce("Reinstalling requirements.")
+            ok = repair_requirements()
+            self._announce("Success" if ok else "Failed")
         elif action == "check_integrity":
-            self._run_integrity_check()
+            issues = run_auto_checks()
+            if not issues:
+                self._announce("All checks passed.")
+            else:
+                self._announce("Issues: " + "; ".join(d for _, d in issues))
         elif action == "recreate_techsoft":
-            self._speak("Recreating folders.")
+            self._announce("Recreating folders.")
             recreate_techsoft()
-            self._speak("Folders recreated.")
+            self._announce("Folders recreated.")
         elif action == "exit_recovery":
             self.active = False
-            self._speak("Exiting.")
+            self._announce("Exiting.")
             if self.window:
                 self.window.close()
-        
         if self.active:
-            self._update_display()
-
-    def _run_integrity_check(self):
-        self._log("Running integrity check.")
-        issues = run_auto_checks()
-        if not issues:
-            self._speak("All checks passed.")
-            if self.window: self.window.update_text("All checks passed.")
-        else:
-            issue_text = "Issues: " + "; ".join(d for _, d in issues)
-            self._speak(issue_text)
-            if self.window: self.window.update_text(issue_text)
+            self._announce(self.items[self.index][0])
 
     def handle_key(self, vk):
         if vk in (win32con.VK_UP, win32con.VK_BACK):
@@ -204,6 +166,6 @@ def run_recovery(window):
     menu = RecoveryMenu(window)
     if window:
         window.update_text("Tech-Note Recovery")
-    menu._speak("Recovery Menu")
-    menu._update_display()
+    _speak("Recovery Menu")
+    menu._announce(menu.items[menu.index][0])
     return menu

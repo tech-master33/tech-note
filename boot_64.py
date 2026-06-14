@@ -65,7 +65,7 @@ class BrailleNoteApp:
                 startup_sound = os.path.join(SOUNDS_DIR, 'startup.mp3')
             if os.path.exists(startup_sound):
                 player = AudioPlayer()
-                player.play_sound_blocking(startup_sound)
+                player.play_file(startup_sound)
 
         # Apply visual settings to window (may trigger speech)
         self._apply_visual_settings()
@@ -443,8 +443,7 @@ def _run_recovery_if_needed():
     if not issues:
         return False
     window = StealthWindow(on_key_down=None)
-    window.show()
-
+    window.create()
     window.update_text("Tech-Note Recovery")
     menu = run_recovery(window)
     def handle_key(vk):
