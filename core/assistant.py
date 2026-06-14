@@ -1,13 +1,7 @@
 import datetime
+import speech_recognition as _sr_mod
 
-_sr = None
-
-def _get_sr():
-    global _sr
-    if _sr is None:
-        import speech_recognition as sr_mod
-        _sr = sr_mod
-    return _sr
+_sr = _sr_mod
 
 
 class VoiceAssistant:
@@ -19,11 +13,9 @@ class VoiceAssistant:
 
     def listen(self, timeout=5):
         try:
-            sr = _get_sr()
-            r = sr.Recognizer()
-            with sr.Microphone() as source:
-                r.adjust_for_ambient_noise(source, duration=0.3)
-                audio = r.listen(source, timeout=timeout)
+            r = _sr.Recognizer()
+            with _sr.Microphone() as source:
+                audio = r.listen(source, timeout=timeout, phrase_time_limit=timeout)
             text = r.recognize_google(audio)
             return text.lower()
         except Exception:

@@ -144,6 +144,9 @@ class BrailleNoteApp:
                 self._char_echo = s.get("char_echo", "Off")
                 self._word_echo = s.get("word_echo", "Off")
                 self._key_bindings = s.get("key_bindings", {})
+                for action in ("next_item", "prev_item"):
+                    keys = self._key_bindings.get(action, [])
+                    self._key_bindings[action] = [k for k in keys if k not in (38, 40)]
                 self._announce_position = s.get("announce_position", "On")
                 self._state_keys = s.get("state_keys", "Off")
                 self.synth.set_pitch(s.get("pitch", 50))
