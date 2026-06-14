@@ -27,7 +27,7 @@ def _get_drive_type(root):
 def _get_drive_list():
     tech_drive = _get_techsoft_drive()
     drives = []
-    hd_num = 1
+    drive_num = 1
     for letter in string.ascii_uppercase:
         root = f"{letter}:\\"
         if not os.path.exists(root):
@@ -46,9 +46,9 @@ def _get_drive_list():
             if label:
                 drives.append((label, root))
             else:
-                name = "HardDisk" if hd_num == 1 else f"HardDisk {hd_num}"
+                name = "Drive" if drive_num == 1 else f"Drive {drive_num}"
                 drives.append((name, root))
-                hd_num += 1
+                drive_num += 1
     return drives
 
 
