@@ -1,6 +1,4 @@
 import datetime
-import os
-import subprocess
 
 _sr = None
 
@@ -51,10 +49,6 @@ class VoiceAssistant:
             self.speak("Restarting Tech-Note.")
             if self.on_restart:
                 self.on_restart()
-        elif "cancel" in c:
-            self.speak("Nothing to cancel.")
-        elif "open" in command or "launch" in command or "start" in command:
-            self._open_app(command)
         else:
             self.speak("I don't know that command.")
 
@@ -72,18 +66,6 @@ class VoiceAssistant:
             self.speak(f"Battery at {pct} percent, {status}.")
         except Exception:
             self.speak("Could not check battery.")
-
-    def _open_app(self, command):
-        apps = {
-            "chrome": "chrome.exe", "firefox": "firefox.exe", "notepad": "notepad.exe",
-            "calculator": "calc.exe", "edge": "msedge.exe", "vlc": "vlc.exe",
-        }
-        for name, exe in apps.items():
-            if name in command:
-                subprocess.Popen(exe, creationflags=subprocess.CREATE_NO_WINDOW)
-                self.speak(f"Opening {name}.")
-                return
-        self.speak(f"Could not find {command}.")
 
     def run(self):
         self.speak("Listening.")
