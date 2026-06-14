@@ -17,8 +17,6 @@ from apps.tutorial_app import TutorialApp
 from core.setup_core import TechNoteSetup
 from core.audio_player import AudioPlayer
 from core.config import TECH_SOFT
-from apps.dora.dora_app import DoraApp
-
 pythoncom.CoInitialize()
 
 class BrailleNoteApp:
@@ -210,7 +208,9 @@ class BrailleNoteApp:
                 self.synth = new_synth
         self._apply_settings()
 
-        self.synth.set_voice(self.account.get('default_synth', 'Auto'))
+        voice_name = self.account.get('default_synth', 'Auto')
+        if hasattr(self.synth, 'set_voice'):
+            self.synth.set_voice(voice_name)
 
         if self.account.get("pin"):
             self.launch_app(lambda m, w: LockScreenApp(m, w, self.load_main_menu))
@@ -291,14 +291,21 @@ class BrailleNoteApp:
             bindings = defaults.get(action_name, [])
         return vk in bindings
 
+    def _get_dora_app(self):
+        if not hasattr(self, '_DoraApp'):
+            from apps.dora.dora_app import DoraApp
+            self._DoraApp = DoraApp
+        return self._DoraApp
+
     def _open_dora_menu(self):
         self._typing_buffer = ""
-        if isinstance(self.current_app, DoraApp):
+        DA = self._get_dora_app()
+        if isinstance(self.current_app, DA):
             self.current_app = None
             if self.menu:
                 self.menu.announce_current()
         else:
-            self.current_app = DoraApp(self.synth, self.window)
+            self.current_app = DA(self.synth, self.window)
             self.current_app.on_focus()
 
     def _handle_dora_f2(self):
@@ -313,7 +320,8 @@ class BrailleNoteApp:
             self._open_dora_menu()
 
     def _open_dora_voice(self):
-        if isinstance(self.current_app, DoraApp):
+        DA = self._get_dora_app()
+        if isinstance(self.current_app, DA):
             self.current_app.assistant.run_voice_loop()
             return
         if self._dora_voice_thread and self._dora_voice_thread.is_alive():

@@ -1,14 +1,21 @@
+import importlib
 import os
 import subprocess
 import tempfile
-import sounddevice as sd
-import soundfile as sf
 
 
 class AudioPlayer:
     def __init__(self):
         self._ffplay_proc = None
         self.playing = False
+        self._sd = None
+        self._sf = None
+
+    def _ensure_audio(self):
+        if self._sd is None:
+            self._sd = importlib.import_module('sounddevice')
+        if self._sf is None:
+            self._sf = importlib.import_module('soundfile')
 
     def play_file(self, path):
         self.stop()
@@ -16,13 +23,16 @@ class AudioPlayer:
             return False
         ext = os.path.splitext(path)[1].lower()
         if ext in ('.wav', '.flac', '.ogg'):
-            data, sr = sf.read(path, dtype='float32')
-            if data.ndim == 1:
-                data = data.reshape(-1, 1)
-            sd.play(data, sr, blocking=False)
-            self.playing = True
-            return True
-        # Decode MP3 etc. to temp WAV with ffmpeg, then play
+            try:
+                self._ensure_audio()
+                data, sr = self._sf.read(path, dtype='float32')
+                if data.ndim == 1:
+                    data = data.reshape(-1, 1)
+                self._sd.play(data, sr, blocking=False)
+                self.playing = True
+                return True
+            except Exception:
+                return False
         try:
             fd, tmp = tempfile.mkstemp(suffix='.wav')
             os.close(fd)
@@ -30,10 +40,11 @@ class AudioPlayer:
                 ['ffmpeg', '-y', '-i', path, '-acodec', 'pcm_f32le', '-ar', '44100', '-ac', '1', tmp],
                 capture_output=True, timeout=30
             )
-            data, sr = sf.read(tmp, dtype='float32')
+            self._ensure_audio()
+            data, sr = self._sf.read(tmp, dtype='float32')
             if data.ndim == 1:
                 data = data.reshape(-1, 1)
-            sd.play(data, sr, blocking=False)
+            self._sd.play(data, sr, blocking=False)
             self.playing = True
             return True
         except Exception:
@@ -49,10 +60,14 @@ class AudioPlayer:
             return
         ext = os.path.splitext(path)[1].lower()
         if ext in ('.wav', '.flac', '.ogg'):
-            data, sr = sf.read(path, dtype='float32')
-            if data.ndim == 1:
-                data = data.reshape(-1, 1)
-            sd.play(data, sr, blocking=True)
+            try:
+                self._ensure_audio()
+                data, sr = self._sf.read(path, dtype='float32')
+                if data.ndim == 1:
+                    data = data.reshape(-1, 1)
+                self._sd.play(data, sr, blocking=True)
+            except Exception:
+                pass
         else:
             try:
                 fd, tmp = tempfile.mkstemp(suffix='.wav')
@@ -61,10 +76,11 @@ class AudioPlayer:
                     ['ffmpeg', '-y', '-i', path, '-acodec', 'pcm_f32le', '-ar', '44100', '-ac', '1', tmp],
                     capture_output=True, timeout=30
                 )
-                data, sr = sf.read(tmp, dtype='float32')
+                self._ensure_audio()
+                data, sr = self._sf.read(tmp, dtype='float32')
                 if data.ndim == 1:
                     data = data.reshape(-1, 1)
-                sd.play(data, sr, blocking=True)
+                self._sd.play(data, sr, blocking=True)
             except Exception:
                 pass
             finally:
@@ -86,7 +102,8 @@ class AudioPlayer:
             return False
 
     def stop(self):
-        sd.stop()
+        if self._sd:
+            self._sd.stop()
         if self._ffplay_proc:
             try:
                 self._ffplay_proc.kill()

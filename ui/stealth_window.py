@@ -94,6 +94,7 @@ class StealthWindow:
                 print(f"StealthWindow: SetForegroundWindow failed: {e}")
         else:
             print("StealthWindow: ERROR: CreateWindowEx failed to return a valid hwnd")
+            return
 
         pythoncom.CoInitialize()
         win32gui.PumpMessages()
@@ -111,7 +112,10 @@ class StealthWindow:
             if wparam == win32con.VK_SPACE:
                 self.space_down = True
             if self.on_key_down:
-                self.on_key_down(wparam)
+                try:
+                    self.on_key_down(wparam)
+                except Exception as e:
+                    print(f"StealthWindow: on_key_down error: {e}")
             return 0
         elif msg == win32con.WM_KEYUP:
             if wparam == win32con.VK_SPACE:

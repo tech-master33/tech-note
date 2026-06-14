@@ -15,8 +15,6 @@ class AudioDucker:
 
     def get_enabled(self):
         return self._enabled
-        if not enabled:
-            self.unduck()
 
     def duck(self):
         if not self._enabled:

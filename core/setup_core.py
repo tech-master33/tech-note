@@ -25,9 +25,11 @@ class TechNoteSetup(SoftApp):
 
     def _load_voices_for_synth(self):
         inst = create_synth(self.synth_module)
-        if inst:
+        if inst and hasattr(inst, 'get_voice_names'):
             self.voices = inst.get_voice_names()
             self.voice_index = 0
+        else:
+            self.voices = []
 
     def run_setup(self):
         self.window.update_text("TechNote Setup")
@@ -92,6 +94,8 @@ class TechNoteSetup(SoftApp):
                     pass
 
         elif self.current_step == 4:
+            if not self.available_synths:
+                return
             if vk in (win32con.VK_DOWN, win32con.VK_SPACE):
                 self.synth_index = (self.synth_index + 1) % len(self.available_synths)
                 self.window.update_text(self.available_synths[self.synth_index][0])
@@ -119,9 +123,10 @@ class TechNoteSetup(SoftApp):
                 self.window.update_text(self.voices[self.voice_index])
                 self.speak(self.voices[self.voice_index])
             elif vk in (win32con.VK_UP, win32con.VK_BACK):
-                self.voice_index = (self.voice_index - 1) % len(self.voices)
-                self.window.update_text(self.voices[self.voice_index])
-                self.speak(self.voices[self.voice_index])
+                if self.voices:
+                    self.voice_index = (self.voice_index - 1) % len(self.voices)
+                    self.window.update_text(self.voices[self.voice_index])
+                    self.speak(self.voices[self.voice_index])
             elif vk == win32con.VK_RETURN:
                 self._enter_layout_step()
 
@@ -149,7 +154,8 @@ class TechNoteSetup(SoftApp):
 
     def _enter_synth_step(self):
         self.speak("TTS engine. Use arrows to select.")
-        self.window.update_text(self.available_synths[self.synth_index][0])
+        if self.available_synths:
+            self.window.update_text(self.available_synths[self.synth_index][0])
 
     def _enter_layout_step(self):
         self.current_step = 6
