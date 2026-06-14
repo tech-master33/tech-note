@@ -37,6 +37,9 @@ class BrailleNoteApp:
         self._word_echo = "Off"
         self._key_bindings = {}
         self._announce_position = True
+        self._dora_voice_active = False
+        self._dora_voice_thread = None
+        self._last_f2_time = 0
         self._state_keys = "Off"
 
         # Detect keyboard layout for power key assignment
@@ -291,10 +294,58 @@ class BrailleNoteApp:
             bindings = defaults.get(action_name, [])
         return vk in bindings
 
+    def _get_dora_app(self):
+        if not hasattr(self, '_DoraApp'):
+            from apps.dora.dora_app import DoraApp
+            self._DoraApp = DoraApp
+        return self._DoraApp
+
+    def _open_dora_menu(self):
+        self._typing_buffer = ""
+        DA = self._get_dora_app()
+        if isinstance(self.current_app, DA):
+            self.current_app = None
+            if self.menu:
+                self.menu.announce_current()
+        else:
+            self.current_app = DA(self.synth, self.window)
+            self.current_app.on_focus()
+
+    def _handle_dora_f2(self):
+        now = time.time()
+        if now - self._last_f2_time < 0.5:
+            self._last_f2_time = 0
+            self.synth.speak("Dora voice mode.")
+            self._open_dora_voice()
+        else:
+            self._last_f2_time = now
+            self.synth.speak("Dora.")
+            self._open_dora_menu()
+
+    def _open_dora_voice(self):
+        DA = self._get_dora_app()
+        if isinstance(self.current_app, DA):
+            self.current_app.assistant.run_voice_loop()
+            return
+        if self._dora_voice_thread and self._dora_voice_thread.is_alive():
+            self.synth.speak("Voice mode already active.")
+            return
+        import threading
+        from apps.dora.dora_core import DoraAssistant
+        assistant = DoraAssistant(self.synth.speak)
+        self._dora_voice_active = True
+        self._dora_voice_thread = threading.Thread(target=assistant.run_voice_loop, daemon=True)
+        self._dora_voice_thread.start()
+
     def handle_key(self, vk):
         print(f"Key pressed: {vk}")
 
         # --- Truly Global (always work, before app delegation) ---
+
+        # Dora Assistant (F2)
+        if vk == win32con.VK_F2:
+            self._handle_dora_f2()
+            return
 
         # Power menu (layout-aware backtick)
         if vk == self._power_vk or self._is_key_match(vk, "power_menu"):
