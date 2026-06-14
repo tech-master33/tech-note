@@ -435,13 +435,23 @@ class BrailleNoteApp:
             self.window.close()
 
 def _run_recovery_if_needed():
-    from core.recovery import run_auto_checks, run_recovery
+    from core.recovery import run_auto_checks, run_recovery, recreate_techsoft
     from ui.stealth_window import StealthWindow
     import pythoncom
     pythoncom.CoInitialize()
     issues = run_auto_checks()
-    if not issues:
+
+    # Separate techsoft issues — delete and restart to trigger setup
+    techsoft_issues = [i for i in issues if i[0] in ("techsoft_missing", "settings_missing")]
+    other_issues = [i for i in issues if i[0] not in ("techsoft_missing", "settings_missing")]
+
+    if techsoft_issues:
+        recreate_techsoft()
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    if not other_issues:
         return False
+
     window = StealthWindow(on_key_down=None)
     window.create()
     window.update_text("Tech-Note Recovery")

@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import win32con
+from synths.nvda import Synth as NVDASynth
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQ_PATH = os.path.join(BASE_DIR, 'requirements.txt')
@@ -12,27 +13,20 @@ def _get_speaker():
     global _SPEAKER
     if _SPEAKER is not None:
         return _SPEAKER
-    try:
-        import comtypes.client
-        import pythoncom
-        pythoncom.CoInitialize()
-        _SPEAKER = comtypes.client.CreateObject("SAPI.SpVoice")
-    except Exception:
-        _SPEAKER = False
+    _SPEAKER = NVDASynth()
     return _SPEAKER
 
 def _speak(text):
     sp = _get_speaker()
-    if sp:
+    if sp and sp.is_valid:
         try:
-            sp.Speak(text, 1)
+            sp.speak(text)
         except Exception:
             pass
 
 RECOVERY_MENU_ITEMS = [
     ("Reinstall Requirements", "reinstall_reqs"),
     ("Check Integrity", "check_integrity"),
-    ("Recreate Tech-Soft", "recreate_techsoft"),
     ("Exit Recovery", "exit_recovery"),
 ]
 
@@ -142,10 +136,6 @@ class RecoveryMenu:
                 self._announce("All checks passed.")
             else:
                 self._announce("Issues: " + "; ".join(d for _, d in issues))
-        elif action == "recreate_techsoft":
-            self._announce("Recreating folders.")
-            recreate_techsoft()
-            self._announce("Folders recreated.")
         elif action == "exit_recovery":
             self.active = False
             self._announce("Exiting.")
