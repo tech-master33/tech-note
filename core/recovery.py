@@ -145,9 +145,9 @@ class RecoveryMenu:
             self._announce(self.items[self.index][0])
 
     def handle_key(self, vk):
-        if vk in (win32con.VK_UP, win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.previous()
-        elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+        elif vk in (win32con.VK_SPACE):
             self.next()
         elif vk == win32con.VK_RETURN:
             self.select()

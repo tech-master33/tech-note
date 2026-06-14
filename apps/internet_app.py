@@ -65,17 +65,17 @@ class InternetApp(SoftApp):
             return
 
         if self.reading_mode:
-            if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+            if vk in (win32con.VK_SPACE):
                 self._next_content()
-            elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            elif vk in (win32con.VK_BACK):
                 self._previous_content()
             elif vk == 0x48: # 'H' for headings
                 self._next_heading()
             return
 
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+        if vk in (win32con.VK_SPACE):
             self.menu.next()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+        elif vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()

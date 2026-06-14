@@ -181,9 +181,9 @@ class EmailApp(SoftApp):
             self._handle_compose(vk)
 
     def _handle_menu(self, vk):
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+        if vk in (win32con.VK_SPACE):
             self.menu.next()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+        elif vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -194,9 +194,9 @@ class EmailApp(SoftApp):
             if item: self.window.update_text("Email: " + item.title)
 
     def _handle_inbox(self, vk):
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+        if vk in (win32con.VK_SPACE):
             self.menu.next()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+        elif vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()

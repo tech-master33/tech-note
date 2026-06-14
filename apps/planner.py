@@ -54,9 +54,9 @@ class PlannerApp(SoftApp):
             self.exit_app()
             return
 
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+        if vk in (win32con.VK_SPACE):
             self.menu.next()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+        elif vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()

@@ -1,8 +1,10 @@
 import os
 import sys
 import json
+import subprocess
 import win32api
 import win32con
+import threading
 import time
 import pythoncom
 from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUNDS_DIR, SOUND_SCHEME
@@ -21,6 +23,7 @@ pythoncom.CoInitialize()
 class BrailleNoteApp:
     def __init__(self):
         self.tech_soft = TECH_SOFT
+        self.assistant = None
         if not os.path.exists(self.tech_soft):
             os.makedirs(self.tech_soft)
             for folder in ['documents', 'downloads', 'contacts', 'desktop']:
@@ -162,13 +165,7 @@ class BrailleNoteApp:
         setup.run_setup()
 
     def _reload_app(self):
-        self.current_app = None
-        self.menu = None
-        account_path = os.path.join(self.tech_soft, 'account.json')
-        if os.path.exists(account_path):
-            self.load_account_and_menu(account_path)
-        else:
-            self._start_setup()
+        self._restart_process()
 
     def _reset_and_restart(self):
         self.current_app = None
@@ -257,8 +254,23 @@ class BrailleNoteApp:
         self.current_app = TutorialApp(self.synth, self.window)
         self.current_app.on_focus()
 
+    def _restart_process(self):
+        subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
+        self._exit_app()
+        os._exit(0)
+
     def _exit_app(self):
         self.window.close()
+
+    def _activate_assistant(self):
+        if self.assistant is None:
+            from core.assistant import VoiceAssistant
+            self.assistant = VoiceAssistant(
+                self.synth.speak,
+                on_shutdown=self._exit_app,
+                on_restart=self._reload_app,
+            )
+        threading.Thread(target=self.assistant.run, daemon=True).start()
 
     def _get_status_info(self):
         import datetime
@@ -281,8 +293,8 @@ class BrailleNoteApp:
         bindings = self._key_bindings.get(action_name, [])
         if not bindings:
             defaults = {
-                "next_item": [32, 40],
-                "prev_item": [8, 38],
+                "next_item": [32],
+                "prev_item": [8],
                 "select": [13],
                 "back": [27],
                 "help": [112],
@@ -296,6 +308,11 @@ class BrailleNoteApp:
         print(f"Key pressed: {vk}")
 
         # --- Truly Global (always work, before app delegation) ---
+
+        # Voice Assistant (F2)
+        if vk == win32con.VK_F2:
+            self._activate_assistant()
+            return
 
         # Power menu (layout-aware backtick)
         if vk == self._power_vk or self._is_key_match(vk, "power_menu"):
@@ -346,7 +363,10 @@ class BrailleNoteApp:
             if vk in (win32con.VK_RETURN, win32con.VK_ESCAPE):
                 self._typing_buffer = ""
 
-            self.current_app.on_key(vk)
+            try:
+                self.current_app.on_key(vk)
+            except Exception as e:
+                print(f"App on_key error: {e}")
             if not self.current_app.active:
                 self.current_app = None
                 if self.menu:
@@ -395,44 +415,6 @@ class BrailleNoteApp:
         finally:
             self.window.close()
 
-def _run_recovery_if_needed():
-    from core.recovery import run_auto_checks, run_recovery, recreate_techsoft
-    from ui.stealth_window import StealthWindow
-    import pythoncom
-    pythoncom.CoInitialize()
-    issues = run_auto_checks()
-
-    # techsoft_missing only — delete and restart to trigger fresh setup
-    techsoft_issues = [i for i in issues if i[0] == "techsoft_missing"]
-
-    # settings_missing alone is handled by the app (triggers setup)
-    other_issues = [i for i in issues if i[0] not in ("techsoft_missing", "settings_missing")]
-
-    if techsoft_issues:
-        recreate_techsoft()
-        os.execv(sys.executable, [sys.executable] + sys.argv)
-
-    if not other_issues:
-        return False
-
-    window = StealthWindow(on_key_down=None)
-    if not window.hwnd:
-        return False
-    window.update_text("Tech-Note Recovery")
-    menu = run_recovery(window)
-    def handle_key(vk):
-        menu.handle_key(vk)
-        if not menu.active:
-            window.close()
-    window.on_key_down = handle_key
-    try:
-        while window.running and menu.active:
-            time.sleep(0.1)
-    finally:
-        window.close()
-    # Always let the app boot, even if user exits recovery
-    return False
-
 if __name__ == "__main__":
     # Redirect all stdout and stderr to out.log in the project root
     project_root = os.path.dirname(os.path.abspath(__file__))
@@ -445,9 +427,8 @@ if __name__ == "__main__":
         print(f"Failed to redirect output to {out_log_path}: {e}", file=sys.stderr)
 
     try:
-        if not _run_recovery_if_needed():
-            app = BrailleNoteApp()
-            app.run()
+        app = BrailleNoteApp()
+        app.run()
     except Exception as e: # Catch the exception object
         import traceback
         import sys # Import sys for stderr

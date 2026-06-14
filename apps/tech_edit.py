@@ -112,10 +112,10 @@ class TechEdit(SoftApp):
         if not self.file_list:
             return
 
-        if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+        if vk in (win32con.VK_SPACE):
             self.file_index = (self.file_index + 1) % len(self.file_list)
             self._announce_file()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+        elif vk in (win32con.VK_BACK):
             self.file_index = (self.file_index - 1) % len(self.file_list)
             self._announce_file()
         elif vk == win32con.VK_RETURN:

@@ -22,9 +22,10 @@ class PowerApp(SoftApp):
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
-        elif vk in (win32con.VK_BACK, win32con.VK_UP):
+            return
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
-        elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+        elif vk in (win32con.VK_SPACE):
             self.menu.next()
         elif vk == win32con.VK_RETURN:
             self.menu.select()

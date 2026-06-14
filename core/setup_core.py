@@ -54,12 +54,12 @@ class TechNoteSetup(SoftApp):
         elif self.current_step == 2:
             lock_options = ["PIN", "Password"]
             current_lock = 0 if self.lock_type == "pin" else 1
-            if vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+            if vk in (win32con.VK_SPACE):
                 current_lock = (current_lock + 1) % 2
                 self.lock_type = "pin" if current_lock == 0 else "password"
                 self.window.update_text("Lock Type: " + lock_options[current_lock])
                 self.speak(lock_options[current_lock])
-            elif vk in (win32con.VK_UP, win32con.VK_BACK): # Allow backspace if empty? No, keep it simple.
+            elif vk in (win32con.VK_BACK): # Allow backspace if empty? No, keep it simple.
                 current_lock = (current_lock - 1) % 2
                 self.lock_type = "pin" if current_lock == 0 else "password"
                 self.window.update_text("Lock Type: " + lock_options[current_lock])
@@ -96,11 +96,11 @@ class TechNoteSetup(SoftApp):
         elif self.current_step == 4:
             if not self.available_synths:
                 return
-            if vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+            if vk in (win32con.VK_SPACE):
                 self.synth_index = (self.synth_index + 1) % len(self.available_synths)
                 self.window.update_text(self.available_synths[self.synth_index][0])
                 self.speak(self.available_synths[self.synth_index][0])
-            elif vk in (win32con.VK_UP, win32con.VK_BACK):
+            elif vk in (win32con.VK_BACK):
                 self.synth_index = (self.synth_index - 1) % len(self.available_synths)
                 self.window.update_text(self.available_synths[self.synth_index][0])
                 self.speak(self.available_synths[self.synth_index][0])
@@ -118,11 +118,11 @@ class TechNoteSetup(SoftApp):
             if not self.voices:
                 self._enter_layout_step()
                 return
-            if vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+            if vk in (win32con.VK_SPACE):
                 self.voice_index = (self.voice_index + 1) % len(self.voices)
                 self.window.update_text(self.voices[self.voice_index])
                 self.speak(self.voices[self.voice_index])
-            elif vk in (win32con.VK_UP, win32con.VK_BACK):
+            elif vk in (win32con.VK_BACK):
                 if self.voices:
                     self.voice_index = (self.voice_index - 1) % len(self.voices)
                     self.window.update_text(self.voices[self.voice_index])
@@ -133,12 +133,12 @@ class TechNoteSetup(SoftApp):
         elif self.current_step == 6:
             layout_options = ["US", "UK"]
             current = 0 if self.keyboard_layout == "US" else 1
-            if vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+            if vk in (win32con.VK_SPACE):
                 current = (current + 1) % 2
                 self.keyboard_layout = layout_options[current]
                 self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
                 self.speak(self.keyboard_layout)
-            elif vk in (win32con.VK_UP, win32con.VK_BACK):
+            elif vk in (win32con.VK_BACK):
                 current = (current - 1) % 2
                 self.keyboard_layout = layout_options[current]
                 self.window.update_text("Keyboard Layout: " + self.keyboard_layout)

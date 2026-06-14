@@ -136,9 +136,9 @@ class SettingsApp(SoftApp):
             if vk == win32con.VK_ESCAPE:
                 self._back_from_account()
                 return
-            if vk in (win32con.VK_BACK, win32con.VK_UP):
+            if vk in (win32con.VK_BACK):
                 self.account_menu.previous()
-            elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+            elif vk in (win32con.VK_SPACE):
                 self.account_menu.next()
             elif vk == win32con.VK_RETURN:
                 self.account_menu.select()
@@ -154,9 +154,9 @@ class SettingsApp(SoftApp):
                 self.exit_app()
             return
 
-        if vk in (win32con.VK_BACK, win32con.VK_UP):
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
-        elif vk in (win32con.VK_DOWN, win32con.VK_SPACE):
+        elif vk in (win32con.VK_SPACE):
             self.menu.next()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -362,23 +362,18 @@ class SettingsApp(SoftApp):
     def _switch_branch(self):
         branch = "main" if self.settings.get("update_channel") == "stable" else "testing"
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["git", "checkout", branch], cwd=BASE_DIR,
                 capture_output=True, text=True, timeout=30
             )
-            if result.returncode != 0:
-                self.speak(f"Failed to switch to {branch}.")
-                return
             result = subprocess.run(
                 ["git", "pull"], cwd=BASE_DIR,
                 capture_output=True, text=True, timeout=60
             )
-            if result.returncode == 0:
-                self.speak(f"Switched to {branch} channel.")
-                if "Already up to date" not in result.stdout.strip():
-                    self._install_requirements()
-            else:
-                self.speak(f"Switched to {branch} but pull failed.")
+            if result.returncode == 0 and "Already up to date" not in result.stdout.strip():
+                self._install_requirements()
+            self.speak(f"Switched to {branch}. Restarting.")
+            self._restart_app()
         except Exception:
             self.speak("Could not switch branch.")
 
@@ -402,6 +397,7 @@ class SettingsApp(SoftApp):
                 else:
                     self.speak("Update downloaded.")
                     self._install_requirements()
+                    self._restart_app()
             else:
                 self.speak("Update failed. Check your internet.")
         except subprocess.TimeoutExpired:
@@ -410,7 +406,6 @@ class SettingsApp(SoftApp):
             self.speak("Git not found.")
         except Exception:
             self.speak("Update error.")
-        self._announce_main()
 
     def _install_requirements(self):
         req_path = os.path.join(BASE_DIR, 'requirements.txt')
@@ -519,6 +514,11 @@ class SettingsApp(SoftApp):
             self.window.update_text("Account: " + title)
         else:
             self._announce_main()
+
+    def _restart_app(self):
+        subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
+        self.exit_app()
+        os._exit(0)
 
     def _reset_technote(self):
         self.confirm_mode = "confirm_reset"
