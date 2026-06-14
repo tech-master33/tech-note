@@ -59,10 +59,7 @@ class MediaPlayerApp(SoftApp):
             self.speak("Stopped")
             return
 
-        if vk in (win32con.VK_SPACE):
-            self.player.stop()
-            self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.player.stop()
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
@@ -77,6 +74,16 @@ class MediaPlayerApp(SoftApp):
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Media: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if self.manager.space_used_in_chord:
+                return
+            self.player.stop()
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text("Media: " + item.title)
             
     def get_help_text(self):
         return "Media Player. Space for next, Backspace for previous. Enter to play. F1 to stop. Press Escape to exit."

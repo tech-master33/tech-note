@@ -52,9 +52,7 @@ class AddressListApp(SoftApp):
             self.exit_app()
             return
 
-        if vk in (win32con.VK_SPACE):
-            self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -64,3 +62,12 @@ class AddressListApp(SoftApp):
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Contacts: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if getattr(self.manager, 'space_used_in_chord', False):
+                return
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text("Contacts: " + item.title)

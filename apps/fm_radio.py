@@ -40,10 +40,7 @@ class FMRadioApp(SoftApp):
             self.speak("Stopped")
             return
 
-        if vk in (win32con.VK_SPACE):
-            self.player.stop()
-            self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.player.stop()
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
@@ -54,6 +51,16 @@ class FMRadioApp(SoftApp):
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Radio: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if getattr(self.manager, 'space_used_in_chord', False):
+                return
+            self.menu.next()
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text("Radio: " + item.title)
 
     def _tune(self, name, url):
         self.speak("Tuning to " + name)

@@ -54,9 +54,7 @@ class PlannerApp(SoftApp):
             self.exit_app()
             return
 
-        if vk in (win32con.VK_SPACE):
-            self.menu.next()
-        elif vk in (win32con.VK_BACK):
+        if vk in (win32con.VK_BACK):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -66,6 +64,15 @@ class PlannerApp(SoftApp):
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Planner: " + item.title)
+
+    def on_key_up(self, vk):
+        if vk == win32con.VK_SPACE:
+            if getattr(self.manager, 'space_used_in_chord', False):
+                return
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text("Planner: " + item.title)
             
     def get_help_text(self):
         return "Planner. Space for next, Backspace for previous. Enter to select. Press Escape to exit."

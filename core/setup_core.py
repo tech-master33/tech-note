@@ -54,12 +54,12 @@ class TechNoteSetup(SoftApp):
         elif self.current_step == 2:
             lock_options = ["PIN", "Password"]
             current_lock = 0 if self.lock_type == "pin" else 1
-            if vk in (win32con.VK_SPACE):
+            if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
                 current_lock = (current_lock + 1) % 2
                 self.lock_type = "pin" if current_lock == 0 else "password"
                 self.window.update_text("Lock Type: " + lock_options[current_lock])
                 self.speak(lock_options[current_lock])
-            elif vk in (win32con.VK_BACK): # Allow backspace if empty? No, keep it simple.
+            elif vk in (win32con.VK_BACK, win32con.VK_UP):
                 current_lock = (current_lock - 1) % 2
                 self.lock_type = "pin" if current_lock == 0 else "password"
                 self.window.update_text("Lock Type: " + lock_options[current_lock])
@@ -96,11 +96,11 @@ class TechNoteSetup(SoftApp):
         elif self.current_step == 4:
             if not self.available_synths:
                 return
-            if vk in (win32con.VK_SPACE):
+            if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
                 self.synth_index = (self.synth_index + 1) % len(self.available_synths)
                 self.window.update_text(self.available_synths[self.synth_index][0])
                 self.speak(self.available_synths[self.synth_index][0])
-            elif vk in (win32con.VK_BACK):
+            elif vk in (win32con.VK_BACK, win32con.VK_UP):
                 self.synth_index = (self.synth_index - 1) % len(self.available_synths)
                 self.window.update_text(self.available_synths[self.synth_index][0])
                 self.speak(self.available_synths[self.synth_index][0])
@@ -118,11 +118,11 @@ class TechNoteSetup(SoftApp):
             if not self.voices:
                 self._enter_layout_step()
                 return
-            if vk in (win32con.VK_SPACE):
+            if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
                 self.voice_index = (self.voice_index + 1) % len(self.voices)
                 self.window.update_text(self.voices[self.voice_index])
                 self.speak(self.voices[self.voice_index])
-            elif vk in (win32con.VK_BACK):
+            elif vk in (win32con.VK_BACK, win32con.VK_UP):
                 if self.voices:
                     self.voice_index = (self.voice_index - 1) % len(self.voices)
                     self.window.update_text(self.voices[self.voice_index])
@@ -131,15 +131,19 @@ class TechNoteSetup(SoftApp):
                 self._enter_layout_step()
 
         elif self.current_step == 6:
-            layout_options = ["US", "UK"]
-            current = 0 if self.keyboard_layout == "US" else 1
-            if vk in (win32con.VK_SPACE):
-                current = (current + 1) % 2
+            layout_options = ["US", "UK", "Arabic"]
+            try:
+                current = layout_options.index(self.keyboard_layout)
+            except ValueError:
+                current = 0
+                
+            if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
+                current = (current + 1) % len(layout_options)
                 self.keyboard_layout = layout_options[current]
                 self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
                 self.speak(self.keyboard_layout)
-            elif vk in (win32con.VK_BACK):
-                current = (current - 1) % 2
+            elif vk in (win32con.VK_BACK, win32con.VK_UP):
+                current = (current - 1) % len(layout_options)
                 self.keyboard_layout = layout_options[current]
                 self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
                 self.speak(self.keyboard_layout)
@@ -186,16 +190,6 @@ class TechNoteSetup(SoftApp):
             if not hidden: self.speak(ch)
             return True
         return False
-
-    def _vk_to_char(self, vk):
-        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-        if 0x41 <= vk <= 0x5A:
-            return chr(vk).upper() if shift else chr(vk).lower()
-        if 0x30 <= vk <= 0x39:
-            return chr(vk)
-        if vk == win32con.VK_SPACE:
-            return ' '
-        return None
 
     def save_account(self):
         config = {
