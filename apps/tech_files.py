@@ -27,13 +27,14 @@ def _get_drive_type(root):
 def _get_drive_list():
     tech_drive = _get_techsoft_drive()
     drives = []
+    hd_num = 1
     for letter in string.ascii_uppercase:
         root = f"{letter}:\\"
         if not os.path.exists(root):
             continue
         drv_type = _get_drive_type(root)
         if root.upper().startswith(tech_drive):
-            drives.append(("HardDisk", root))
+            drives.append(("Tech-Note", root))
         elif drv_type == win32file.DRIVE_REMOVABLE:
             drives.append(("External", root))
         elif drv_type == win32file.DRIVE_CDROM:
@@ -45,16 +46,23 @@ def _get_drive_list():
             if label:
                 drives.append((label, root))
             else:
-                drives.append((f"HardDisk {letter}", root))
+                name = "HardDisk" if hd_num == 1 else f"HardDisk {hd_num}"
+                drives.append((name, root))
+                hd_num += 1
     return drives
 
 
 class TechFiles(SoftApp):
+    DRIVE_MENU = 0
+    FILE_MENU = 1
+
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.drives = _get_drive_list()
         self.drive_index = 0
         self.path = None
+        self.state = self.FILE_MENU
+        self._saved_menu = None
         self._open_drive(0)
 
     def _open_drive(self, index):
@@ -63,11 +71,17 @@ class TechFiles(SoftApp):
             name, root_path = self.drives[index]
             self.path = root_path
             self.speak(f"File Manager. {name}")
+            self.state = self.FILE_MENU
             self.refresh()
 
-    def _switch_drive(self):
-        idx = (self.drive_index + 1) % len(self.drives)
-        self._open_drive(idx)
+    def _show_drive_menu(self):
+        self._saved_menu = self.menu
+        root = MenuNode("Switch Drive")
+        for i, (name, root_path) in enumerate(self.drives):
+            root.add_child(MenuNode(name, lambda idx=i: self._open_drive(idx)))
+        self.menu = MenuSystem(root, self.speak)
+        self.state = self.DRIVE_MENU
+        self.speak("Switch Drive. " + self.menu.get_current_item().title)
 
     def _open_dir(self, path):
         self.path = path
@@ -112,6 +126,8 @@ class TechFiles(SoftApp):
         self.speak(f"File: {filename}")
 
     def on_focus(self):
+        if self.state == self.DRIVE_MENU:
+            return
         self._build_menu()
         item = self.menu.get_current_item()
         title = item.title if item else "File Manager"
@@ -120,15 +136,22 @@ class TechFiles(SoftApp):
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
+            if self.state == self.DRIVE_MENU:
+                self.menu = self._saved_menu
+                self.state = self.FILE_MENU
+                item = self.menu.get_current_item()
+                if item:
+                    self.window.update_text("Files: " + item.title)
+                return
             self.exit_app()
             return
 
-        if vk == win32con.VK_F1:
+        if vk == win32con.VK_F1 and self.state == self.FILE_MENU:
             self._delete_current()
             return
 
         if self.window.space_down and vk == 0x44:
-            self._switch_drive()
+            self._show_drive_menu()
             return
 
         if vk in (win32con.VK_SPACE, win32con.VK_DOWN):
