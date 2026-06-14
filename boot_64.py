@@ -29,7 +29,7 @@ class BrailleNoteApp:
         self.synth = SapiSynthBase()
         self._apply_settings()
         self.window = StealthWindow(on_key_down=self.handle_key)
-        
+
         self.menu = None
         self.current_app = None
         self._typing_buffer = ""
@@ -41,27 +41,29 @@ class BrailleNoteApp:
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
-        
+
         # Play startup sound before any speech
+        self._play_startup_sound()
+
+        # Apply visual settings to window (may trigger speech)
+        self._apply_visual_settings()
+
+    def _play_startup_sound(self):
         settings_path = os.path.join(self.tech_soft, 'settings.json')
-        play_startup = True
         if os.path.exists(settings_path):
             try:
                 with open(settings_path, 'r') as f:
                     s = json.load(f)
                 if s.get("startup_sound") == "Off":
-                    play_startup = False
-            except: pass
-
-        if play_startup:
-            startup_sound = _get_sound_path('startup.mp3')
-            if not os.path.exists(startup_sound):
-                startup_sound = os.path.join(SOUNDS_DIR, 'startup.mp3')
-            if os.path.exists(startup_sound):
-                AudioPlayer().play_sound_blocking(startup_sound)
-
-        # Apply visual settings to window (may trigger speech)
-        self._apply_visual_settings()
+                    return False
+            except:
+                pass
+        path = _get_sound_path('startup.mp3')
+        if not os.path.exists(path):
+            path = os.path.join(SOUNDS_DIR, 'startup.mp3')
+        if os.path.exists(path):
+            AudioPlayer().play_sound_blocking(path)
+        return True
 
     def _detect_keyboard_layout(self):
         settings_path = os.path.join(self.tech_soft, 'settings.json')

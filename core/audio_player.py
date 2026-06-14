@@ -5,17 +5,18 @@ import tempfile
 
 
 class AudioPlayer:
+    _sd = None
+    _sf = None
+
     def __init__(self):
         self._ffplay_proc = None
         self.playing = False
-        self._sd = None
-        self._sf = None
 
     def _ensure_audio(self):
-        if self._sd is None:
-            self._sd = importlib.import_module('sounddevice')
-        if self._sf is None:
-            self._sf = importlib.import_module('soundfile')
+        if AudioPlayer._sd is None:
+            AudioPlayer._sd = importlib.import_module('sounddevice')
+        if AudioPlayer._sf is None:
+            AudioPlayer._sf = importlib.import_module('soundfile')
 
     def play_file(self, path):
         self.stop()
@@ -25,10 +26,10 @@ class AudioPlayer:
         if ext in ('.wav', '.flac', '.ogg'):
             try:
                 self._ensure_audio()
-                data, sr = self._sf.read(path, dtype='float32')
+                data, sr = AudioPlayer._sf.read(path, dtype='float32')
                 if data.ndim == 1:
                     data = data.reshape(-1, 1)
-                self._sd.play(data, sr, blocking=False)
+                AudioPlayer._sd.play(data, sr, blocking=False)
                 self.playing = True
                 return True
             except Exception:
@@ -41,10 +42,10 @@ class AudioPlayer:
                 capture_output=True, timeout=30
             )
             self._ensure_audio()
-            data, sr = self._sf.read(tmp, dtype='float32')
+            data, sr = AudioPlayer._sf.read(tmp, dtype='float32')
             if data.ndim == 1:
                 data = data.reshape(-1, 1)
-            self._sd.play(data, sr, blocking=False)
+            AudioPlayer._sd.play(data, sr, blocking=False)
             self.playing = True
             return True
         except Exception:
@@ -62,10 +63,10 @@ class AudioPlayer:
         if ext in ('.wav', '.flac', '.ogg'):
             try:
                 self._ensure_audio()
-                data, sr = self._sf.read(path, dtype='float32')
+                data, sr = AudioPlayer._sf.read(path, dtype='float32')
                 if data.ndim == 1:
                     data = data.reshape(-1, 1)
-                self._sd.play(data, sr, blocking=True)
+                AudioPlayer._sd.play(data, sr, blocking=True)
             except Exception:
                 pass
         else:
@@ -77,10 +78,10 @@ class AudioPlayer:
                     capture_output=True, timeout=30
                 )
                 self._ensure_audio()
-                data, sr = self._sf.read(tmp, dtype='float32')
+                data, sr = AudioPlayer._sf.read(tmp, dtype='float32')
                 if data.ndim == 1:
                     data = data.reshape(-1, 1)
-                self._sd.play(data, sr, blocking=True)
+                AudioPlayer._sd.play(data, sr, blocking=True)
             except Exception:
                 pass
             finally:
@@ -102,8 +103,8 @@ class AudioPlayer:
             return False
 
     def stop(self):
-        if self._sd:
-            self._sd.stop()
+        if AudioPlayer._sd:
+            AudioPlayer._sd.stop()
         if self._ffplay_proc:
             try:
                 self._ffplay_proc.kill()
