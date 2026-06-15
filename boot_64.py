@@ -23,7 +23,6 @@ pythoncom.CoInitialize()
 class BrailleNoteApp:
     def __init__(self):
         self.tech_soft = TECH_SOFT
-        self.assistant = None
         if not os.path.exists(self.tech_soft):
             os.makedirs(self.tech_soft)
             for folder in ['documents', 'downloads', 'contacts', 'desktop']:
@@ -280,7 +279,15 @@ class BrailleNoteApp:
         os._exit(0)
 
     def _exit_app(self):
-        self.window.close()
+        try:
+            self.synth.stop()
+        except:
+            pass
+        try:
+            self.window.close()
+        except:
+            pass
+        os._exit(0)
 
     def _vk_to_char(self, vk):
         import ctypes
@@ -300,16 +307,6 @@ class BrailleNoteApp:
         if res > 0:
             return buf.value
         return None
-
-    def _activate_assistant(self):
-        if self.assistant is None:
-            from core.assistant import VoiceAssistant
-            self.assistant = VoiceAssistant(
-                self.synth.speak,
-                on_shutdown=self._exit_app,
-                on_restart=self._reload_app,
-            )
-        threading.Thread(target=self.assistant.run, daemon=True).start()
 
     def _get_status_info(self):
         import datetime
@@ -372,11 +369,6 @@ class BrailleNoteApp:
         if vk == win32con.VK_F4 and (win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000):
             print("Global Alt+F4: Exiting")
             self._exit_app()
-            return
-
-        # Voice Assistant (F2)
-        if vk == win32con.VK_F2:
-            self._activate_assistant()
             return
 
         # Power menu (layout-aware backtick)
@@ -449,7 +441,7 @@ class BrailleNoteApp:
             return
 
         if self._is_key_match(vk, "help"):
-            self.synth.speak(f"Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. {self._power_key_name} for power. Shift F1 for tutorial.")
+            self.synth.speak(f"Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. {self._power_key_name} for power.")
             return
 
         if self._is_key_match(vk, "status"):

@@ -564,8 +564,7 @@ class SettingsApp(SoftApp):
 
     def _restart_app(self):
         subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
-        self.exit_app()
-        os._exit(0)
+        self.manager._exit_app()
 
     def _reset_technote(self):
         self.confirm_mode = "confirm_reset"
@@ -588,5 +587,5 @@ class SettingsApp(SoftApp):
         if self.adjust_mode:
             return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
         if self.account_menu:
-            return "Account Management. Use arrows to navigate options. Enter to select. Escape to go back."
-        return "Settings App. Use arrows to navigate. Enter to select. Escape to exit."
+            return "Account Management. Use Space and Backspace to navigate. Enter to select. Escape to go back."
+        return "Settings App. Use Space and Backspace to navigate. Enter to select. Escape to exit."

@@ -21,9 +21,9 @@ class TutorialApp(SoftApp):
     def _show_topic(self, topic):
         self._topic_mode = topic
         texts = {
-            "nav": "Navigation Basics. Use Space or Down Arrow to move to the next item. Use Backspace or Up Arrow to move to the previous item. Press Enter to select an item. Press Escape to go back or exit. Use the Plus key to stop speech. Use first letter navigation by pressing the first letter of a menu item.",
+            "nav": "Navigation Basics. Use Space to move to the next item. Use Backspace to move to the previous item. Press Enter to select an item. Press Escape to go back or exit. Use the Plus key to stop speech. Use first letter navigation by pressing the first letter of a menu item.",
             "menu": "Main Menu. The main menu contains your applications: Tutorial, Word Processor, Settings, Planner, Address List, Email, Internet, Chat, Media Center, Calculator, and File Manager. Navigate with Space and Backspace. Press Enter to open an app. Press Escape to return to the main menu from an app.",
-            "tts_menu": "TTS Menu. Press Space plus O to open Options, then select TTS Menu. Here you can change TTS Engine, Speech Rate, Volume, Voice Selection, and Punctuation Level. Navigate with arrows, adjust values with Plus and Minus. Press Enter to save, Escape to cancel.",
+            "tts_menu": "TTS Menu. Press Space plus O to open Options, then select TTS Menu. Here you can change TTS Engine, Speech Rate, Volume, Voice Selection, and Punctuation Level. Navigate with Space and Backspace, adjust values with Plus and Minus. Press Enter to save, Escape to cancel.",
             "keyboard_menu": "Keyboard Menu. Press Space plus O to open Options, then select Keyboard Menu. Here you can toggle Character Echo, Word Echo, and rebind your keys. Character Echo speaks each letter you type. Word Echo speaks completed words when you press Space.",
             "typing": "Typing and Editing. When in a text field, type normally. Use Enter to submit, Backspace to delete. Text input fields support Character Echo and Word Echo based on your Keyboard Menu settings.",
             "shortcuts": "Shortcuts. F1 for context help. Shift F1 for Tutorial. F5 for time, date, and battery status. Backtick for Power Menu. Space plus O for Options. Escape exits apps. Plus key stops speech.",

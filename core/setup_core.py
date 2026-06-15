@@ -59,7 +59,7 @@ class TechNoteSetup(SoftApp):
             if vk == win32con.VK_RETURN:
                 if self.username:
                     self.current_step += 1
-                    self.speak("Select Lock Type. Use arrows. PIN or Password.")
+                    self.speak("Select Lock Type. Use Space or Backspace. PIN or Password.")
                     self.window.update_text("Lock Type: PIN")
             elif self._handle_input(vk, 'username'):
                 pass
@@ -122,7 +122,7 @@ class TechNoteSetup(SoftApp):
                 self._load_voices_for_synth()
                 self.current_step += 1
                 if self.voices:
-                    self.speak("Voice selection. Use arrows.")
+                    self.speak("Voice selection. Use Space or Backspace.")
                     self.window.update_text(self.voices[self.voice_index])
                 else:
                     self._enter_layout_step()
@@ -164,7 +164,7 @@ class TechNoteSetup(SoftApp):
                     self.finish_callback()
 
     def _enter_synth_step(self):
-        self.speak("TTS engine. Use arrows to select.")
+        self.speak("TTS engine. Use Space or Backspace to select.")
         if self.available_synths:
             self.window.update_text(self.available_synths[self.synth_index][0])
 
