@@ -138,6 +138,10 @@ class SettingsApp(SoftApp):
                 return
             if vk == win32con.VK_BACK:
                 self.account_menu.previous()
+            elif vk == win32con.VK_DOWN:
+                self.account_menu.next()
+            elif vk == win32con.VK_UP:
+                self.account_menu.previous()
             elif vk == win32con.VK_RETURN:
                 self.account_menu.select()
             elif 0x41 <= vk <= 0x5A:
@@ -157,6 +161,10 @@ class SettingsApp(SoftApp):
             return
 
         if vk == win32con.VK_BACK:
+            self.menu.previous()
+        elif vk == win32con.VK_DOWN:
+            self.menu.next()
+        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -278,8 +286,8 @@ class SettingsApp(SoftApp):
             self.speak(self.settings[key])
         elif key == "keyboard_layout":
             opts = ["US", "UK", "Arabic"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
+            curr = opts.index(self.settings[key]) if self.settings[key] in opts else 0
+            self.settings[key] = opts[(curr + direction) % len(opts)]
             self.speak(self.settings[key])
             self._apply_keyboard_layout()
         elif key == "update_channel":
@@ -355,6 +363,30 @@ class SettingsApp(SoftApp):
         if ch is not None:
             self.text_input += ch
             self.window.update_text(self.text_input)
+
+    def _vk_to_char(self, vk):
+        import win32api
+        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
+        caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
+        if 0x41 <= vk <= 0x5A:
+            upper = shift ^ caps
+            return chr(vk).upper() if upper else chr(vk).lower()
+        if 0x30 <= vk <= 0x39:
+            shift_syms = {0x30: ')', 0x31: '!', 0x32: '@', 0x33: '#',
+                          0x34: '$', 0x35: '%', 0x36: '^', 0x37: '&',
+                          0x38: '*', 0x39: '('}
+            return shift_syms[vk] if shift else chr(vk)
+        if vk == win32con.VK_SPACE:
+            return ' '
+        sym_map = {
+            0xBD: ('-', '_'), 0xBB: ('=', '+'), 0xC0: ('`', '~'),
+            0xDB: ('[', '{'), 0xDD: (']', '}'), 0xDC: ('\\', '|'),
+            0xBA: (';', ':'), 0xDE: ("'", '"'),
+            0xBC: (',', '<'), 0xBE: ('.', '>'), 0xBF: ('/', '?'),
+        }
+        if vk in sym_map:
+            return sym_map[vk][1] if shift else sym_map[vk][0]
+        return None
 
     def _switch_branch(self):
         branch = "main" if self.settings.get("update_channel") == "stable" else "testing"
@@ -556,5 +588,5 @@ class SettingsApp(SoftApp):
         if self.adjust_mode:
             return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
         if self.account_menu:
-            return "Account Management. Use Space and Backspace to navigate. Enter to select. Escape to go back."
-        return "Settings App. Navigate with Space and Backspace. Enter to select. Escape to exit."
+            return "Account Management. Use arrows to navigate options. Enter to select. Escape to go back."
+        return "Settings App. Use arrows to navigate. Enter to select. Escape to exit."
