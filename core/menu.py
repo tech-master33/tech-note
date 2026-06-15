@@ -140,6 +140,7 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.fm_radio import FMRadioApp
     from apps.chat_app import ChatApp
     from apps.tutorial_app import TutorialApp
+    from apps.game_center import GameCenter
     root = MenuNode("Main Menu")
     
     # Tutorial
@@ -175,6 +176,9 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     
     # Calculator
     root.add_child(MenuNode("Scientific Calculator", lambda: app_callback(TechCalc), "c"))
+    
+    # Game Center
+    root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
     
     # File Manager
     root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
