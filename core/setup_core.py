@@ -144,7 +144,17 @@ class TechNoteSetup(SoftApp):
                 self._enter_layout_step()
 
         elif self.current_step == 6:
-            if vk == win32con.VK_RETURN:
+            if vk in (win32con.VK_SPACE,):
+                self._layout_index = (self._layout_index + 1) % len(self._layout_options)
+                self.keyboard_layout = self._layout_options[self._layout_index]
+                self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
+                self.speak(self.keyboard_layout)
+            elif vk in (win32con.VK_BACK,):
+                self._layout_index = (self._layout_index - 1) % len(self._layout_options)
+                self.keyboard_layout = self._layout_options[self._layout_index]
+                self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
+                self.speak(self.keyboard_layout)
+            elif vk == win32con.VK_RETURN:
                 self._complete_setup()
 
         elif self.current_step == 7:
@@ -159,8 +169,10 @@ class TechNoteSetup(SoftApp):
             self.window.update_text(self.available_synths[self.synth_index][0])
 
     def _enter_layout_step(self):
+        self._layout_options = ["US", "UK", "Arabic"]
+        self._layout_index = self._layout_options.index(self.keyboard_layout) if self.keyboard_layout in self._layout_options else 0
         self.current_step = 6
-        self.speak(f"Keyboard layout detected: {self.keyboard_layout}. Press Enter to continue.")
+        self.speak(f"Keyboard layout detected: {self.keyboard_layout}. Use Space or Backspace to change.")
         self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
 
     def _complete_setup(self):
