@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "id": "puzzle",
+      "name": "Puzzle Game",
+      "description": "Classic 15-puzzle sliding tile game. Use arrow keys to arrange numbers 1-15.",
+      "version": "1.0",
+      "filename": "puzzle_game.py",
+      "download_url": "https://tech-note-apps.netlify.app/apps/puzzle_game.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "calculator",
+      "name": "Scientific Calculator",
+      "description": "Full scientific calculator with trig, log, and memory functions.",
+      "version": "1.0",
+      "filename": "tech_calc.py",
+      "download_url": "https://tech-note-apps.netlify.app/apps/tech_calc.py",
+      "author": "Tech-Note"
+    }
+  ]
+}

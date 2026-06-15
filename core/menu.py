@@ -141,6 +141,7 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.chat_app import ChatApp
     from apps.tutorial_app import TutorialApp
     from apps.game_center import GameCenter
+    from apps.app_store import AppStore
     root = MenuNode("Main Menu")
     
     # Tutorial
@@ -182,5 +183,8 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     
     # File Manager
     root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
+    
+    # App Store
+    root.add_child(MenuNode("App Store", lambda: app_callback(AppStore), "l"))
     
     return root
