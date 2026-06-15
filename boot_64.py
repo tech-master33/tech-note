@@ -282,6 +282,25 @@ class BrailleNoteApp:
     def _exit_app(self):
         self.window.close()
 
+    def _vk_to_char(self, vk):
+        import ctypes
+        if vk == win32con.VK_SPACE:
+            return ' '
+        if vk in (win32con.VK_RETURN, win32con.VK_BACK, win32con.VK_ESCAPE):
+            return None
+        state = (ctypes.c_byte * 256)()
+        if not ctypes.windll.user32.GetKeyboardState(ctypes.byref(state)):
+            return None
+        buf = ctypes.create_unicode_buffer(5)
+        hkl = ctypes.windll.user32.GetKeyboardLayout(0)
+        sc = win32api.MapVirtualKey(vk, 0)
+        res = ctypes.windll.user32.ToUnicodeEx(
+            vk, sc, ctypes.byref(state), buf, len(buf), 0, hkl
+        )
+        if res > 0:
+            return buf.value
+        return None
+
     def _activate_assistant(self):
         if self.assistant is None:
             from core.assistant import VoiceAssistant
@@ -310,19 +329,15 @@ class BrailleNoteApp:
         return status
 
     def _is_key_match(self, vk, action_name):
-        # Arrows always work for next/prev
-        if action_name == "next_item" and vk == 40: return True
-        if action_name == "prev_item" and vk == 38: return True
-
         bindings = self._key_bindings.get(action_name, [])
         if not bindings:
             defaults = {
-                "next_item": [32, 40], # Space, Down Arrow
-                "prev_item": [8, 38],  # Backspace, Up Arrow
-                "select": [13],    # Enter
-                "back": [27],      # Escape
-                "help": [112],     # F1
-                "status": [116],    # F5
+                "next_item": [32],   # Space
+                "prev_item": [8],    # Backspace
+                "select": [13],      # Enter
+                "back": [27],        # Escape
+                "help": [112],       # F1
+                "status": [116],     # F5
                 "power_menu": [self._power_vk],
             }
             bindings = defaults.get(action_name, [])
@@ -400,14 +415,11 @@ class BrailleNoteApp:
                         ch = " "
                         self.synth.speak("Space")
                     else:
-                        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-                        caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
-                        if 0x41 <= vk <= 0x5A:
-                            upper = shift ^ caps
-                            ch = chr(vk) if upper else chr(vk).lower()
+                        ch = self._vk_to_char(vk)
+                        if ch:
+                            self.synth.speak(ch)
                         else:
-                            ch = chr(vk)
-                        self.synth.speak(ch)
+                            ch = ""
                     self._typing_buffer += ch
                 except:
                     self._typing_buffer += chr(vk) if 0x30 <= vk <= 0x5A else ""
@@ -445,7 +457,7 @@ class BrailleNoteApp:
             self.synth.speak(info)
             return
 
-        if vk != win32con.VK_SPACE and self._is_key_match(vk, "next_item"):
+        if self._is_key_match(vk, "next_item"):
             print("Next item")
             self.menu.next()
         elif self._is_key_match(vk, "prev_item"):

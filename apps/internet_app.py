@@ -119,17 +119,6 @@ class InternetApp(SoftApp):
             self.window.update_text(f"URL: {self.input_buf}")
             self.speak(ch)
 
-    def _vk_to_char(self, vk):
-        import win32api
-        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-        if 0x41 <= vk <= 0x5A:
-            return chr(vk).lower()
-        if 0x30 <= vk <= 0x39:
-            return chr(vk)
-        syms = {0xBE: '.', 0xBF: '/', 0xBD: '-', 0xBA: ':', 0xC0: '~'}
-        if vk in syms: return syms[vk]
-        return None
-
     def _next_content(self):
         if not self.content: return
         self.content_index = (self.content_index + 1) % len(self.content)
