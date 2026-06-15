@@ -245,6 +245,14 @@ class BrailleNoteApp:
         self.menu = MenuSystem(self.menu_root, self.speak)
         self.speak("Main Menu")
 
+    def refresh_main_menu(self):
+        import core.menu
+        core.menu.ANNOUNCE_POSITION = self._announce_position == "On"
+        self.menu_root = build_braillenote_menu(
+            self, self.window, self.launch_app, self._reset_and_restart
+        )
+        self.menu = MenuSystem(self.menu_root, self.speak)
+
     def _create_lock_screen(self, manager, window):
         from apps.lock_screen import LockScreenApp
         return LockScreenApp(manager, window, self.load_main_menu)

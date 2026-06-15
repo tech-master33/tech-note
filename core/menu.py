@@ -187,4 +187,87 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     # App Store
     root.add_child(MenuNode("App Store", lambda: app_callback(AppStore), "l"))
     
+    # Installed apps from App Store
+    _add_installed_apps(root, app_callback)
+    
     return root
+
+
+def _add_installed_apps(root, app_callback):
+    import os
+    import json
+    import importlib
+    from core.config import TECH_SOFT
+    INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
+    APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
+    
+    if not os.path.exists(INSTALLED_FILE):
+        return
+    
+    try:
+        with open(INSTALLED_FILE, 'r') as f:
+            installed = json.load(f)
+    except:
+        return
+    
+    if not installed:
+        return
+    
+    games = []
+    apps = []
+    
+    for app_id, info in installed.items():
+        filename = info.get("filename", "")
+        entry_point = info.get("entry_point", "")
+        name = info.get("name", app_id)
+        category = info.get("category", "Apps").lower()
+        filepath = os.path.join(APPS_DIR, filename)
+        
+        if not os.path.exists(filepath):
+            continue
+        
+        if not filename.endswith('.py'):
+            continue
+        
+        mod_name = filename[:-3]
+        
+        def make_loader(mn=mod_name, ep=entry_point):
+            def load():
+                try:
+                    if mn not in sys.modules:
+                        import sys
+                        if APPS_DIR not in sys.path:
+                            sys.path.insert(0, APPS_DIR)
+                        mod = importlib.import_module(mn)
+                    else:
+                        mod = sys.modules[mn]
+                    
+                    if ep and hasattr(mod, ep):
+                        cls = getattr(mod, ep)
+                    else:
+                        classes = [v for v in vars(mod).values()
+                                   if isinstance(v, type) and hasattr(v, 'on_key') and hasattr(v, 'exit_app')]
+                        cls = classes[0] if classes else None
+                    
+                    if cls:
+                        app_callback(cls)
+                except Exception as e:
+                    print(f"Failed to load installed app {mn}: {e}")
+            return load
+        
+        item = MenuNode(name, make_loader())
+        
+        if category == "games":
+            games.append(item)
+        else:
+            apps.append(item)
+    
+    if games:
+        games_menu = root.add_child(MenuNode("Installed Games"))
+        for g in games:
+            games_menu.add_child(g)
+    
+    if apps:
+        apps_menu = root.add_child(MenuNode("Installed Apps"))
+        for a in apps:
+            apps_menu.add_child(a)

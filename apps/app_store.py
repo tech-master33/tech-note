@@ -38,44 +38,55 @@ class AppStore(SoftApp):
 
     def _build_menu(self):
         root = MenuNode("App Store")
-        root.add_child(MenuNode("Browse Apps", self._browse_apps))
+        root.add_child(MenuNode("Games", self._show_category))
+        root.add_child(MenuNode("Apps", self._show_category))
         root.add_child(MenuNode("My Installed Apps", self._show_installed))
         root.add_child(MenuNode("Refresh Catalog", self._fetch_catalog))
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
 
     def _fetch_catalog(self):
-        self.speak("Fetching catalog from Netlify. Please wait.")
+        self.speak("Fetching catalog. Please wait.")
         self.window.update_text("Loading catalog...")
         try:
             req = urllib.request.Request(CATALOG_URL, headers={"User-Agent": "TechNote/1.0"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
             self.catalog = data.get("apps", [])
-            self.speak(f"Found {len(self.catalog)} apps available.")
-            self.window.update_text(f"{len(self.catalog)} apps found.")
+            count = len(self.catalog)
+            self.speak(f"Found {count} items in catalog.")
+            self.window.update_text(f"{count} items found.")
         except urllib.error.URLError:
-            self.speak("No internet connection. Could not reach App Store.")
+            self.speak("No internet connection.")
             self.window.update_text("No internet.")
-        except Exception as e:
+        except Exception:
             self.speak("Failed to load catalog.")
             self.window.update_text("Catalog error.")
 
-    def _browse_apps(self):
+    def _show_category(self):
+        item = self.menu.get_current_item()
+        if not item:
+            return
+        cat_name = item.title
+
         if not self.catalog:
             self._fetch_catalog()
         if not self.catalog:
-            self.speak("No apps available. Check your internet connection.")
+            self.speak("No apps available. Check internet.")
             return
 
-        root = MenuNode("Available Apps")
-        for app_info in self.catalog:
+        apps = [a for a in self.catalog if a.get("category", "").lower() == cat_name.lower()]
+        if not apps:
+            self.speak(f"No {cat_name} available.")
+            return
+
+        root = MenuNode(cat_name)
+        for app_info in apps:
             name = app_info.get("name", "Unknown")
             app_id = app_info.get("id", name)
             is_installed = app_id in self.installed
-            status = " [Installed]" if is_installed else ""
-            root.add_child(MenuNode(f"{name}{status}", lambda a=app_info: self._show_app(a)))
-
+            tag = " [Installed]" if is_installed else ""
+            root.add_child(MenuNode(f"{name}{tag}", lambda a=app_info: self._show_app(a)))
         root.add_child(MenuNode("Back", self._build_menu_back))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -87,34 +98,23 @@ class AppStore(SoftApp):
     def _show_app(self, app_info):
         name = app_info.get("name", "Unknown")
         desc = app_info.get("description", "No description.")
+        ver = app_info.get("version", "1.0")
         app_id = app_info.get("id", name)
         is_installed = app_id in self.installed
 
         root = MenuNode(name)
-        root.add_child(MenuNode(f"Description: {desc}"))
+        root.add_child(MenuNode(f"Version {ver}. {desc}"))
         if is_installed:
             root.add_child(MenuNode("Uninstall", lambda: self._uninstall(app_info)))
         else:
             root.add_child(MenuNode("Install", lambda: self._install(app_info)))
-        root.add_child(MenuNode("Back", self._browse_apps_back))
+        root.add_child(MenuNode("Back", self._browse_back))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
 
-    def _browse_apps_back(self):
-        if self.catalog:
-            root = MenuNode("Available Apps")
-            for app_info in self.catalog:
-                name = app_info.get("name", "Unknown")
-                app_id = app_info.get("id", name)
-                is_installed = app_id in self.installed
-                status = " [Installed]" if is_installed else ""
-                root.add_child(MenuNode(f"{name}{status}", lambda a=app_info: self._show_app(a)))
-            root.add_child(MenuNode("Back", self._build_menu_back))
-            self.menu = MenuSystem(root, self.speak)
-            self.menu.announce_current()
-        else:
-            self._build_menu()
-            self.menu.announce_current()
+    def _browse_back(self):
+        self._build_menu()
+        self.menu.announce_current()
 
     def _install(self, app_info):
         name = app_info.get("name", "Unknown")
@@ -145,16 +145,20 @@ class AppStore(SoftApp):
                 "name": name,
                 "filename": filename,
                 "version": app_info.get("version", "1.0"),
+                "category": app_info.get("category", "Apps"),
+                "entry_point": app_info.get("entry_point", ""),
             }
             self._save_installed()
 
-            self.speak(f"{name} installed. Restart Tech-Note to use it.")
+            self.speak(f"{name} installed.")
             self.window.update_text(f"{name} installed.")
+            if hasattr(self.manager, 'refresh_main_menu'):
+                self.manager.refresh_main_menu()
         except urllib.error.URLError:
-            self.speak("Download failed. No internet connection.")
+            self.speak("Download failed. No internet.")
             self.window.update_text("Download failed.")
         except Exception as e:
-            self.speak(f"Install failed: {str(e)}")
+            self.speak(f"Install failed.")
             self.window.update_text("Install error.")
 
     def _uninstall(self, app_info):
@@ -178,8 +182,10 @@ class AppStore(SoftApp):
         del self.installed[app_id]
         self._save_installed()
 
-        self.speak(f"{name} uninstalled. Restart Tech-Note to remove from menu.")
+        self.speak(f"{name} uninstalled.")
         self.window.update_text(f"{name} removed.")
+        if hasattr(self.manager, 'refresh_main_menu'):
+            self.manager.refresh_main_menu()
 
     def _show_installed(self):
         if not self.installed:
@@ -189,8 +195,8 @@ class AppStore(SoftApp):
         root = MenuNode("Installed Apps")
         for app_id, info in self.installed.items():
             name = info.get("name", app_id)
-            ver = info.get("version", "?")
-            root.add_child(MenuNode(f"{name} v{ver}"))
+            cat = info.get("category", "App")
+            root.add_child(MenuNode(f"{name} ({cat})"))
         root.add_child(MenuNode("Back", self._build_menu_back))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -226,4 +232,4 @@ class AppStore(SoftApp):
                 self.window.update_text("App Store: " + item.title)
 
     def get_help_text(self):
-        return "App Store. Browse and install new apps. Space for next, Backspace for previous. Enter to select. Escape to exit."
+        return "App Store. Browse Games and Apps. Space for next, Backspace for previous. Enter to select."
