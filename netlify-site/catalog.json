@@ -90,6 +90,16 @@
       "filename": "todo_list.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/todo_list.py",
       "author": "Tech-Note"
+    },
+    {
+      "id": "solitaire",
+      "name": "Solitaire",
+      "description": "Classic Klondike solitaire. Build foundations from Ace to King by suit.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "solitaire.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/solitaire.py",
+      "author": "Tech-Note"
     }
   ]
 }
