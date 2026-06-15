@@ -24,7 +24,7 @@
     {
       "id": "memory_match",
       "name": "Memory Match",
-      "description": "Flip cards to find matching pairs. Test your memory!",
+      "description": "Flip cards to find matching pairs.",
       "category": "Games",
       "version": "1.0",
       "filename": "memory_match.py",
@@ -34,7 +34,7 @@
     {
       "id": "connect_four",
       "name": "Connect Four",
-      "description": "Drop pieces to get four in a row. Play against the computer.",
+      "description": "Drop pieces to get four in a row against the computer.",
       "category": "Games",
       "version": "1.0",
       "filename": "connect_four.py",
@@ -49,6 +49,46 @@
       "version": "1.0",
       "filename": "stopwatch.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/stopwatch.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "password_gen",
+      "name": "Password Generator",
+      "description": "Generate secure random passwords with custom options.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "password_gen.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/password_gen.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "alarm_clock",
+      "name": "Alarm Clock",
+      "description": "Set alarms with labels and get notified at the right time.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "alarm_clock.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/alarm_clock.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "notes_app",
+      "name": "Notes",
+      "description": "Create, edit, and manage text notes.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "notes_app.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/notes_app.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "todo_list",
+      "name": "Todo List",
+      "description": "Manage tasks with add, complete, and clear functions.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "todo_list.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/todo_list.py",
       "author": "Tech-Note"
     }
   ]
