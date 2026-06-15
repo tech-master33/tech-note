@@ -100,6 +100,56 @@
       "filename": "solitaire.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/solitaire.py",
       "author": "Tech-Note"
+    },
+    {
+      "id": "sudoku",
+      "name": "Sudoku",
+      "description": "Classic 9x9 number puzzle. Fill rows, columns, and boxes with digits 1 to 9.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "sudoku.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/sudoku.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "blackjack",
+      "name": "Blackjack",
+      "description": "Beat the dealer to 21. Hit, stand, or double down.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "blackjack.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/blackjack.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "2048",
+      "name": "2048",
+      "description": "Slide numbered tiles to merge them and reach 2048.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "game2048.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/game2048.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "snake",
+      "name": "Snake",
+      "description": "Navigate a growing snake to eat food. Don't hit walls or yourself.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "snake.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/snake.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "minesweeper",
+      "name": "Minesweeper",
+      "description": "Find all hidden mines without detonating them.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "minesweeper.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/minesweeper.py",
+      "author": "Tech-Note"
     }
   ]
 }
