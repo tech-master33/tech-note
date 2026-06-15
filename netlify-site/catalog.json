@@ -4,7 +4,7 @@
     {
       "id": "tictactoe",
       "name": "Tic Tac Toe",
-      "description": "Classic tic tac toe against the computer. Use arrow keys and Enter.",
+      "description": "Classic tic tac toe against the computer.",
       "category": "Games",
       "version": "1.0",
       "filename": "tictactoe.py",
@@ -12,9 +12,39 @@
       "author": "Tech-Note"
     },
     {
+      "id": "hangman",
+      "name": "Hangman",
+      "description": "Guess letters to find the word before running out of attempts.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "hangman.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/hangman.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "memory_match",
+      "name": "Memory Match",
+      "description": "Flip cards to find matching pairs. Test your memory!",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "memory_match.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/memory_match.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "connect_four",
+      "name": "Connect Four",
+      "description": "Drop pieces to get four in a row. Play against the computer.",
+      "category": "Games",
+      "version": "1.0",
+      "filename": "connect_four.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/connect_four.py",
+      "author": "Tech-Note"
+    },
+    {
       "id": "stopwatch",
       "name": "Stopwatch",
-      "description": "Precision stopwatch with lap tracking. Start, stop, lap, and reset.",
+      "description": "Precision stopwatch with lap tracking.",
       "category": "Apps",
       "version": "1.0",
       "filename": "stopwatch.py",
