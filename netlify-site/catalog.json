@@ -150,6 +150,56 @@
       "filename": "minesweeper.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/minesweeper.py",
       "author": "Tech-Note"
+    },
+    {
+      "id": "typing_test",
+      "name": "Typing Test",
+      "description": "Measure your typing speed in words per minute with accuracy tracking.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "typing_test.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/typing_test.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "description": "View months, navigate days, and add events. Events saved locally.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "calendar_app.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/calendar_app.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "weather",
+      "name": "Weather",
+      "description": "Get current weather for any city worldwide.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "weather_app.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/weather_app.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "unit_converter",
+      "name": "Unit Converter",
+      "description": "Convert between length, weight, temperature, speed, volume, and data units.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "unit_converter.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/unit_converter.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "dice_roller",
+      "name": "Dice Roller",
+      "description": "Roll multiple dice with modifiers. Supports d4, d6, d8, d10, d12, d20, d100.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "dice_roller.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/dice_roller.py",
+      "author": "Tech-Note"
     }
   ]
 }
