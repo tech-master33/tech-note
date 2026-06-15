@@ -1,127 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech-Note App Store</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0a0a1a; color: #e0e0e0; min-height: 100vh; }
-    .header { background: linear-gradient(135deg, #1a1a3e, #2a1a4e); padding: 30px 20px; text-align: center; border-bottom: 2px solid #6c3bff; }
-    .header h1 { font-size: 2.2em; color: #fff; margin-bottom: 8px; }
-    .header p { color: #a0a0c0; font-size: 1.1em; }
-    .header .status { margin-top: 12px; display: inline-block; background: #1a3a2a; color: #4ade80; padding: 6px 16px; border-radius: 20px; font-size: 0.9em; border: 1px solid #4ade80; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
-    .tabs { display: flex; gap: 12px; margin-bottom: 30px; justify-content: center; }
-    .tab { padding: 10px 28px; border-radius: 8px; border: 2px solid #333; background: #1a1a2e; color: #aaa; cursor: pointer; font-size: 1em; transition: all 0.2s; }
-    .tab:hover { border-color: #6c3bff; color: #fff; }
-    .tab.active { background: #6c3bff; border-color: #6c3bff; color: #fff; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-    .card { background: #12122a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 24px; transition: all 0.2s; }
-    .card:hover { border-color: #6c3bff; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(108,59,255,0.15); }
-    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-    .card h3 { color: #fff; font-size: 1.2em; }
-    .badge { background: #2a1a4e; color: #a78bfa; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; border: 1px solid #6c3bff; }
-    .badge.game { background: #1a3a2a; color: #4ade80; border-color: #4ade80; }
-    .card p { color: #888; line-height: 1.5; margin-bottom: 16px; font-size: 0.95em; }
-    .card-footer { display: flex; justify-content: space-between; align-items: center; }
-    .version { color: #666; font-size: 0.85em; }
-    .btn { padding: 8px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: all 0.2s; }
-    .btn-install { background: #6c3bff; color: #fff; }
-    .btn-install:hover { background: #5a2ddf; }
-    .btn-download { background: #1a3a2a; color: #4ade80; border: 1px solid #4ade80; }
-    .btn-download:hover { background: #2a4a3a; }
-    .footer { text-align: center; padding: 30px; color: #555; font-size: 0.85em; border-top: 1px solid #1a1a3a; margin-top: 40px; }
-    .instructions { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 12px; padding: 24px; margin-bottom: 30px; }
-    .instructions h2 { color: #a78bfa; margin-bottom: 12px; font-size: 1.3em; }
-    .instructions ol { padding-left: 20px; }
-    .instructions li { color: #888; margin-bottom: 8px; line-height: 1.5; }
-    .instructions code { background: #2a2a4a; padding: 2px 8px; border-radius: 4px; color: #e0e0e0; font-size: 0.9em; }
-    .loading { text-align: center; padding: 60px; color: #666; font-size: 1.1em; }
-    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TechNote App Store</title>
+<style>
+body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
+h1 { color: #1a1a2e; }
+h2 { color: #16213e; margin-top: 30px; }
+a { color: #0f3460; }
+</style>
 </head>
 <body>
-  <div class="header">
-    <h1>Tech-Note App Store</h1>
-    <p>Self-voicing keyboard interface for Windows</p>
-    <div class="status">Online &mdash; Ready to install</div>
-  </div>
 
-  <div class="container">
-    <div class="instructions">
-      <h2>How to Install</h2>
-      <ol>
-        <li>Open <strong>Tech-Note</strong> and press <code>Enter</code> on <strong>App Store</strong></li>
-        <li>Browse or use <code>Up/Down</code> arrows to find an app</li>
-        <li>Press <code>Enter</code> to install &mdash; it downloads instantly</li>
-        <li>Press <code>Escape</code> to go back. Installed apps appear in the main menu!</li>
-      </ol>
-    </div>
+<h1>Welcome to TechNote App Store</h1>
 
-    <div class="tabs">
-      <div class="tab active" onclick="filterApps('all')">All</div>
-      <div class="tab" onclick="filterApps('Games')">Games</div>
-      <div class="tab" onclick="filterApps('Apps')">Apps</div>
-    </div>
+<h2>What is this?</h2>
+<p>This is the App Store for TechNote. It hosts free games and apps that you can download directly into TechNote. Browse the catalog below or use the App Store inside TechNote to install them.</p>
 
-    <div id="apps" class="grid">
-      <div class="loading">Loading catalog...</div>
-    </div>
-  </div>
+<h2>Why am I seeing this?</h2>
+<p>You are seeing this page because you visited the App Store in your browser. To install apps, open TechNote and press Enter on App Store from the main menu.</p>
 
-  <div class="footer">
-    Tech-Note &mdash; Open source self-voicing keyboard interface
-    <br>
-    <a href="https://github.com/tech-master33/tech-note" style="color:#6c3bff;">GitHub</a>
-  </div>
+<h2>Available Apps</h2>
+<ul>
+  <li><a href="apps/tictactoe.py">Tic Tac Toe</a> — Classic two-player game</li>
+  <li><a href="apps/hangman.py">Hangman</a> — Guess the word letter by letter</li>
+  <li><a href="apps/memory_match.py">Memory Match</a> — Find matching pairs</li>
+  <li><a href="apps/connect_four.py">Connect Four</a> — Drop discs to connect four</li>
+  <li><a href="apps/solitaire.py">Solitaire</a> — Classic Klondike card game</li>
+  <li><a href="apps/sudoku.py">Sudoku</a> — Number puzzle with three difficulties</li>
+  <li><a href="apps/blackjack.py">Blackjack</a> — Beat the dealer to 21</li>
+  <li><a href="apps/game2048.py">2048</a> — Slide and merge tiles</li>
+  <li><a href="apps/snake.py">Snake</a> — Eat food, grow longer</li>
+  <li><a href="apps/minesweeper.py">Minesweeper</a> — Find the mines</li>
+  <li><a href="apps/stopwatch.py">Stopwatch</a> — Time events</li>
+  <li><a href="apps/password_gen.py">Password Generator</a> — Create secure passwords</li>
+  <li><a href="apps/alarm_clock.py">Alarm Clock</a> — Set alarms</li>
+  <li><a href="apps/notes_app.py">Notes</a> — Save and read notes</li>
+  <li><a href="apps/todo_list.py">Todo List</a> — Manage your tasks</li>
+</ul>
 
-  <script>
-    let allApps = [];
+<h2>Links</h2>
+<p><a href="https://github.com/tech-master33/tech-note">Get TechNote</a></p>
+<p><a href="catalog.json">View Catalog (JSON)</a></p>
 
-    async function loadCatalog() {
-      try {
-        const res = await fetch('catalog.json');
-        const data = await res.json();
-        allApps = data.apps;
-        renderApps(allApps);
-      } catch (e) {
-        document.getElementById('apps').innerHTML = '<div class="loading">Failed to load catalog.</div>';
-      }
-    }
-
-    function filterApps(category) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      event.target.classList.add('active');
-      if (category === 'all') {
-        renderApps(allApps);
-      } else {
-        renderApps(allApps.filter(a => a.category === category));
-      }
-    }
-
-    function renderApps(apps) {
-      const container = document.getElementById('apps');
-      if (!apps.length) {
-        container.innerHTML = '<div class="loading">No apps found.</div>';
-        return;
-      }
-      container.innerHTML = apps.map(app => `
-        <div class="card">
-          <div class="card-header">
-            <h3>${app.name}</h3>
-            <span class="badge ${app.category === 'Games' ? 'game' : ''}">${app.category}</span>
-          </div>
-          <p>${app.description}</p>
-          <div class="card-footer">
-            <span class="version">v${app.version}</span>
-            <a href="${app.download_url}" class="btn btn-download" download>Download</a>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    loadCatalog();
-  </script>
 </body>
 </html>
