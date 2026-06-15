@@ -74,10 +74,6 @@ class OptionsApp(SoftApp):
 
         if vk == win32con.VK_BACK:
             self.menu.previous()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-        elif vk == win32con.VK_UP:
-            self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
         elif 0x41 <= vk <= 0x5A:
@@ -104,7 +100,7 @@ class OptionsApp(SoftApp):
             return "Key binding. Press the key you want to assign. Escape to cancel."
         if self.adjust_mode:
             return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
-        return "Options. Navigate with arrows. Enter to enter a menu. Escape to go back or exit."
+        return "Options. Navigate with Space and Backspace. Enter to select. Escape to go back or exit."
 
     def _load_voice_settings(self):
         if os.path.exists(self.settings_file):
@@ -302,8 +298,8 @@ class OptionsApp(SoftApp):
 
     # --- Key Bindings ---
     BIND_NAMES = {
-        "next_item": "Next Item (Space/Down)",
-        "prev_item": "Previous Item (Backspace/Up)",
+        "next_item": "Next Item (Space)",
+        "prev_item": "Previous Item (Backspace)",
         "select": "Select (Enter)",
         "back": "Back (Escape)",
         "help": "Help (F1)",
@@ -312,7 +308,7 @@ class OptionsApp(SoftApp):
     }
     VK_NAMES = {
         8: "Backspace", 13: "Enter", 27: "Escape", 32: "Space",
-        38: "Up", 40: "Down", 112: "F1", 116: "F5",
+        112: "F1", 116: "F5",
         0xBB: "Equals", 0xBD: "Minus",
     }
 

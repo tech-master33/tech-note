@@ -299,10 +299,6 @@ class ChatApp(SoftApp):
             return
         if vk == win32con.VK_BACK:
             self.menu.previous()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-        elif vk == win32con.VK_UP:
-            self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
         elif 0x41 <= vk <= 0x5A:
@@ -319,10 +315,6 @@ class ChatApp(SoftApp):
                 self.menu.announce_current()
             return
         if vk == win32con.VK_BACK:
-            self.menu.previous()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -571,29 +563,6 @@ class ChatApp(SoftApp):
                 self.confirm_action(self.confirm_arg)
             self.confirm_action = None
             self.confirm_arg = None
-
-    def _vk_to_char(self, vk):
-        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-        caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
-        if 0x41 <= vk <= 0x5A:
-            upper = shift ^ caps
-            return chr(vk).upper() if upper else chr(vk).lower()
-        if 0x30 <= vk <= 0x39:
-            shift_syms = {0x30: ')', 0x31: '!', 0x32: '@', 0x33: '#',
-                          0x34: '$', 0x35: '%', 0x36: '^', 0x37: '&',
-                          0x38: '*', 0x39: '('}
-            return shift_syms[vk] if shift else chr(vk)
-        if vk == win32con.VK_SPACE:
-            return ' '
-        sym_map = {
-            0xBD: ('-', '_'), 0xBB: ('=', '+'), 0xC0: ('`', '~'),
-            0xDB: ('[', '{'), 0xDD: (']', '}'), 0xDC: ('\\', '|'),
-            0xBA: (';', ':'), 0xDE: ("'", '"'),
-            0xBC: (',', '<'), 0xBE: ('.', '>'), 0xBF: ('/', '?'),
-        }
-        if vk in sym_map:
-            return sym_map[vk][1] if shift else sym_map[vk][0]
-        return None
 
     def _show_login_menu(self):
         self.state = STATE_LOGIN

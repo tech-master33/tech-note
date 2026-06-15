@@ -79,10 +79,7 @@ class LockScreenApp(SoftApp):
             self.speak("Locked.")
         elif vk == win32con.VK_RETURN:
             self.menu.select()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-            self.window.update_text(self._display_text())
-        elif vk == win32con.VK_UP:
+        elif vk == win32con.VK_BACK:
             self.menu.previous()
             self.window.update_text(self._display_text())
 

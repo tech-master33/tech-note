@@ -285,9 +285,9 @@ class SettingsApp(SoftApp):
             self.settings[key] = opts[(curr + direction) % 2]
             self.speak(self.settings[key])
         elif key == "keyboard_layout":
-            opts = ["US", "UK"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
+            opts = ["US", "UK", "Arabic"]
+            curr = opts.index(self.settings[key]) if self.settings[key] in opts else 0
+            self.settings[key] = opts[(curr + direction) % len(opts)]
             self.speak(self.settings[key])
             self._apply_keyboard_layout()
         elif key == "update_channel":

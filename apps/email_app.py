@@ -183,10 +183,6 @@ class EmailApp(SoftApp):
     def _handle_menu(self, vk):
         if vk == win32con.VK_BACK:
             self.menu.previous()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-        elif vk == win32con.VK_UP:
-            self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
         elif 0x41 <= vk <= 0x5A:
@@ -197,10 +193,6 @@ class EmailApp(SoftApp):
 
     def _handle_inbox(self, vk):
         if vk == win32con.VK_BACK:
-            self.menu.previous()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -312,18 +304,3 @@ class EmailApp(SoftApp):
                 self.speak(ch)
             return True
         return False
-
-    def _vk_to_char(self, vk):
-        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-        if 0x41 <= vk <= 0x5A:
-            return chr(vk).upper() if shift else chr(vk).lower()
-        if 0x30 <= vk <= 0x39:
-            syms = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')']
-            if shift:
-                # Basic mapping for common email chars
-                if vk == 0x32: return '@'
-                return syms[vk-0x31] if vk > 0x30 else ')'
-            return chr(vk)
-        if vk == win32con.VK_SPACE: return ' '
-        if vk == 0xBE: return '.'
-        return None
