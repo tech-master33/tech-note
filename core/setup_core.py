@@ -20,7 +20,6 @@ class TechNoteSetup(SoftApp):
         self.password = ""
         self.pin = ""
         self.lock_type = "pin"
-        self.keyboard_layout = "US"
         self.active = True
 
     def _load_voices_for_synth(self):
@@ -46,7 +45,7 @@ class TechNoteSetup(SoftApp):
             if vk == win32con.VK_RETURN:
                 if self.username:
                     self.current_step += 1
-                    self.speak("Select Lock Type. Use Space or Backspace. PIN or Password.")
+                    self.speak("Select Lock Type. Use arrows. PIN or Password.")
                     self.window.update_text("Lock Type: PIN")
             elif self._handle_input(vk, 'username'):
                 pass
@@ -109,14 +108,14 @@ class TechNoteSetup(SoftApp):
                 self._load_voices_for_synth()
                 self.current_step += 1
                 if self.voices:
-                    self.speak("Voice selection. Use Space or Backspace.")
+                    self.speak("Voice selection. Use arrows.")
                     self.window.update_text(self.voices[self.voice_index])
                 else:
                     self._complete_setup()
 
         elif self.current_step == 5:
             if not self.voices:
-                self._enter_layout_step()
+                self._complete_setup()
                 return
             if vk in (win32con.VK_SPACE,):
                 self.voice_index = (self.voice_index + 1) % len(self.voices)
@@ -128,47 +127,22 @@ class TechNoteSetup(SoftApp):
                     self.window.update_text(self.voices[self.voice_index])
                     self.speak(self.voices[self.voice_index])
             elif vk == win32con.VK_RETURN:
-                self._enter_layout_step()
-
-        elif self.current_step == 6:
-            layout_options = ["US", "UK", "Arabic"]
-            try:
-                current = layout_options.index(self.keyboard_layout)
-            except ValueError:
-                current = 0
-                
-            if vk in (win32con.VK_SPACE,):
-                current = (current + 1) % len(layout_options)
-                self.keyboard_layout = layout_options[current]
-                self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
-                self.speak(self.keyboard_layout)
-            elif vk in (win32con.VK_BACK,):
-                current = (current - 1) % len(layout_options)
-                self.keyboard_layout = layout_options[current]
-                self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
-                self.speak(self.keyboard_layout)
-            elif vk == win32con.VK_RETURN:
                 self._complete_setup()
 
-        elif self.current_step == 7:
+        elif self.current_step == 6:
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:
                     self.finish_callback()
 
     def _enter_synth_step(self):
-        self.speak("TTS engine. Use Space or Backspace to select.")
+        self.speak("TTS engine. Use arrows to select.")
         if self.available_synths:
             self.window.update_text(self.available_synths[self.synth_index][0])
 
-    def _enter_layout_step(self):
-        self.current_step = 6
-        self.speak("Keyboard layout. Use Space or Backspace to select. US, UK, or Arabic.")
-        self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
-
     def _complete_setup(self):
         self.save_account()
-        self.current_step = 7
+        self.current_step = 6
         self.speak("Setup complete. Press Enter to start.")
         self.window.update_text("Setup Complete")
 
@@ -203,18 +177,4 @@ class TechNoteSetup(SoftApp):
         os.makedirs(os.path.dirname(ACCOUNT_PATH), exist_ok=True)
         with open(ACCOUNT_PATH, 'w') as f:
             json.dump(config, f)
-        self._save_keyboard_layout()
         self.speak("Account saved.")
-
-    def _save_keyboard_layout(self):
-        settings_path = os.path.join(os.path.dirname(ACCOUNT_PATH), 'settings.json')
-        try:
-            s = {}
-            if os.path.exists(settings_path):
-                with open(settings_path, 'r') as f:
-                    s = json.load(f)
-            s["keyboard_layout"] = self.keyboard_layout
-            with open(settings_path, 'w') as f:
-                json.dump(s, f)
-        except Exception:
-            pass
