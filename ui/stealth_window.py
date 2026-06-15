@@ -196,4 +196,10 @@ class StealthWindow:
     def close(self):
         self.running = False
         if self.hwnd and win32gui.IsWindow(self.hwnd):
+            try:
+                for alpha in range(255, 0, -15):
+                    win32gui.SetLayeredWindowAttributes(self.hwnd, 0, max(alpha, 0), LWA_ALPHA)
+                    time.sleep(0.02)
+            except:
+                pass
             win32gui.PostMessage(self.hwnd, win32con.WM_CLOSE, 0, 0)

@@ -280,6 +280,15 @@ class BrailleNoteApp:
 
     def _exit_app(self):
         try:
+            self.window.update_text("Shutting down Tech-Note...")
+        except:
+            pass
+        try:
+            self.synth.speak("Shutting down Tech-Note.")
+        except:
+            pass
+        time.sleep(0.5)
+        try:
             self.synth.stop()
         except:
             pass

@@ -46,12 +46,14 @@ class PowerApp(SoftApp):
 
     def _do_restart(self):
         self.speak("Restarting Tech-Note.")
+        self.window.update_text("Restarting Tech-Note...")
         self.exit_app()
         if self.on_restart:
             self.on_restart()
 
     def _do_shutdown(self):
         self.speak("Shutting down Tech-Note.")
+        self.window.update_text("Shutting down Tech-Note...")
         self.exit_app()
         if self.on_exit:
             self.on_exit()
