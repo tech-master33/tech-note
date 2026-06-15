@@ -7,7 +7,7 @@ from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT
 
-CATALOG_URL = "https://tech-note-apps.netlify.app/catalog.json"
+CATALOG_URL = "https://steady-licorice-d12c5f.netlify.app/catalog.json"
 APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
 INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
 
