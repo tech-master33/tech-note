@@ -4,25 +4,60 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sudoku - TechNote App Store</title>
-<style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333}h1{color:#1a1a2e}h2{color:#16213e;margin-top:30px}a{color:#0f3460}.meta{color:#666;font-size:.9em;margin-bottom:20px}.back{display:inline-block;margin-bottom:20px}</style>
+<style>
+body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
+h1 { color: #1a1a2e; }
+h2 { color: #16213e; margin-top: 30px; }
+a { color: #0f3460; }
+.meta { color: #666; font-size: 0.9em; margin-bottom: 20px; }
+.back { display: inline-block; margin-bottom: 20px; }
+.preview { background: #f4f4f4; border: 1px solid #ddd; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 14px; white-space: pre; margin: 16px 0; line-height: 1.4; }
+.badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; margin-right: 6px; }
+</style>
 </head>
 <body>
+
 <a href="../" class="back">&larr; Back to App Store</a>
+
 <h1>Sudoku</h1>
-<div class="meta">Version 1.0 &bull; Category: Games</div>
-<h2>Description</h2>
-<p>Classic 9x9 number puzzle. Fill each row, column, and 3x3 box with digits 1 through 9. Three difficulty levels: Easy, Medium, Hard.</p>
-<h2>How to Play</h2>
+<div class="meta">
+  <span class="badge">Games</span> Version 1.0 &bull; Number Puzzle
+</div>
+
+<h2>About</h2>
+<p>The classic 9x9 number puzzle. Fill every row, column, and 3x3 box with the digits 1 through 9 — no repeats allowed. Choose from three difficulty levels that control how many cells are pre-filled. Tracks your errors so you can improve.</p>
+
+<h2>Preview</h2>
+<div class="preview">  5 | 3 | . | . | 7 | . | . | . | .
+  6 | . | . | 1 | 9 | 5 | . | . | .
+  . | 9 | 8 | . | . | . | . | 6 | .
+  ------+-------+------
+  8 | . | . | . | 6 | . | . | . | 3
+  4 | . | . | 8 | . | 3 | . | . | 1
+  7 | . | . | . | 2 | . | . | . | 6</div>
+
+<h2>Controls</h2>
 <ul>
   <li><strong>Arrow keys</strong> — Move cursor</li>
-  <li><strong>1-9</strong> — Select digit</li>
-  <li><strong>Enter</strong> — Place digit</li>
+  <li><strong>1-9</strong> — Select digit to place</li>
+  <li><strong>Enter</strong> — Place digit in cell</li>
   <li><strong>0</strong> — Clear cell</li>
-  <li><strong>D</strong> — Change difficulty</li>
+  <li><strong>D</strong> — Cycle difficulty (Easy / Medium / Hard)</li>
   <li><strong>N</strong> — New game</li>
   <li><strong>Escape</strong> — Exit</li>
 </ul>
-<h2>Install</h2>
-<p>Open TechNote &rarr; App Store &rarr; Sudoku &rarr; Enter to install.</p>
+
+<h2>Features</h2>
+<ul>
+  <li>3 difficulty levels</li>
+  <li>Proper puzzle generation</li>
+  <li>Error counter</li>
+  <li>Given cells are protected</li>
+  <li>Voice reads coordinates and values</li>
+</ul>
+
+<h2>How to Install</h2>
+<p>Open TechNote &rarr; App Store &rarr; Sudoku &rarr; Press Enter to install.</p>
+
 </body>
 </html>

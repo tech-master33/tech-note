@@ -4,22 +4,65 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Blackjack - TechNote App Store</title>
-<style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333}h1{color:#1a1a2e}h2{color:#16213e;margin-top:30px}a{color:#0f3460}.meta{color:#666;font-size:.9em;margin-bottom:20px}.back{display:inline-block;margin-bottom:20px}</style>
+<style>
+body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
+h1 { color: #1a1a2e; }
+h2 { color: #16213e; margin-top: 30px; }
+a { color: #0f3460; }
+.meta { color: #666; font-size: 0.9em; margin-bottom: 20px; }
+.back { display: inline-block; margin-bottom: 20px; }
+.preview { background: #f4f4f4; border: 1px solid #ddd; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 14px; white-space: pre; margin: 16px 0; line-height: 1.4; }
+.badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; margin-right: 6px; }
+</style>
 </head>
 <body>
+
 <a href="../" class="back">&larr; Back to App Store</a>
+
 <h1>Blackjack</h1>
-<div class="meta">Version 1.0 &bull; Category: Games</div>
-<h2>Description</h2>
-<p>Beat the dealer to 21. Hit to draw cards, stand to hold, or double down to double your bet. Start with $100 and try to win big.</p>
-<h2>How to Play</h2>
+<div class="meta">
+  <span class="badge">Games</span> Version 1.0 &bull; Card Game
+</div>
+
+<h2>About</h2>
+<p>Beat the dealer to 21 without going over. Start with $100 and place your bets. Hit to draw cards, stand to hold your hand, or double down for a chance at bigger wins. Face cards are worth 10, Aces are 1 or 11.</p>
+
+<h2>Preview</h2>
+<div class="preview">Balance: $120  Bet: $20
+
+Dealer (17): K♠ 7♥
+You (18): A♠ 7♦
+
+> Hit
+  Stand
+  Double</div>
+
+<h2>Controls</h2>
 <ul>
-  <li><strong>Up/Down</strong> — Navigate menu</li>
-  <li><strong>Left/Right</strong> — Adjust bet</li>
+  <li><strong>Up / Down</strong> — Navigate menu</li>
+  <li><strong>Left / Right</strong> — Adjust bet amount</li>
   <li><strong>Enter</strong> — Select action</li>
   <li><strong>Escape</strong> — Exit</li>
 </ul>
-<h2>Install</h2>
-<p>Open TechNote &rarr; App Store &rarr; Blackjack &rarr; Enter to install.</p>
+
+<h2>Actions</h2>
+<ul>
+  <li><strong>Hit</strong> — Draw another card</li>
+  <li><strong>Stand</strong> — Keep your current hand</li>
+  <li><strong>Double</strong> — Double your bet, draw one card, then stand</li>
+</ul>
+
+<h2>Features</h2>
+<ul>
+  <li>Full Blackjack rules with Ace handling</li>
+  <li>$100 starting balance</li>
+  <li>Adjustable bets ($5 increments)</li>
+  <li>Dealer follows house rules (stands on 17)</li>
+  <li>Voice announces all cards and totals</li>
+</ul>
+
+<h2>How to Install</h2>
+<p>Open TechNote &rarr; App Store &rarr; Blackjack &rarr; Press Enter to install.</p>
+
 </body>
 </html>

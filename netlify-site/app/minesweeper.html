@@ -4,22 +4,58 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Minesweeper - TechNote App Store</title>
-<style>body{font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333}h1{color:#1a1a2e}h2{color:#16213e;margin-top:30px}a{color:#0f3460}.meta{color:#666;font-size:.9em;margin-bottom:20px}.back{display:inline-block;margin-bottom:20px}</style>
+<style>
+body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
+h1 { color: #1a1a2e; }
+h2 { color: #16213e; margin-top: 30px; }
+a { color: #0f3460; }
+.meta { color: #666; font-size: 0.9em; margin-bottom: 20px; }
+.back { display: inline-block; margin-bottom: 20px; }
+.preview { background: #f4f4f4; border: 1px solid #ddd; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 14px; white-space: pre; margin: 16px 0; line-height: 1.4; }
+.badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; margin-right: 6px; }
+</style>
 </head>
 <body>
+
 <a href="../" class="back">&larr; Back to App Store</a>
+
 <h1>Minesweeper</h1>
-<div class="meta">Version 1.0 &bull; Category: Games</div>
-<h2>Description</h2>
-<p>Reveal cells on a grid without detonating hidden mines. Use number clues to figure out where mines are and flag them.</p>
-<h2>How to Play</h2>
+<div class="meta">
+  <span class="badge">Games</span> Version 1.0 &bull; Logic Puzzle
+</div>
+
+<h2>About</h2>
+<p>Reveal cells on a 10x10 grid without detonating any of the 15 hidden mines. Each number tells you how many mines are adjacent. Use logic to flag mines and clear safe cells. First click is always safe.</p>
+
+<h2>Preview</h2>
+<div class="preview">Mines: 15  Flags: 3  Mode: Reveal
+
+  1   F   .   .   1   .   .   .   .   .
+  .   1   1   .   1   .   1   1   1   .
+  .   .   1   .   1   F   1   .   .   .
+  .   .   1   .   1   1   1   .   1   1
+  .   .   1   1   2   1   1   .   1   .</div>
+
+<h2>Controls</h2>
 <ul>
   <li><strong>Arrow keys</strong> — Move cursor</li>
-  <li><strong>Enter</strong> — Reveal or flag</li>
-  <li><strong>Tab</strong> — Toggle reveal/flag mode</li>
+  <li><strong>Enter</strong> — Reveal cell or place flag (depends on mode)</li>
+  <li><strong>Tab</strong> — Toggle between Reveal and Flag mode</li>
   <li><strong>Escape</strong> — Exit</li>
 </ul>
-<h2>Install</h2>
-<p>Open TechNote &rarr; App Store &rarr; Minesweeper &rarr; Enter to install.</p>
+
+<h2>Features</h2>
+<ul>
+  <li>10x10 grid with 15 mines</li>
+  <li>Reveal and Flag modes</li>
+  <li>Auto-reveal empty cells</li>
+  <li>First click is always safe</li>
+  <li>Win/lose detection</li>
+  <li>Voice announces cell values</li>
+</ul>
+
+<h2>How to Install</h2>
+<p>Open TechNote &rarr; App Store &rarr; Minesweeper &rarr; Press Enter to install.</p>
+
 </body>
 </html>
