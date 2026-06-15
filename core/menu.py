@@ -218,6 +218,7 @@ def _add_installed_apps(root, app_callback):
         filename = info.get("filename", "")
         entry_point = info.get("entry_point", "")
         name = info.get("name", app_id)
+        category = info.get("category", "Apps").lower()
         filepath = os.path.join(APPS_DIR, filename)
         
         if not os.path.exists(filepath):
@@ -251,4 +252,5 @@ def _add_installed_apps(root, app_callback):
                     print(f"Failed to load installed app {mn}: {e}")
             return load
         
-        root.add_child(MenuNode(name, make_loader()))
+        if category != "games":
+            root.add_child(MenuNode(name, make_loader()))

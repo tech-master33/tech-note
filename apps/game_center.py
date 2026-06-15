@@ -1,6 +1,14 @@
+import os
+import json
+import sys
+import importlib
 import win32con
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
+from core.config import TECH_SOFT
+
+APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
+INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
 
 
 class GameCenter(SoftApp):
@@ -11,8 +19,59 @@ class GameCenter(SoftApp):
     def _build_menu(self):
         root = MenuNode("Game Center")
         root.add_child(MenuNode("Puzzle", self._open_puzzle))
+
+        installed_games = self._load_installed_games()
+        for name, loader in installed_games:
+            root.add_child(MenuNode(name, loader))
+
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
+
+    def _load_installed_games(self):
+        games = []
+        if not os.path.exists(INSTALLED_FILE):
+            return games
+        try:
+            with open(INSTALLED_FILE, 'r') as f:
+                installed = json.load(f)
+        except:
+            return games
+
+        for app_id, info in installed.items():
+            category = info.get("category", "").lower()
+            if category != "games":
+                continue
+            filename = info.get("filename", "")
+            entry_point = info.get("entry_point", "")
+            name = info.get("name", app_id)
+            filepath = os.path.join(APPS_DIR, filename)
+            if not os.path.exists(filepath) or not filename.endswith('.py'):
+                continue
+            mod_name = filename[:-3]
+
+            def make_loader(mn=mod_name, ep=entry_point):
+                def load():
+                    try:
+                        if mn not in sys.modules:
+                            if APPS_DIR not in sys.path:
+                                sys.path.insert(0, APPS_DIR)
+                            mod = importlib.import_module(mn)
+                        else:
+                            mod = sys.modules[mn]
+                        if ep and hasattr(mod, ep):
+                            cls = getattr(mod, ep)
+                        else:
+                            classes = [v for v in vars(mod).values()
+                                       if isinstance(v, type) and hasattr(v, 'on_key') and hasattr(v, 'exit_app')]
+                            cls = classes[0] if classes else None
+                        if cls:
+                            self.manager.launch_app(lambda c=cls: c)
+                    except Exception as e:
+                        print(f"Failed to load game {mn}: {e}")
+                return load
+
+            games.append((name, make_loader()))
+        return games
 
     def _open_puzzle(self):
         from apps.puzzle_game import PuzzleGame
