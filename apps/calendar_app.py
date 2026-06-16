@@ -4,6 +4,7 @@ import json
 import os
 import win32con
 from core.app_base import SoftApp
+from core.menu import MenuSystem, MenuNode
 
 EVENTS_FILE = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'calendar_events.json')
 
@@ -16,11 +17,11 @@ class CalendarApp(SoftApp):
         self.month = now.month
         self.today = now.day
         self.cursor_day = now.day
-        self.state = "view"
-        self.menu_cursor = 0
+        self.state = "menu"
         self.events = self._load_events()
         self.input_buf = ""
-        self.view_cursor = 0
+        self.menu = None
+        self._build_menu()
 
     def _load_events(self):
         if os.path.exists(EVENTS_FILE):
@@ -42,80 +43,47 @@ class CalendarApp(SoftApp):
     def _get_month_name(self):
         return calendar.month_name[self.month]
 
-    def _render(self):
-        if self.state == "input":
-            return self._render_input()
-
-        lines = []
-        lines.append(f"{self._get_month_name()} {self.year}")
-        lines.append("")
-
-        cal = calendar.monthcalendar(self.year, self.month)
-        lines.append(" Mon  Tue  Wed  Thu  Fri  Sat  Sun")
-        lines.append(" " + "-----" * 7)
-
-        for week in cal:
-            parts = []
-            for day in week:
-                if day == 0:
-                    parts.append("     ")
-                elif day == self.cursor_day:
-                    parts.append(f" [{day:2d}]")
-                elif day == self.today and self.month == datetime.datetime.now().month and self.year == datetime.datetime.now().year:
-                    parts.append(f" *{day:2d} ")
-                else:
-                    parts.append(f"  {day:2d} ")
-            lines.append(" ".join(parts))
-
-        lines.append("")
-
-        if self.cursor_day:
-            key = self._get_event_key(self.cursor_day)
+    def _build_menu(self):
+        root = MenuNode("Calendar")
+        root.add_child(MenuNode(f"{self._get_month_name()} {self.year}"))
+        days_in_month = calendar.monthrange(self.year, self.month)[1]
+        for day in range(1, days_in_month + 1):
+            key = self._get_event_key(day)
             day_events = self.events.get(key, [])
-            if day_events:
-                lines.append(f"Events for {self._get_month_name()} {self.cursor_day}:")
-                for e in day_events:
-                    lines.append(f"  - {e}")
-            else:
-                lines.append(f"No events for {self._get_month_name()} {self.cursor_day}.")
+            marker = " * " if day == self.today and self.month == datetime.datetime.now().month and self.year == datetime.datetime.now().year else ""
+            event_tag = f" ({len(day_events)} events)" if day_events else ""
+            label = f"{day}{marker}{event_tag}"
+            root.add_child(MenuNode(label, lambda d=day: self._select_day(d)))
+        root.add_child(MenuNode("Back", self.exit_app))
+        self.menu = MenuSystem(root, self.speak)
 
-        lines.append("")
-        lines.append("Arrows: navigate. Enter: options. Escape: exit.")
-        return "\n".join(lines)
-
-    def _render_input(self):
-        lines = ["Add Event", ""]
-        lines.append(f"Date: {self._get_month_name()} {self.cursor_day}, {self.year}")
-        lines.append("")
-        lines.append(f"Event: {self.input_buf}_")
-        lines.append("")
-        lines.append("Type event name. Enter to save. Escape to cancel.")
-        return "\n".join(lines)
-
-    def _show_options(self):
+    def _select_day(self, day):
+        self.cursor_day = day
         self.state = "options"
-        self.menu_cursor = 0
+        self._build_options_menu()
 
-    def _render_options(self):
+    def _build_options_menu(self):
         key = self._get_event_key(self.cursor_day)
         day_events = self.events.get(key, [])
 
-        lines = [f"{self._get_month_name()} {self.cursor_day}, {self.year}", ""]
-        options = ["Add Event"]
-        for e in day_events:
-            options.append(f"Delete: {e}")
-        options.append("Back")
+        root = MenuNode(f"{self._get_month_name()} {self.cursor_day}")
+        root.add_child(MenuNode("Add Event", self._add_event))
+        for i, e in enumerate(day_events):
+            root.add_child(MenuNode(f"Delete: {e}", lambda idx=i: self._delete_event(idx)))
+        root.add_child(MenuNode("Back", self._back_to_calendar))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
 
-        for i, opt in enumerate(options):
-            prefix = ">" if i == self.menu_cursor else " "
-            lines.append(f"{prefix} {opt}")
-
-        return "\n".join(lines)
+    def _back_to_calendar(self):
+        self.state = "menu"
+        self._build_menu()
+        self.menu.announce_current()
 
     def _add_event(self):
         self.state = "input"
         self.input_buf = ""
         self.speak("Enter event name.")
+        self.window.update_text("Event: ")
 
     def _save_event(self):
         text = self.input_buf.strip()
@@ -128,8 +96,7 @@ class CalendarApp(SoftApp):
         self.events[key].append(text)
         self._save_events()
         self.speak(f"Event added: {text}")
-        self.state = "view"
-        self.window.update_text(self._render())
+        self._build_options_menu()
 
     def _delete_event(self, idx):
         key = self._get_event_key(self.cursor_day)
@@ -139,8 +106,7 @@ class CalendarApp(SoftApp):
                 del self.events[key]
             self._save_events()
             self.speak(f"Deleted: {removed}")
-        self.state = "view"
-        self.window.update_text(self._render())
+        self._build_options_menu()
 
     def _change_month(self, delta):
         self.month += delta
@@ -152,6 +118,7 @@ class CalendarApp(SoftApp):
             self.year -= 1
         self.cursor_day = 1
         self.speak(f"{self._get_month_name()} {self.year}")
+        self._build_menu()
 
     def on_focus(self):
         now = datetime.datetime.now()
@@ -159,91 +126,49 @@ class CalendarApp(SoftApp):
         self.month = now.month
         self.today = now.day
         self.cursor_day = now.day
-        self.state = "view"
+        self.state = "menu"
         self.events = self._load_events()
+        self._build_menu()
         self.speak(f"Calendar. {self._get_month_name()} {self.year}. Today is {self.today}.")
-        self.window.update_text(self._render())
-
-    def _speak_cursor(self):
-        if self.cursor_day:
-            key = self._get_event_key(self.cursor_day)
-            day_events = self.events.get(key, [])
-            day_name = self._get_month_name()
-            if day_events:
-                self.speak(f"{day_name} {self.cursor_day}. {len(day_events)} events.")
-            else:
-                self.speak(f"{day_name} {self.cursor_day}. No events.")
+        self.window.update_text(f"{self._get_month_name()} {self.year}")
 
     def on_key(self, vk):
         if self.state == "input":
             if vk == win32con.VK_ESCAPE:
-                self.state = "view"
+                self.state = "options"
                 self.speak("Cancelled.")
-                self.window.update_text(self._render())
+                self._build_options_menu()
             elif vk == win32con.VK_RETURN:
                 self._save_event()
             elif vk == win32con.VK_BACK:
                 if self.input_buf:
                     self.input_buf = self.input_buf[:-1]
-                    self.window.update_text(self._render())
+                    self.window.update_text(f"Event: {self.input_buf}")
             elif 0x20 <= vk <= 0x7E:
                 self.input_buf += chr(vk)
-                self.window.update_text(self._render())
-            return
-
-        if self.state == "options":
-            key = self._get_event_key(self.cursor_day)
-            day_events = self.events.get(key, [])
-            option_count = 1 + len(day_events) + 1
-
-            if vk == win32con.VK_ESCAPE:
-                self.state = "view"
-                self.window.update_text(self._render())
-            elif vk == win32con.VK_UP:
-                self.menu_cursor = (self.menu_cursor - 1) % option_count
-                self.window.update_text(self._render())
-            elif vk == win32con.VK_DOWN:
-                self.menu_cursor = (self.menu_cursor + 1) % option_count
-                self.window.update_text(self._render())
-            elif vk == win32con.VK_RETURN:
-                if self.menu_cursor == 0:
-                    self._add_event()
-                elif self.menu_cursor == option_count - 1:
-                    self.state = "view"
-                    self.window.update_text(self._render())
-                else:
-                    self._delete_event(self.menu_cursor - 1)
+                self.window.update_text(f"Event: {self.input_buf}")
             return
 
         if vk == win32con.VK_ESCAPE:
-            self.exit_app()
+            if self.state == "options":
+                self._back_to_calendar()
+            else:
+                self.exit_app()
             return
-
-        days_in_month = calendar.monthrange(self.year, self.month)[1]
-
-        moved = False
-        if vk == win32con.VK_LEFT:
-            self.cursor_day = max(1, self.cursor_day - 1)
-            moved = True
-        elif vk == win32con.VK_RIGHT:
-            self.cursor_day = min(days_in_month, self.cursor_day + 1)
-            moved = True
-        elif vk == win32con.VK_UP:
-            self.cursor_day = max(1, self.cursor_day - 7)
-            moved = True
-        elif vk == win32con.VK_DOWN:
-            self.cursor_day = min(days_in_month, self.cursor_day + 7)
-            moved = True
-        elif vk == win32con.VK_PAGEUP:
-            self._change_month(-1)
-        elif vk == win32con.VK_PAGEDOWN:
-            self._change_month(1)
+        if vk == win32con.VK_BACK:
+            self.menu.previous()
+        elif vk == win32con.VK_SPACE:
+            if self.manager.space_used_in_chord:
+                return
+            self.menu.next()
         elif vk == win32con.VK_RETURN:
-            self._show_options()
+            self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            self.menu.first_letter_nav(chr(vk))
 
-        if moved:
-            self._speak_cursor()
-        self.window.update_text(self._render())
+        item = self.menu.get_current_item()
+        if item:
+            self.window.update_text(item.title)
 
     def get_help_text(self):
-        return "Calendar. Arrows to navigate days. PageUp/PageDown to change month. Enter for options. Add and view events."
+        return "Calendar. Browse days, add and view events. Space for next, Backspace for previous. Enter to select."
