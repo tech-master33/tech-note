@@ -200,16 +200,6 @@
       "filename": "dice_roller.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/dice_roller.py",
       "author": "Tech-Note"
-    },
-    {
-      "id": "calculator",
-      "name": "Calculator",
-      "description": "Basic calculator with parentheses, history, and full voice feedback.",
-      "category": "Apps",
-      "version": "1.0",
-      "filename": "tech_calc.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/tech_calc.py",
-      "author": "Tech-Note"
     }
   ]
 }
