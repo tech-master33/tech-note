@@ -105,6 +105,16 @@ class MemoryMatch(SoftApp):
         self.speak(f"Memory Match. {ROWS} by {COLS}. Find matching pairs.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        r, c = self.cursor_r, self.cursor_c
+        pos = f"Row {r + 1}, column {c + 1}."
+        if self.matched[r][c]:
+            self.speak(f"{pos} {self.board[r][c]}. Matched.")
+        elif self.revealed[r][c]:
+            self.speak(f"{pos} {self.board[r][c]}.")
+        else:
+            self.speak(f"{pos} Unknown.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -120,18 +130,25 @@ class MemoryMatch(SoftApp):
         if self.locked:
             return
 
+        moved = False
         if vk == win32con.VK_UP:
             self.cursor_r = (self.cursor_r - 1) % ROWS
+            moved = True
         elif vk == win32con.VK_DOWN:
             self.cursor_r = (self.cursor_r + 1) % ROWS
+            moved = True
         elif vk == win32con.VK_LEFT:
             self.cursor_c = (self.cursor_c - 1) % COLS
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor_c = (self.cursor_c + 1) % COLS
+            moved = True
         elif vk == win32con.VK_RETURN:
             self._flip()
             return
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

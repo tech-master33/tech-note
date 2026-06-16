@@ -6,6 +6,7 @@ class Synth:
         self._rate = 0
         self._volume = 100
         self._voice_index = 0
+        self._voices = []
         try:
             import comtypes.client
             self.engine = comtypes.client.CreateObject("Speech.Voice")
@@ -17,9 +18,12 @@ class Synth:
     def _enum_voices(self):
         try:
             tokens = self.engine.GetVoices()
+            self._voices = []
             self._voice_names = []
             for i in range(tokens.Count):
-                self._voice_names.append(tokens.Item(i).GetDescription())
+                v = tokens.Item(i)
+                self._voices.append(v)
+                self._voice_names.append(v.GetDescription())
         except Exception:
             self._voice_names = ["Default"]
 
@@ -29,6 +33,8 @@ class Synth:
         if interrupt:
             self.stop()
         try:
+            self.engine.Rate = self._rate
+            self.engine.Volume = self._volume
             self.engine.Speak(text)
         except Exception:
             pass
@@ -36,24 +42,31 @@ class Synth:
     def stop(self):
         if self.is_valid:
             try:
-                self.engine.AudioOutputStream.Stop()
+                self.engine.Speak("", 3)
             except Exception:
-                try:
-                    self.engine.Skip(1)
-                except Exception:
-                    pass
+                pass
 
     def get_rate(self):
         return self._rate
 
     def set_rate(self, value):
         self._rate = max(-10, min(10, int(value)))
+        if self.is_valid:
+            try:
+                self.engine.Rate = self._rate
+            except Exception:
+                pass
 
     def get_volume(self):
         return self._volume
 
     def set_volume(self, value):
         self._volume = max(0, min(100, int(value)))
+        if self.is_valid:
+            try:
+                self.engine.Volume = self._volume
+            except Exception:
+                pass
 
     def get_voice_names(self):
         return self._voice_names
@@ -66,11 +79,10 @@ class Synth:
         return False
 
     def set_voice_by_index(self, index):
-        if 0 <= index < len(self._voice_names):
+        if 0 <= index < len(self._voices):
             self._voice_index = index
             try:
-                tokens = self.engine.GetVoices()
-                self.engine.Voice = tokens.Item(index)
+                self.engine.Voice = self._voices[index]
             except Exception:
                 pass
 

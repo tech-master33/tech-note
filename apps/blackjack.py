@@ -127,6 +127,15 @@ class Blackjack(SoftApp):
         self.speak(f"Blackjack. Balance ${self.balance}. Place your bet.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        if self.phase == "bet":
+            opts = ["Decrease Bet", "Increase Bet", "Deal", "Exit"]
+            self.speak(f"Bet ${self.bet}. {opts[self.cursor]}.")
+        elif self.phase == "play":
+            opts = ["Hit", "Stand", "Double"]
+            pv = hand_value(self.player)
+            self.speak(f"Your total {pv}. {opts[self.cursor]}.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -141,16 +150,21 @@ class Blackjack(SoftApp):
                 self.window.update_text(self._render())
             return
 
+        moved = False
         if vk == win32con.VK_UP:
             if self.phase == "bet":
                 self.cursor = (self.cursor - 1) % 4
+                moved = True
             elif self.phase == "play":
                 self.cursor = (self.cursor - 1) % 3
+                moved = True
         elif vk == win32con.VK_DOWN:
             if self.phase == "bet":
                 self.cursor = (self.cursor + 1) % 4
+                moved = True
             elif self.phase == "play":
                 self.cursor = (self.cursor + 1) % 3
+                moved = True
         elif vk == win32con.VK_LEFT:
             if self.phase == "bet" and self.cursor == 0:
                 self.bet = max(5, self.bet - 5)
@@ -179,6 +193,8 @@ class Blackjack(SoftApp):
                 elif self.cursor == 2:
                     self._double()
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

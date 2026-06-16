@@ -197,6 +197,22 @@ class Solitaire(SoftApp):
         self.speak("Solitaire. Klondike. Arrows to move cursor, Enter to select and place cards.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        col = self.cursor_col + 1
+        stack = self.tableau[self.cursor_col]
+        if not stack:
+            self.speak(f"Column {col}. Empty.")
+            return
+        if self.cursor_row < len(stack):
+            card = stack[self.cursor_row]["card"]
+            face = stack[self.cursor_row]["face_up"]
+            if face:
+                self.speak(f"Column {col}. {card_full(card)}.")
+            else:
+                self.speak(f"Column {col}. Face down.")
+        else:
+            self.speak(f"Column {col}. Empty.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             if self.move_mode:
@@ -222,20 +238,26 @@ class Solitaire(SoftApp):
                 self.cursor_col = (self.cursor_col + 1) % 7
             elif vk == win32con.VK_RETURN:
                 self._place_card(self.cursor_col)
+            self._speak_cursor()
             self.window.update_text(self._render())
             return
 
+        moved = False
         if vk == win32con.VK_LEFT:
             self.cursor_col = (self.cursor_col - 1) % 7
             self.cursor_row = min(self.cursor_row, max(0, len(self.tableau[self.cursor_col]) - 1))
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor_col = (self.cursor_col + 1) % 7
             self.cursor_row = min(self.cursor_row, max(0, len(self.tableau[self.cursor_col]) - 1))
+            moved = True
         elif vk == win32con.VK_UP:
             self.cursor_row = max(0, self.cursor_row - 1)
+            moved = True
         elif vk == win32con.VK_DOWN:
             max_r = len(self.tableau[self.cursor_col]) - 1
             self.cursor_row = min(max_r, self.cursor_row + 1)
+            moved = True
         elif vk == win32con.VK_RETURN:
             if self.cursor_col == 0 and not self.tableau[0]:
                 self._draw_stock()
@@ -244,6 +266,8 @@ class Solitaire(SoftApp):
         elif vk == 0x46:
             self._try_foundation_from_tableau()
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def _try_foundation_from_tableau(self):

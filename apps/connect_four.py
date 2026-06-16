@@ -163,6 +163,14 @@ class ConnectFour(SoftApp):
         self.speak("Connect Four. Drop pieces to get four in a row. Left and Right to choose column, Enter to drop.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        col = self.cursor + 1
+        lowest = self._get_lowest_row(self.cursor)
+        if lowest == -1:
+            self.speak(f"Column {col}. Full.")
+        else:
+            self.speak(f"Column {col}. Row {lowest + 1} available.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -175,15 +183,20 @@ class ConnectFour(SoftApp):
                 self.window.update_text(self._render())
             return
 
+        moved = False
         if vk == win32con.VK_LEFT:
             self.cursor = (self.cursor - 1) % COLS
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor = (self.cursor + 1) % COLS
+            moved = True
         elif vk == win32con.VK_RETURN:
             self._drop(self.cursor)
             self.window.update_text(self._render())
             return
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

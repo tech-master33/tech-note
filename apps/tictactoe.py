@@ -163,6 +163,15 @@ class TicTacToe(SoftApp):
         self.speak("Tic Tac Toe. You are X, computer is O. Use arrows to move, Enter to place.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        row = self.cursor // 3 + 1
+        col = self.cursor % 3 + 1
+        cell = self.board[self.cursor]
+        if cell != " ":
+            self.speak(f"Row {row}, column {col}. {cell}.")
+        else:
+            self.speak(f"Row {row}, column {col}. Empty.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -171,18 +180,25 @@ class TicTacToe(SoftApp):
         if self.game_over:
             return
 
+        moved = False
         if vk == win32con.VK_UP:
             self.cursor = (self.cursor - 3) % 9
+            moved = True
         elif vk == win32con.VK_DOWN:
             self.cursor = (self.cursor + 3) % 9
+            moved = True
         elif vk == win32con.VK_LEFT:
             self.cursor = (self.cursor - 1) % 9
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor = (self.cursor + 1) % 9
+            moved = True
         elif vk == win32con.VK_RETURN:
             self._place()
             return
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

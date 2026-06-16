@@ -110,6 +110,15 @@ class Sudoku(SoftApp):
         self.speak(f"Sudoku {self.difficulty}. Use arrows to move, number keys to place digits.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        r, c = self.cursor_row, self.cursor_col
+        val = self.puzzle[r][c]
+        if val == 0:
+            self.speak(f"Row {r + 1}, column {c + 1}. Empty.")
+        else:
+            given = "given" if self.given[r][c] else "entered"
+            self.speak(f"Row {r + 1}, column {c + 1}. {val}. {given}.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -121,14 +130,19 @@ class Sudoku(SoftApp):
                 self.window.update_text(self._render())
             return
 
+        moved = False
         if vk == win32con.VK_LEFT:
             self.cursor_col = (self.cursor_col - 1) % 9
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor_col = (self.cursor_col + 1) % 9
+            moved = True
         elif vk == win32con.VK_UP:
             self.cursor_row = (self.cursor_row - 1) % 9
+            moved = True
         elif vk == win32con.VK_DOWN:
             self.cursor_row = (self.cursor_row + 1) % 9
+            moved = True
         elif vk == win32con.VK_RETURN:
             if self.selected_num > 0 and not self.given[self.cursor_row][self.cursor_col]:
                 self.puzzle[self.cursor_row][self.cursor_col] = self.selected_num
@@ -156,6 +170,8 @@ class Sudoku(SoftApp):
             self._new_game()
             self.speak(f"Difficulty: {self.difficulty}. New game.")
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

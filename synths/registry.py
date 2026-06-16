@@ -9,14 +9,6 @@ def get_available_synths():
     except Exception:
         pass
 
-    try:
-        from synths.nvda import Synth
-        inst = Synth()
-        if inst.test():
-            synths.append(("NVDA", "nvda"))
-    except Exception:
-        pass
-
     return synths
 
 def create_synth(module_name):
@@ -26,7 +18,6 @@ def create_synth(module_name):
     elif module_name == "sapi4_synth":
         from synths.sapi4_synth import Synth
         return Synth()
-    elif module_name == "nvda":
-        from synths.nvda import Synth
-        return Synth()
-    return None
+    else:
+        from synths.sapi_synth import SapiSynthBase
+        return SapiSynthBase()

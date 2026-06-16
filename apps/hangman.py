@@ -94,6 +94,14 @@ class Hangman(SoftApp):
         self.speak("Hangman. Guess letters to find the word.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        letter = self.alphabet[self.cursor]
+        if letter in self.guessed:
+            status = "correct" if letter in self.word else "wrong"
+            self.speak(f"{letter}. Already guessed. {status}.")
+        else:
+            self.speak(f"{letter}.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -106,14 +114,19 @@ class Hangman(SoftApp):
                 self.window.update_text(self._render())
             return
 
+        moved = False
         if vk == win32con.VK_LEFT:
             self.cursor = (self.cursor - 1) % 26
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor = (self.cursor + 1) % 26
+            moved = True
         elif vk == win32con.VK_UP:
             self.cursor = (self.cursor - 13) % 26
+            moved = True
         elif vk == win32con.VK_DOWN:
             self.cursor = (self.cursor + 13) % 26
+            moved = True
         elif vk == win32con.VK_RETURN:
             self._guess()
             return
@@ -122,6 +135,8 @@ class Hangman(SoftApp):
             self._guess()
             return
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

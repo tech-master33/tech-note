@@ -14,3 +14,5 @@ temp/
 netlify.toml
 *.lock
 public/
+netlify-site/apps/
+project/

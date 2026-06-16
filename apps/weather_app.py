@@ -2,18 +2,42 @@ import urllib.request
 import json
 import win32con
 from core.app_base import SoftApp
+from core.menu import MenuSystem, MenuNode
 
 
 class WeatherApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.state = "menu"
-        self.menu_cursor = 0
-        self.menu_items = ["Enter City", "Last Result", "Exit"]
         self.city = ""
         self.input_buf = ""
         self.weather_data = None
         self.error_msg = ""
+        self.menu = None
+        self._build_menu()
+
+    def _build_menu(self):
+        root = MenuNode("Weather")
+        root.add_child(MenuNode("Enter City", self._start_input))
+        if self.weather_data:
+            root.add_child(MenuNode("Last Result", self._show_result))
+        root.add_child(MenuNode("Back", self.exit_app))
+        self.menu = MenuSystem(root, self.speak)
+
+    def _start_input(self):
+        self.state = "input"
+        self.input_buf = ""
+        self.speak("Enter city name.")
+        self.window.update_text("City:")
+
+    def _show_result(self):
+        if self.weather_data:
+            self.state = "result"
+            d = self.weather_data
+            self.speak(f"Weather in {d['city']}: {d['temp_c']} degrees Celsius, {d['temp_f']} Fahrenheit, feels like {d['feels_c']} Celsius. {d['desc']}. Humidity {d['humidity']} percent. Wind {d['wind_kmph']} kilometers per hour {d['wind_dir']}. Visibility {d['visibility']} kilometers. UV index {d['uv']}.")
+            self.window.update_text(self._render_result())
+        else:
+            self.speak("No previous result.")
 
     def _fetch_weather(self, city):
         try:
@@ -36,109 +60,90 @@ class WeatherApp(SoftApp):
                     "uv": current.get("uvIndex", "?"),
                 }
                 self.error_msg = ""
-                self.state = "result"
-                self.speak(f"Weather in {self.weather_data['city']}: {self.weather_data['temp_c']} degrees Celsius, {self.weather_data['desc']}.")
+                self._show_result()
         except Exception as e:
             self.error_msg = f"Failed to get weather: {str(e)}"
             self.speak(self.error_msg)
             self.state = "menu"
+            self._build_menu()
+            self.window.update_text(self._render_menu())
 
-    def _render(self):
-        if self.state == "menu":
-            lines = ["Weather", ""]
-            if self.error_msg:
-                lines.append(self.error_msg)
-                lines.append("")
-            for i, item in enumerate(self.menu_items):
-                prefix = ">" if i == self.menu_cursor else " "
-                lines.append(f"{prefix} {item}")
-            return "\n".join(lines)
+    def _render_menu(self):
+        lines = ["Weather"]
+        if self.error_msg:
+            lines.append(self.error_msg)
+        return "\n".join(lines)
 
-        if self.state == "input":
-            lines = ["Enter City", "", f"City: {self.input_buf}_", "", "Type city name. Enter to search. Escape to cancel."]
-            return "\n".join(lines)
-
-        if self.state == "result" and self.weather_data:
-            d = self.weather_data
-            lines = [
-                f"Weather for {d['city']}",
-                "",
-                f"Temperature:   {d['temp_c']}C / {d['temp_f']}F",
-                f"Feels like:    {d['feels_c']}C / {d['feels_f']}F",
-                f"Conditions:    {d['desc']}",
-                f"Humidity:      {d['humidity']}%",
-                f"Wind:          {d['wind_kmph']} km/h {d['wind_dir']}",
-                f"Visibility:    {d['visibility']} km",
-                f"UV Index:      {d['uv']}",
-                "",
-                "Enter to search again. Escape to exit.",
-            ]
-            return "\n".join(lines)
-
-        return "Weather"
+    def _render_result(self):
+        if not self.weather_data:
+            return "Weather"
+        d = self.weather_data
+        lines = [
+            f"Weather for {d['city']}",
+            "",
+            f"Temperature:   {d['temp_c']}C / {d['temp_f']}F",
+            f"Feels like:    {d['feels_c']}C / {d['feels_f']}F",
+            f"Conditions:    {d['desc']}",
+            f"Humidity:      {d['humidity']}%",
+            f"Wind:          {d['wind_kmph']} km/h {d['wind_dir']}",
+            f"Visibility:    {d['visibility']} km",
+            f"UV Index:      {d['uv']}",
+            "",
+            "Enter to search again. Escape to exit.",
+        ]
+        return "\n".join(lines)
 
     def on_focus(self):
         self.state = "menu"
-        self.menu_cursor = 0
         self.error_msg = ""
+        self._build_menu()
         self.speak("Weather. Enter a city to get current conditions.")
-        self.window.update_text(self._render())
+        self.window.update_text(self._render_menu())
 
     def on_key(self, vk):
         if self.state == "input":
             if vk == win32con.VK_ESCAPE:
                 self.state = "menu"
+                self._build_menu()
                 self.speak("Cancelled.")
-                self.window.update_text(self._render())
+                self.window.update_text(self._render_menu())
             elif vk == win32con.VK_RETURN:
                 city = self.input_buf.strip()
                 if city:
                     self.speak(f"Fetching weather for {city}...")
                     self.window.update_text(f"Loading weather for {city}...")
                     self._fetch_weather(city)
-                    self.window.update_text(self._render())
             elif vk == win32con.VK_BACK:
                 if self.input_buf:
                     self.input_buf = self.input_buf[:-1]
-                    self.window.update_text(self._render())
+                    self.window.update_text(f"City: {self.input_buf}")
             elif 0x20 <= vk <= 0x7E:
                 self.input_buf += chr(vk)
-                self.window.update_text(self._render())
+                self.window.update_text(f"City: {self.input_buf}")
             return
 
         if self.state == "result":
             if vk == win32con.VK_ESCAPE:
                 self.exit_app()
-            elif vk == win32con.VK_RETURN:
-                self.state = "menu"
-                self.menu_cursor = 0
-                self.window.update_text(self._render())
             return
 
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
             return
-
-        if vk == win32con.VK_UP:
-            self.menu_cursor = (self.menu_cursor - 1) % len(self.menu_items)
-        elif vk == win32con.VK_DOWN:
-            self.menu_cursor = (self.menu_cursor + 1) % len(self.menu_items)
-        elif vk == win32con.VK_RETURN:
-            if self.menu_cursor == 0:
-                self.state = "input"
-                self.input_buf = ""
-                self.speak("Enter city name.")
-            elif self.menu_cursor == 1:
-                if self.weather_data:
-                    self.state = "result"
-                    self.speak(f"Weather in {self.weather_data['city']}.")
-                else:
-                    self.speak("No previous result.")
-            elif self.menu_cursor == 2:
-                self.exit_app()
+        elif vk == win32con.VK_BACK:
+            self.menu.previous()
+            self.window.update_text(self._render_menu())
+        elif vk == win32con.VK_SPACE:
+            if self.manager.space_used_in_chord:
                 return
+            self.menu.next()
+            self.window.update_text(self._render_menu())
+        elif vk == win32con.VK_RETURN:
+            self.menu.select()
+            self.window.update_text(self._render_menu())
+        elif 0x41 <= vk <= 0x5A:
+            self.menu.first_letter_nav(chr(vk))
+            self.window.update_text(self._render_menu())
 
-        self.window.update_text(self._render())
-
-    def get_help_text():
+    def get_help_text(self):
         return "Weather. Get current weather for any city. Enter a city name to search."

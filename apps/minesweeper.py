@@ -108,6 +108,20 @@ class Minesweeper(SoftApp):
         self.speak(f"Minesweeper. {self.mines} mines. Arrow keys to move, Enter to reveal or flag.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        r, c = self.cursor_row, self.cursor_col
+        if self.revealed[r][c]:
+            if self.grid[r][c] == -1:
+                self.speak(f"Row {r + 1}, column {c + 1}. Mine.")
+            elif self.grid[r][c] == 0:
+                self.speak(f"Row {r + 1}, column {c + 1}. Empty.")
+            else:
+                self.speak(f"Row {r + 1}, column {c + 1}. {self.grid[r][c]} mines nearby.")
+        elif self.flagged[r][c]:
+            self.speak(f"Row {r + 1}, column {c + 1}. Flagged.")
+        else:
+            self.speak(f"Row {r + 1}, column {c + 1}. Hidden.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -120,14 +134,19 @@ class Minesweeper(SoftApp):
                 self.window.update_text(self._render())
             return
 
+        moved = False
         if vk == win32con.VK_LEFT:
             self.cursor_col = (self.cursor_col - 1) % self.cols
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor_col = (self.cursor_col + 1) % self.cols
+            moved = True
         elif vk == win32con.VK_UP:
             self.cursor_row = (self.cursor_row - 1) % self.rows
+            moved = True
         elif vk == win32con.VK_DOWN:
             self.cursor_row = (self.cursor_row + 1) % self.rows
+            moved = True
         elif vk == win32con.VK_TAB:
             self.flag_mode = not self.flag_mode
             self.speak(f"Mode: {'Flag' if self.flag_mode else 'Reveal'}.")
@@ -157,6 +176,8 @@ class Minesweeper(SoftApp):
                         val = self.grid[r][c]
                         self.speak(f"{val} mines nearby." if val > 0 else "Empty.")
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

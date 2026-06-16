@@ -1,5 +1,6 @@
 import win32con
 from core.app_base import SoftApp
+from core.menu import MenuSystem, MenuNode
 
 CATEGORIES = {
     "Length": {
@@ -61,6 +62,67 @@ class UnitConverter(SoftApp):
         self.input_buf = ""
         self.result = ""
         self.categories = list(CATEGORIES.keys())
+        self.menu = None
+        self._build_category_menu()
+
+    def _build_category_menu(self):
+        root = MenuNode("Unit Converter")
+        for cat in self.categories:
+            root.add_child(MenuNode(cat, lambda c=cat: self._select_category(c)))
+        root.add_child(MenuNode("Back", self.exit_app))
+        self.menu = MenuSystem(root, self.speak)
+
+    def _select_category(self, cat_name):
+        self.cat_cursor = self.categories.index(cat_name)
+        self.state = "units"
+        self.unit_cursor = 0
+        self.from_unit = 0
+        self.to_unit = min(1, len(CATEGORIES[cat_name]["units"]) - 1)
+        units = CATEGORIES[cat_name]["units"]
+        self.speak(f"{cat_name}. Select units. FROM: {units[self.from_unit]}, TO: {units[self.to_unit]}.")
+        self.window.update_text(self._render_units())
+
+    def _build_unit_menu(self):
+        cat_name = self.categories[self.cat_cursor]
+        units = CATEGORIES[cat_name]["units"]
+        root = MenuNode(cat_name)
+        for i, u in enumerate(units):
+            markers = []
+            if i == self.from_unit:
+                markers.append("FROM")
+            if i == self.to_unit:
+                markers.append("TO")
+            tag = f" [{', '.join(markers)}]" if markers else ""
+            root.add_child(MenuNode(f"{u}{tag}", lambda idx=i: self._toggle_unit(idx)))
+        root.add_child(MenuNode("Convert", self._start_input))
+        root.add_child(MenuNode("Back", self._back_to_category))
+        self.menu = MenuSystem(root, self.speak)
+
+    def _toggle_unit(self, idx):
+        if idx == self.from_unit:
+            self.to_unit = (self.to_unit + 1) % len(CATEGORIES[self.categories[self.cat_cursor]]["units"])
+        elif idx == self.to_unit:
+            self.from_unit = (self.from_unit + 1) % len(CATEGORIES[self.categories[self.cat_cursor]]["units"])
+        else:
+            self.from_unit = idx
+        units = CATEGORIES[self.categories[self.cat_cursor]]["units"]
+        self.speak(f"FROM: {units[self.from_unit]}, TO: {units[self.to_unit]}.")
+        self._build_unit_menu()
+        self.window.update_text(self._render_units())
+
+    def _start_input(self):
+        self.state = "input"
+        self.input_buf = ""
+        self.result = ""
+        units = CATEGORIES[self.categories[self.cat_cursor]]["units"]
+        self.speak(f"Convert from {units[self.from_unit]} to {units[self.to_unit]}. Enter value.")
+        self.window.update_text(self._render_input())
+
+    def _back_to_category(self):
+        self.state = "category"
+        self._build_category_menu()
+        self.speak("Select category.")
+        self.window.update_text("Unit Converter")
 
     def _convert(self, value, from_u, to_u, cat_name):
         cat = CATEGORIES[cat_name]
@@ -77,7 +139,6 @@ class UnitConverter(SoftApp):
             celsius = (value - 32) * 5 / 9
         elif from_u == "Kelvin":
             celsius = value - 273.15
-
         if to_u == "Celsius":
             return celsius
         elif to_u == "Fahrenheit":
@@ -85,98 +146,45 @@ class UnitConverter(SoftApp):
         elif to_u == "Kelvin":
             return celsius + 273.15
 
-    def _render(self):
-        if self.state == "category":
-            lines = ["Unit Converter", "Select category:", ""]
-            for i, cat in enumerate(self.categories):
-                prefix = ">" if i == self.cat_cursor else " "
-                lines.append(f"{prefix} {cat}")
-            lines.append("")
-            lines.append("Up/Down to navigate. Enter to select. Escape to exit.")
-            return "\n".join(lines)
-
+    def _render_units(self):
         cat_name = self.categories[self.cat_cursor]
         units = CATEGORIES[cat_name]["units"]
+        lines = [f"{cat_name} Converter", ""]
+        for i, u in enumerate(units):
+            markers = []
+            if i == self.from_unit:
+                markers.append("FROM")
+            if i == self.to_unit:
+                markers.append("TO")
+            tag = f" [{', '.join(markers)}]" if markers else ""
+            lines.append(f"  {u}{tag}")
+        lines.append("")
+        lines.append("Enter to convert. Escape to go back.")
+        return "\n".join(lines)
 
-        if self.state == "units":
-            lines = [f"{cat_name} Converter", ""]
-            for i, u in enumerate(units):
-                markers = []
-                if i == self.from_unit:
-                    markers.append("FROM")
-                if i == self.to_unit:
-                    markers.append("TO")
-                tag = f" [{', '.join(markers)}]" if markers else ""
-                prefix = ">" if i == self.unit_cursor else " "
-                lines.append(f"{prefix} {u}{tag}")
+    def _render_input(self):
+        cat_name = self.categories[self.cat_cursor]
+        units = CATEGORIES[cat_name]["units"]
+        lines = [f"{cat_name}: {units[self.from_unit]} to {units[self.to_unit]}", ""]
+        lines.append(f"Value: {self.input_buf}_")
+        if self.result:
             lines.append("")
-            lines.append("Enter to toggle FROM/TO. Escape to go back.")
-            return "\n".join(lines)
-
-        if self.state == "input":
-            lines = [f"{cat_name}: {units[self.from_unit]} to {units[self.to_unit]}", ""]
-            lines.append(f"Value: {self.input_buf}_")
-            if self.result:
-                lines.append("")
-                lines.append(f"Result: {self.result}")
-            lines.append("")
-            lines.append("Enter number. Enter to convert. Escape to cancel.")
-            return "\n".join(lines)
-
-        return ""
+            lines.append(f"Result: {self.result}")
+        return "\n".join(lines)
 
     def on_focus(self):
         self.state = "category"
-        self.cat_cursor = 0
+        self._build_category_menu()
         self.speak("Unit Converter. Select a category.")
-        self.window.update_text(self._render())
+        self.window.update_text("Unit Converter")
 
     def on_key(self, vk):
-        if self.state == "category":
-            if vk == win32con.VK_ESCAPE:
-                self.exit_app()
-                return
-            if vk == win32con.VK_UP:
-                self.cat_cursor = (self.cat_cursor - 1) % len(self.categories)
-            elif vk == win32con.VK_DOWN:
-                self.cat_cursor = (self.cat_cursor + 1) % len(self.categories)
-            elif vk == win32con.VK_RETURN:
-                self.state = "units"
-                self.unit_cursor = 0
-                self.from_unit = 0
-                self.to_unit = min(1, len(CATEGORIES[self.categories[self.cat_cursor]]["units"]) - 1)
-                self.speak(f"{self.categories[self.cat_cursor]}. Select units.")
-            self.window.update_text(self._render())
-            return
-
-        if self.state == "units":
-            units = CATEGORIES[self.categories[self.cat_cursor]]["units"]
-            if vk == win32con.VK_ESCAPE:
-                self.state = "category"
-                self.window.update_text(self._render())
-            elif vk == win32con.VK_UP:
-                self.unit_cursor = (self.unit_cursor - 1) % len(units)
-            elif vk == win32con.VK_DOWN:
-                self.unit_cursor = (self.unit_cursor + 1) % len(units)
-            elif vk == win32con.VK_RETURN:
-                if self.unit_cursor == self.from_unit:
-                    self.to_unit = (self.to_unit + 1) % len(units)
-                elif self.unit_cursor == self.to_unit:
-                    self.from_unit = (self.from_unit + 1) % len(units)
-                else:
-                    self.from_unit = self.unit_cursor
-                self.state = "input"
-                self.input_buf = ""
-                self.result = ""
-                self.speak(f"Convert from {units[self.from_unit]} to {units[self.to_unit]}. Enter value.")
-            self.window.update_text(self._render())
-            return
-
         if self.state == "input":
             units = CATEGORIES[self.categories[self.cat_cursor]]["units"]
             if vk == win32con.VK_ESCAPE:
                 self.state = "units"
-                self.window.update_text(self._render())
+                self._build_unit_menu()
+                self.window.update_text(self._render_units())
             elif vk == win32con.VK_RETURN:
                 try:
                     val = float(self.input_buf)
@@ -205,8 +213,22 @@ class UnitConverter(SoftApp):
                 if ch not in self.input_buf or ch in "+-":
                     self.input_buf += ch
                     self.result = ""
-            self.window.update_text(self._render())
+            self.window.update_text(self._render_input())
             return
 
-    def get_help_text():
+        if vk == win32con.VK_ESCAPE:
+            self.exit_app()
+            return
+        elif vk == win32con.VK_BACK:
+            self.menu.previous()
+        elif vk == win32con.VK_SPACE:
+            if self.manager.space_used_in_chord:
+                return
+            self.menu.next()
+        elif vk == win32con.VK_RETURN:
+            self.menu.select()
+        elif 0x41 <= vk <= 0x5A:
+            self.menu.first_letter_nav(chr(vk))
+
+    def get_help_text(self):
         return "Unit Converter. Convert between length, weight, temperature, speed, volume, and data units."

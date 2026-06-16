@@ -2,6 +2,7 @@ import random
 import time
 import win32con
 from core.app_base import SoftApp
+from core.menu import MenuSystem, MenuNode
 
 WORDS = [
     "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog",
@@ -21,8 +22,6 @@ class TypingTest(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.state = "menu"
-        self.menu_cursor = 0
-        self.menu_items = ["Start Test (30s)", "Start Test (60s)", "Start Test (120s)", "Exit"]
         self.duration = 30
         self.target_text = ""
         self.typed_text = ""
@@ -32,11 +31,22 @@ class TypingTest(SoftApp):
         self.elapsed = 0
         self.correct = 0
         self.total = 0
+        self.menu = None
+        self._build_menu()
+
+    def _build_menu(self):
+        root = MenuNode("Typing Test")
+        root.add_child(MenuNode("Start Test (30s)", lambda: self._start_test(30)))
+        root.add_child(MenuNode("Start Test (60s)", lambda: self._start_test(60)))
+        root.add_child(MenuNode("Start Test (120s)", lambda: self._start_test(120)))
+        root.add_child(MenuNode("Back", self.exit_app))
+        self.menu = MenuSystem(root, self.speak)
 
     def _generate_text(self, word_count=30):
         return " ".join(random.choices(WORDS, k=word_count))
 
-    def _start_test(self):
+    def _start_test(self, duration):
+        self.duration = duration
         self.target_text = self._generate_text(40)
         self.typed_text = ""
         self.start_time = time.time()
@@ -62,30 +72,20 @@ class TypingTest(SoftApp):
         self.accuracy = int((self.correct / self.total) * 100) if self.total > 0 else 0
 
         self.state = "result"
-        self.speak(f"Test complete. {self.wpm} words per minute. {self.accuracy}% accuracy.")
+        self.speak(f"Test complete. {self.wpm} words per minute. {self.accuracy}% accuracy. {self.total} words typed, {self.correct} correct.")
         self.window.update_text(self._render())
 
     def _render(self):
-        if self.state == "menu":
-            lines = ["Typing Test", ""]
-            for i, item in enumerate(self.menu_items):
-                prefix = ">" if i == self.menu_cursor else " "
-                lines.append(f"{prefix} {item}")
-            return "\n".join(lines)
-
         if self.state == "typing":
             remaining = max(0, self.duration - (time.time() - self.start_time))
             lines = [f"Time: {int(remaining)}s"]
             lines.append("")
-
             target_display = self.target_text[:80]
             if len(self.target_text) > 80:
                 target_display += "..."
             lines.append(f"Text: {target_display}")
             lines.append("")
             lines.append(f"You:  {self.typed_text}_")
-            lines.append("")
-            lines.append("Type to begin. Backspace to delete.")
             return "\n".join(lines)
 
         if self.state == "result":
@@ -95,15 +95,15 @@ class TypingTest(SoftApp):
             lines.append(f"Time:          {int(self.elapsed)}s")
             lines.append(f"Words typed:   {self.total}")
             lines.append(f"Correct:       {self.correct}")
-            lines.append("")
-            lines.append("Enter to try again. Escape to exit.")
             return "\n".join(lines)
+
+        return "Typing Test"
 
     def on_focus(self):
         self.state = "menu"
-        self.menu_cursor = 0
+        self._build_menu()
         self.speak("Typing Test. Choose a duration.")
-        self.window.update_text(self._render())
+        self.window.update_text("Typing Test")
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
@@ -111,38 +111,20 @@ class TypingTest(SoftApp):
                 self.exit_app()
             elif self.state == "typing":
                 self.state = "menu"
+                self._build_menu()
                 self.speak("Test cancelled.")
-                self.window.update_text(self._render())
+                self.window.update_text("Typing Test")
             elif self.state == "result":
                 self.state = "menu"
-                self.window.update_text(self._render())
-            return
-
-        if self.state == "menu":
-            if vk == win32con.VK_UP:
-                self.menu_cursor = (self.menu_cursor - 1) % len(self.menu_items)
-            elif vk == win32con.VK_DOWN:
-                self.menu_cursor = (self.menu_cursor + 1) % len(self.menu_items)
-            elif vk == win32con.VK_RETURN:
-                if self.menu_cursor == 0:
-                    self.duration = 30
-                    self._start_test()
-                elif self.menu_cursor == 1:
-                    self.duration = 60
-                    self._start_test()
-                elif self.menu_cursor == 2:
-                    self.duration = 120
-                    self._start_test()
-                elif self.menu_cursor == 3:
-                    self.exit_app()
-                    return
-            self.window.update_text(self._render())
+                self._build_menu()
+                self.window.update_text("Typing Test")
             return
 
         if self.state == "result":
             if vk == win32con.VK_RETURN:
                 self.state = "menu"
-                self.window.update_text(self._render())
+                self._build_menu()
+                self.window.update_text("Typing Test")
             return
 
         if self.state == "typing":
@@ -160,7 +142,6 @@ class TypingTest(SoftApp):
             elif 0x20 <= vk <= 0x7E:
                 ch = chr(vk).lower()
                 self.typed_text += ch
-
                 idx = len(self.typed_text) - 1
                 if idx < len(self.target_text):
                     if self.typed_text[idx] == self.target_text[idx]:
@@ -172,6 +153,19 @@ class TypingTest(SoftApp):
             remaining = self.duration - (time.time() - self.start_time)
             if remaining <= 0:
                 self._end_test()
+            return
+
+        if self.state == "menu":
+            if vk == win32con.VK_BACK:
+                self.menu.previous()
+            elif vk == win32con.VK_SPACE:
+                if self.manager.space_used_in_chord:
+                    return
+                self.menu.next()
+            elif vk == win32con.VK_RETURN:
+                self.menu.select()
+            elif 0x41 <= vk <= 0x5A:
+                self.menu.first_letter_nav(chr(vk))
 
     def get_help_text(self):
         return "Typing Test. Measure your typing speed in words per minute. Choose 30, 60, or 120 seconds."

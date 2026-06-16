@@ -106,6 +106,14 @@ class Game2048(SoftApp):
         self.speak("2048. Slide tiles to merge numbers. Reach 2048 to win.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        r, c = self.cursor_row, self.cursor_col
+        val = self.grid[r][c]
+        if val == 0:
+            self.speak(f"Row {r + 1}, column {c + 1}. Empty.")
+        else:
+            self.speak(f"Row {r + 1}, column {c + 1}. {val}.")
+
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
@@ -124,14 +132,19 @@ class Game2048(SoftApp):
             self.window.update_text(self._render())
             return
 
+        moved = False
         if vk == win32con.VK_LEFT:
             self._move("left")
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self._move("right")
+            moved = True
         elif vk == win32con.VK_UP:
             self._move("up")
+            moved = True
         elif vk == win32con.VK_DOWN:
             self._move("down")
+            moved = True
         elif vk == 0x4E:
             self.__init__(self.manager, self.window)
             self.speak("New game.")

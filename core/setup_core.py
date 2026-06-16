@@ -19,6 +19,8 @@ class TechNoteSetup(SoftApp):
         self.username = ""
         self.password = ""
         self.pin = ""
+        self._pin_original = ""
+        self._pw_original = ""
         self.lock_type = "pin"
         self.keyboard_layout = self._detect_windows_layout()
         self.active = True
@@ -92,8 +94,11 @@ class TechNoteSetup(SoftApp):
                     self.pin += chr(vk)
                     self.window.update_text("*" * len(self.pin))
                     if len(self.pin) == 4:
-                        self.current_step += 1
-                        self._enter_synth_step()
+                        self._pin_original = self.pin
+                        self.pin = ""
+                        self.current_step = 4
+                        self.speak("Confirm your PIN.")
+                        self.window.update_text("Confirm PIN:")
                 elif vk == win32con.VK_BACK:
                     if self.pin:
                         self.pin = self.pin[:-1]
@@ -101,12 +106,50 @@ class TechNoteSetup(SoftApp):
             else:
                 if vk == win32con.VK_RETURN:
                     if self.password:
-                        self.current_step += 1
-                        self._enter_synth_step()
+                        self._pw_original = self.password
+                        self.password = ""
+                        self.current_step = 4
+                        self.speak("Confirm your password.")
+                        self.window.update_text("Confirm Password:")
                 elif self._handle_input(vk, 'password', hidden=True):
                     pass
 
         elif self.current_step == 4:
+            if self.lock_type == "pin":
+                if 0x30 <= vk <= 0x39:
+                    self.pin += chr(vk)
+                    self.window.update_text("*" * len(self.pin))
+                    if len(self.pin) == 4:
+                        if self.pin == self._pin_original:
+                            self.pin = self._pin_original
+                            self._enter_synth_step()
+                        else:
+                            self.speak("PINs don't match. Try again.")
+                            self.pin = ""
+                            self.current_step = 3
+                            if self.lock_type == "pin":
+                                self.window.update_text("PIN:")
+                            else:
+                                self.window.update_text("Password:")
+                elif vk == win32con.VK_BACK:
+                    if self.pin:
+                        self.pin = self.pin[:-1]
+                        self.window.update_text("*" * len(self.pin) if self.pin else "Confirm PIN:")
+            else:
+                if vk == win32con.VK_RETURN:
+                    if self.password:
+                        if self.password == self._pw_original:
+                            self.password = self._pw_original
+                            self._enter_synth_step()
+                        else:
+                            self.speak("Passwords don't match. Try again.")
+                            self.password = ""
+                            self.current_step = 3
+                            self.window.update_text("Password:")
+                elif self._handle_input(vk, 'password', hidden=True):
+                    pass
+
+        elif self.current_step == 5:
             if not self.available_synths:
                 return
             if vk in (win32con.VK_SPACE,):
@@ -120,14 +163,14 @@ class TechNoteSetup(SoftApp):
             elif vk == win32con.VK_RETURN:
                 self.synth_module = self.available_synths[self.synth_index][1]
                 self._load_voices_for_synth()
-                self.current_step += 1
+                self.current_step = 6
                 if self.voices:
                     self.speak("Voice selection. Use Space or Backspace.")
                     self.window.update_text(self.voices[self.voice_index])
                 else:
                     self._enter_layout_step()
 
-        elif self.current_step == 5:
+        elif self.current_step == 6:
             if not self.voices:
                 self._enter_layout_step()
                 return
@@ -143,7 +186,7 @@ class TechNoteSetup(SoftApp):
             elif vk == win32con.VK_RETURN:
                 self._enter_layout_step()
 
-        elif self.current_step == 6:
+        elif self.current_step == 7:
             if vk in (win32con.VK_SPACE,):
                 self._layout_index = (self._layout_index + 1) % len(self._layout_options)
                 self.keyboard_layout = self._layout_options[self._layout_index]
@@ -157,13 +200,14 @@ class TechNoteSetup(SoftApp):
             elif vk == win32con.VK_RETURN:
                 self._complete_setup()
 
-        elif self.current_step == 7:
+        elif self.current_step == 8:
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:
                     self.finish_callback()
 
     def _enter_synth_step(self):
+        self.current_step = 5
         self.speak("TTS engine. Use Space or Backspace to select.")
         if self.available_synths:
             self.window.update_text(self.available_synths[self.synth_index][0])
@@ -171,14 +215,14 @@ class TechNoteSetup(SoftApp):
     def _enter_layout_step(self):
         self._layout_options = ["US", "UK", "Arabic"]
         self._layout_index = self._layout_options.index(self.keyboard_layout) if self.keyboard_layout in self._layout_options else 0
-        self.current_step = 6
+        self.current_step = 7
         self.speak(f"Keyboard layout detected: {self.keyboard_layout}. Use Space or Backspace to change.")
         self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
 
     def _complete_setup(self):
         self._save_keyboard_layout()
         self.save_account()
-        self.current_step = 7
+        self.current_step = 8
         self.speak("Setup complete. Press Enter to start.")
         self.window.update_text("Setup Complete")
 

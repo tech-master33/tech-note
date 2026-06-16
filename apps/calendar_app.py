@@ -164,6 +164,16 @@ class CalendarApp(SoftApp):
         self.speak(f"Calendar. {self._get_month_name()} {self.year}. Today is {self.today}.")
         self.window.update_text(self._render())
 
+    def _speak_cursor(self):
+        if self.cursor_day:
+            key = self._get_event_key(self.cursor_day)
+            day_events = self.events.get(key, [])
+            day_name = self._get_month_name()
+            if day_events:
+                self.speak(f"{day_name} {self.cursor_day}. {len(day_events)} events.")
+            else:
+                self.speak(f"{day_name} {self.cursor_day}. No events.")
+
     def on_key(self, vk):
         if self.state == "input":
             if vk == win32con.VK_ESCAPE:
@@ -211,14 +221,19 @@ class CalendarApp(SoftApp):
 
         days_in_month = calendar.monthrange(self.year, self.month)[1]
 
+        moved = False
         if vk == win32con.VK_LEFT:
             self.cursor_day = max(1, self.cursor_day - 1)
+            moved = True
         elif vk == win32con.VK_RIGHT:
             self.cursor_day = min(days_in_month, self.cursor_day + 1)
+            moved = True
         elif vk == win32con.VK_UP:
             self.cursor_day = max(1, self.cursor_day - 7)
+            moved = True
         elif vk == win32con.VK_DOWN:
             self.cursor_day = min(days_in_month, self.cursor_day + 7)
+            moved = True
         elif vk == win32con.VK_PAGEUP:
             self._change_month(-1)
         elif vk == win32con.VK_PAGEDOWN:
@@ -226,6 +241,8 @@ class CalendarApp(SoftApp):
         elif vk == win32con.VK_RETURN:
             self._show_options()
 
+        if moved:
+            self._speak_cursor()
         self.window.update_text(self._render())
 
     def get_help_text(self):

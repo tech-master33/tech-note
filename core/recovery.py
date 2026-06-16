@@ -2,7 +2,7 @@ import os
 import sys
 import subprocess
 import win32con
-from synths.nvda import Synth as NVDASynth
+from synths.sapi_synth import SapiSynthBase
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQ_PATH = os.path.join(BASE_DIR, 'requirements.txt')
@@ -13,7 +13,7 @@ def _get_speaker():
     global _SPEAKER
     if _SPEAKER is not None:
         return _SPEAKER
-    _SPEAKER = NVDASynth()
+    _SPEAKER = SapiSynthBase()
     return _SPEAKER
 
 def _speak(text):
