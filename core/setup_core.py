@@ -48,7 +48,18 @@ class TechNoteSetup(SoftApp):
 
     def run_setup(self):
         self.window.update_text("TechNote Setup")
-        self.speak("Welcome to TechNote. Press Enter to begin.")
+        lines = [
+            "Welcome to TechNote",
+            "",
+            "A self-voicing keyboard interface for Windows.",
+            "",
+            "Navigation: Space = next, Backspace = previous",
+            "Enter = select, Escape = back or exit",
+            "",
+            "Press Enter to begin setup."
+        ]
+        self.window.update_text("\n".join(lines))
+        self.speak("Welcome to TechNote. A self voicing keyboard interface for Windows. Use Space and Backspace to navigate, Enter to select. Press Enter to begin setup.")
 
     def on_key(self, vk):
         if self.current_step == 0:
@@ -223,8 +234,21 @@ class TechNoteSetup(SoftApp):
         self._save_keyboard_layout()
         self.save_account()
         self.current_step = 8
-        self.speak("Setup complete. Press Enter to start.")
-        self.window.update_text("Setup Complete")
+        lines = [
+            "Setup Complete!",
+            "",
+            f"Username: {self.username}",
+            f"Lock: {self.lock_type.upper()}",
+            f"Layout: {self.keyboard_layout}",
+            f"TTS: {self.available_synths[self.synth_index][0] if self.available_synths else 'Default'}",
+            "",
+            "Press Enter to start TechNote."
+        ]
+        self.window.update_text("\n".join(lines))
+        summary_parts = [f"Username {self.username}", f"lock type {self.lock_type}", f"keyboard {self.keyboard_layout}"]
+        if self.available_synths:
+            summary_parts.append(f"synth {self.available_synths[self.synth_index][0]}")
+        self.speak(f"Setup complete. {', '.join(summary_parts)}. Press Enter to start.")
 
     def _handle_input(self, vk, attr, hidden=False):
         val = getattr(self, attr)

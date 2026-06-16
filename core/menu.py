@@ -176,7 +176,7 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     media.add_child(MenuNode("FM Radio", lambda: app_callback(FMRadioApp)))
     
     # Calculator
-    root.add_child(MenuNode("Scientific Calculator", lambda: app_callback(TechCalc), "c"))
+    root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
     
     # Game Center
     root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
