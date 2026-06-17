@@ -30,6 +30,9 @@ class BrailleNoteApp:
 
         self.synth = SapiSynthBase()
         self._apply_settings()
+
+        self._power_vk = 0xC0
+        self._power_key_name = "backtick (above Tab)"
         self.window = StealthWindow(on_key_down=self.handle_key, on_key_up=self.handle_key_up)
 
         self.menu = None
@@ -75,25 +78,23 @@ class BrailleNoteApp:
             self.synth.set_temp_params(**kwargs)
 
     def _play_startup_sound(self):
-        settings_path = os.path.join(self.tech_soft, 'settings.json')
-        if os.path.exists(settings_path):
-            try:
-                with open(settings_path, 'r') as f:
-                    s = json.load(f)
-                if s.get("startup_sound") == "Off":
-                    return False
-            except:
-                pass
-        path = _get_sound_path('startup.mp3')
-        if not os.path.exists(path):
-            path = os.path.join(SOUNDS_DIR, 'startup.mp3')
-        if os.path.exists(path):
-            player = AudioPlayer()
-            player.play_file_background(path)
-            for _ in range(100):
-                if not player.playing:
-                    break
-                time.sleep(0.1)
+        try:
+            settings_path = os.path.join(self.tech_soft, 'settings.json')
+            if os.path.exists(settings_path):
+                try:
+                    with open(settings_path, 'r') as f:
+                        s = json.load(f)
+                    if s.get("startup_sound") == "Off":
+                        return False
+                except:
+                    pass
+            path = _get_sound_path('startup.mp3')
+            if not os.path.exists(path):
+                path = os.path.join(SOUNDS_DIR, 'startup.mp3')
+            if os.path.exists(path):
+                AudioPlayer().play_sound_blocking(path)
+        except Exception as e:
+            print(f"Startup sound error: {e}")
         return True
 
     def _detect_keyboard_layout(self):

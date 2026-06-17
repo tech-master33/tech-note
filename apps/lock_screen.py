@@ -245,5 +245,5 @@ class LockScreenApp(SoftApp):
         if not os.path.exists(unlock_sound):
             unlock_sound = os.path.join(SOUNDS_DIR, 'unlock.mp3')
         if os.path.exists(unlock_sound):
-            AudioPlayer().play_file(unlock_sound)
+            AudioPlayer().play_sound_blocking(unlock_sound)
         self.speak("Unlocked.")
