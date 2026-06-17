@@ -64,21 +64,21 @@
     {
       "id": "alarm_clock",
       "name": "Alarm Clock",
-      "description": "Set alarms with labels and get notified at the right time.",
+      "description": "Set alarms with labels, dismiss or snooze when they ring.",
       "category": "Apps",
-      "version": "1.1",
+      "version": "1.2",
       "filename": "alarm_clock.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/alarm_clock.py",
       "author": "Tech-Note"
     },
     {
-      "id": "notes_app",
-      "name": "Notes",
-      "description": "Create, edit, and manage text notes.",
+      "id": "habit_tracker",
+      "name": "Habit Tracker",
+      "description": "Track daily habits and build streaks.",
       "category": "Apps",
-      "version": "1.1",
-      "filename": "notes_app.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/notes_app.py",
+      "version": "1.0",
+      "filename": "habit_tracker.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/habit_tracker.py",
       "author": "Tech-Note"
     },
     {
