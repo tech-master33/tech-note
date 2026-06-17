@@ -22,18 +22,29 @@ def _get_scheme_fallback(name):
     default_dir = os.path.join(SOUNDS_DIR, 'default')
     return os.path.join(default_dir, name)
 
-def play_click():
+def play_move():
     if SOUND_SCHEME == "Minimal":
         return
     path = _get_sound_path('Focus.wav')
-    if not os.path.exists(path):
-        path = _get_sound_path('clicked.ogg')
+    if os.path.exists(path):
+        _audio_player.play_file(path)
+    elif SOUND_SCHEME != "Default":
+        fallback = _get_scheme_fallback('Focus.wav')
+        if os.path.exists(fallback):
+            _audio_player.play_file(fallback)
+
+def play_click():
+    if SOUND_SCHEME == "Minimal":
+        return
+    path = _get_sound_path('clicked.ogg')
     if not os.path.exists(path):
         path = _get_sound_path('clicked.wav')
     if os.path.exists(path):
         _audio_player.play_file(path)
     elif SOUND_SCHEME != "Default":
-        fallback = _get_scheme_fallback('Focus.wav')
+        fallback = _get_scheme_fallback('clicked.ogg')
+        if not os.path.exists(fallback):
+            fallback = _get_scheme_fallback('clicked.wav')
         if os.path.exists(fallback):
             _audio_player.play_file(fallback)
 
@@ -67,12 +78,14 @@ class MenuSystem:
         if not self.current_node.children:
             return
         self.current_index = (self.current_index + 1) % len(self.current_node.children)
+        play_move()
         self.announce_current()
 
     def previous(self):
         if not self.current_node.children:
             return
         self.current_index = (self.current_index - 1) % len(self.current_node.children)
+        play_move()
         self.announce_current()
 
     def select(self):
@@ -99,6 +112,7 @@ class MenuSystem:
             parent = self.current_node.parent
             self.current_index = parent.children.index(self.current_node)
             self.current_node = parent
+            play_move()
             self.announce_current()
         else:
             self.speak("Main Menu")
@@ -112,6 +126,7 @@ class MenuSystem:
             item = self.current_node.children[idx]
             if item.title.lower().startswith(char):
                 self.current_index = idx
+                play_move()
                 self.announce_current()
                 return
 
@@ -165,6 +180,9 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
     root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
     root.add_child(MenuNode("App Store", lambda: app_callback(AppStore), "l"))
+    root.add_child(MenuNode("Settings", lambda: app_callback(
+        lambda m, w: SettingsApp(m, w, on_reset_account=on_reset_account)
+    ), "s"))
     root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
     
     _add_installed_apps(root, app_callback)
