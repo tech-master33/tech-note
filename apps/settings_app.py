@@ -25,10 +25,7 @@ class SettingsApp(SoftApp):
             "auto_resume_apps": True,
             "smooth_shutdown_audio": True,
             "app_sleep_hibernate": True,
-            "shutdown_key_protection": True,
-            "pre_shutdown_sync": True,
-            "optimize_speech_engine": True,
-            "fast_boot_optimization": True
+            "shutdown_key_protection": True
         }
         self.load_settings()
         self.adjust_mode = None
@@ -71,13 +68,10 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_adjust("keyboard_layout")))
         root.add_child(MenuNode("Update Channel", lambda: self._enter_adjust("update_channel")))
         root.add_child(MenuNode("Auto-Update on Startup", lambda: self._enter_adjust("auto_update_on_startup")))
-        root.add_child(MenuNode("Auto-Resume Apps", lambda: self._enter_adjust("auto_resume_apps")))
-        root.add_child(MenuNode("Smooth Shutdown Audio", lambda: self._enter_adjust("smooth_shutdown_audio")))
-        root.add_child(MenuNode("App Sleep/Hibernate", lambda: self._enter_adjust("app_sleep_hibernate")))
-        root.add_child(MenuNode("Shutdown Key Protection", lambda: self._enter_adjust("shutdown_key_protection")))
-        root.add_child(MenuNode("Pre-Shutdown Sync", lambda: self._enter_adjust("pre_shutdown_sync")))
-        root.add_child(MenuNode("Optimize Speech Engine", lambda: self._enter_adjust("optimize_speech_engine")))
-        root.add_child(MenuNode("Fast Boot Optimization", lambda: self._enter_adjust("fast_boot_optimization")))
+        root.add_child(MenuNode("Remember Last App", lambda: self._enter_adjust("auto_resume_apps")))
+        root.add_child(MenuNode("Fade Audio on Shutdown", lambda: self._enter_adjust("smooth_shutdown_audio")))
+        root.add_child(MenuNode("Sleep/Hibernate Options", lambda: self._enter_adjust("app_sleep_hibernate")))
+        root.add_child(MenuNode("Block Keys During Shutdown", lambda: self._enter_adjust("shutdown_key_protection")))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -330,8 +324,7 @@ class SettingsApp(SoftApp):
             self._apply_display_settings()
         elif key in ["auto_update_on_startup", "shutdown_pin", "night_mode_filter",
                       "auto_resume_apps", "smooth_shutdown_audio", "app_sleep_hibernate",
-                      "shutdown_key_protection", "pre_shutdown_sync", "optimize_speech_engine",
-                      "fast_boot_optimization"]:
+                      "shutdown_key_protection"]:
             self.settings[key] = not self.settings[key]
             self.speak("On" if self.settings[key] else "Off")
 
@@ -461,6 +454,10 @@ class SettingsApp(SoftApp):
             self._handle_confirm_pin(vk)
         elif self.pin_mode == "reset_pin":
             self._handle_new_pin(vk)
+        elif self.pin_mode == "confirm_reset_pin":
+            self._handle_confirm_reset_pin(vk)
+        elif self.pin_mode == "confirm_reset_password":
+            self._handle_confirm_reset_password(vk)
 
     def _handle_confirm_pin(self, vk):
         if 0x30 <= vk <= 0x39:
@@ -542,14 +539,103 @@ class SettingsApp(SoftApp):
         else:
             self._announce_main()
 
+    def _handle_confirm_reset_pin(self, vk):
+        if 0x30 <= vk <= 0x39:
+            self.new_pin += chr(vk)
+            self.window.update_text("*" * len(self.new_pin))
+            if len(self.new_pin) == 4:
+                try:
+                    with open(ACCOUNT_PATH, 'r') as f:
+                        account = json.load(f)
+                    if self.new_pin == account.get("pin", ""):
+                        self.pin_mode = None
+                        self.confirm_mode = "confirm_reset"
+                        self.speak("Are you sure you want to reset TechNote? Press Enter to confirm or Escape to cancel.")
+                        self.window.update_text("Confirm Reset TechNote?")
+                    else:
+                        self.speak("Wrong PIN. Reset cancelled.")
+                        self.pin_mode = None
+                        self._announce_main()
+                except Exception:
+                    self.speak("Failed to verify PIN.")
+                    self.pin_mode = None
+                    self._announce_main()
+        elif vk == win32con.VK_BACK:
+            if self.new_pin:
+                self.new_pin = self.new_pin[:-1]
+                self.window.update_text("*" * len(self.new_pin) if self.new_pin else "Confirm PIN:")
+            else:
+                self.pin_mode = None
+                self.speak("Cancelled.")
+                self._announce_main()
+        elif vk == win32con.VK_ESCAPE:
+            self.pin_mode = None
+            self.speak("Cancelled.")
+            self._announce_main()
+
+    def _handle_confirm_reset_password(self, vk):
+        if vk == win32con.VK_RETURN:
+            try:
+                with open(ACCOUNT_PATH, 'r') as f:
+                    account = json.load(f)
+                if self.new_pin == account.get("password", ""):
+                    self.pin_mode = None
+                    self.confirm_mode = "confirm_reset"
+                    self.speak("Are you sure you want to reset TechNote? Press Enter to confirm or Escape to cancel.")
+                    self.window.update_text("Confirm Reset TechNote?")
+                else:
+                    self.speak("Wrong password. Reset cancelled.")
+                    self.pin_mode = None
+                    self._announce_main()
+            except Exception:
+                self.speak("Failed to verify password.")
+                self.pin_mode = None
+                self._announce_main()
+            return
+        if vk == win32con.VK_BACK:
+            if self.new_pin:
+                self.new_pin = self.new_pin[:-1]
+                self.window.update_text("*" * len(self.new_pin) if self.new_pin else "Confirm Password:")
+            else:
+                self.pin_mode = None
+                self.speak("Cancelled.")
+                self._announce_main()
+            return
+        if vk == win32con.VK_ESCAPE:
+            self.pin_mode = None
+            self.speak("Cancelled.")
+            self._announce_main()
+            return
+        if vk == win32con.VK_SPACE:
+            self.new_pin += " "
+            self.window.update_text("*" * len(self.new_pin))
+            return
+        ch = self._vk_to_char(vk)
+        if ch is not None:
+            self.new_pin += ch
+            self.window.update_text("*" * len(self.new_pin))
+
     def _restart_app(self):
         subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
         self.manager._exit_app()
 
     def _reset_technote(self):
-        self.confirm_mode = "confirm_reset"
-        self.speak("Are you sure you want to reset TechNote? Press Enter to confirm or Escape to cancel.")
-        self.window.update_text("Confirm Reset TechNote?")
+        account = self._load_account()
+        lock_type = account.get("lock_type", "pin")
+        if lock_type == "pin" and account.get("pin"):
+            self.pin_mode = "confirm_reset_pin"
+            self.new_pin = ""
+            self.speak("Enter current PIN to confirm reset.")
+            self.window.update_text("Confirm PIN:")
+        elif lock_type == "password" and account.get("password"):
+            self.pin_mode = "confirm_reset_password"
+            self.new_pin = ""
+            self.speak("Enter current password to confirm reset.")
+            self.window.update_text("Confirm Password:")
+        else:
+            self.confirm_mode = "confirm_reset"
+            self.speak("Are you sure you want to reset TechNote? Press Enter to confirm or Escape to cancel.")
+            self.window.update_text("Confirm Reset TechNote?")
 
     def _do_reset_technote(self):
         self.confirm_mode = None

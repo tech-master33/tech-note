@@ -2,13 +2,14 @@ import json
 import os
 import time
 import datetime
+import threading
 import win32con
 import win32api
 import psutil
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem, _get_sound_path, SOUNDS_DIR
 from core.audio_player import AudioPlayer
-from core.config import ACCOUNT_PATH
+from core.config import ACCOUNT_PATH, SETTINGS_PATH
 
 class LockScreenApp(SoftApp):
     def __init__(self, manager, window, success_callback):
@@ -20,6 +21,8 @@ class LockScreenApp(SoftApp):
         self._attempts = 0
         self._max_attempts = 3
         self._locked_until = 0
+        self._clock_timer = None
+        self._load_time_format()
         self._build_menu()
 
     def _load_account(self):
@@ -32,6 +35,16 @@ class LockScreenApp(SoftApp):
         else:
             self.account = {}
         self.lock_type = self.account.get("lock_type", "pin")
+
+    def _load_time_format(self):
+        self._time_format = "12h"
+        if os.path.exists(SETTINGS_PATH):
+            try:
+                with open(SETTINGS_PATH, 'r') as f:
+                    s = json.load(f)
+                self._time_format = s.get("time_format", "12h")
+            except Exception:
+                pass
 
     def _battery_text(self):
         try:
@@ -46,7 +59,10 @@ class LockScreenApp(SoftApp):
 
     def _build_menu(self):
         now = datetime.datetime.now()
-        time_str = now.strftime("%I:%M %p").lstrip("0")
+        if self._time_format == "24h":
+            time_str = now.strftime("%H:%M")
+        else:
+            time_str = now.strftime("%I:%M %p").lstrip("0")
         date_str = now.strftime("%A, %B %d, %Y")
         root = MenuNode("Lock Screen")
         root.add_child(MenuNode(f"Time: {time_str}"))
@@ -56,6 +72,18 @@ class LockScreenApp(SoftApp):
             root.add_child(MenuNode(bat))
         root.add_child(MenuNode("Unlock", self._start_entry))
         self.menu = MenuSystem(root, self.speak)
+
+    def _schedule_clock_update(self):
+        if self._clock_timer:
+            self._clock_timer.cancel()
+        self._clock_timer = threading.Timer(60, self._clock_tick)
+        self._clock_timer.daemon = True
+        self._clock_timer.start()
+
+    def _clock_tick(self):
+        self._build_menu()
+        self.window.update_text(self._display_text())
+        self._schedule_clock_update()
 
     def _display_text(self):
         children = self.menu.current_node.children
@@ -73,6 +101,7 @@ class LockScreenApp(SoftApp):
         title = item.title if item else "Lock Screen"
         self.window.update_text(self._display_text())
         self.speak("Locked. " + title)
+        self._schedule_clock_update()
 
     def on_key(self, vk):
         if self.pin_mode:
@@ -205,6 +234,8 @@ class LockScreenApp(SoftApp):
         self.window.update_text(self._display_text())
 
     def _unlock(self):
+        if self._clock_timer:
+            self._clock_timer.cancel()
         self._play_unlock()
         self.success_callback()
         self.exit_app()
@@ -214,5 +245,5 @@ class LockScreenApp(SoftApp):
         if not os.path.exists(unlock_sound):
             unlock_sound = os.path.join(SOUNDS_DIR, 'unlock.mp3')
         if os.path.exists(unlock_sound):
-            AudioPlayer().play_sound_blocking(unlock_sound)
+            AudioPlayer().play_file(unlock_sound)
         self.speak("Unlocked.")

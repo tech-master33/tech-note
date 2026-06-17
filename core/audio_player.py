@@ -2,6 +2,8 @@ import importlib
 import os
 import subprocess
 import tempfile
+import threading
+import time
 
 
 class AudioPlayer:
@@ -55,6 +57,54 @@ class AudioPlayer:
                 os.unlink(tmp)
             except Exception:
                 pass
+
+    def play_file_background(self, path):
+        def _play():
+            self.playing = True
+            try:
+                self._play_file_blocking(path)
+            except Exception:
+                pass
+            finally:
+                self.playing = False
+        t = threading.Thread(target=_play, daemon=True)
+        t.start()
+
+    def _play_file_blocking(self, path):
+        if not os.path.exists(path):
+            return
+        ext = os.path.splitext(path)[1].lower()
+        if ext in ('.wav', '.flac', '.ogg'):
+            try:
+                self._ensure_audio()
+                data, sr = AudioPlayer._sf.read(path, dtype='float32')
+                if data.ndim == 1:
+                    data = data.reshape(-1, 1)
+                AudioPlayer._sd.play(data, sr, blocking=True)
+            except Exception:
+                pass
+        else:
+            tmp = None
+            try:
+                fd, tmp = tempfile.mkstemp(suffix='.wav')
+                os.close(fd)
+                subprocess.run(
+                    ['ffmpeg', '-y', '-i', path, '-acodec', 'pcm_f32le', '-ar', '44100', '-ac', '1', tmp],
+                    capture_output=True, timeout=30
+                )
+                self._ensure_audio()
+                data, sr = AudioPlayer._sf.read(tmp, dtype='float32')
+                if data.ndim == 1:
+                    data = data.reshape(-1, 1)
+                AudioPlayer._sd.play(data, sr, blocking=True)
+            except Exception:
+                pass
+            finally:
+                if tmp:
+                    try:
+                        os.unlink(tmp)
+                    except Exception:
+                        pass
 
     def play_sound_blocking(self, path):
         if not os.path.exists(path):

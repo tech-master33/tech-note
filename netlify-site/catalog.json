@@ -6,7 +6,7 @@
       "name": "Tic Tac Toe",
       "description": "Classic tic tac toe against the computer.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "tictactoe.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/tictactoe.py",
       "author": "Tech-Note"
@@ -16,7 +16,7 @@
       "name": "Hangman",
       "description": "Guess letters to find the word before running out of attempts.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "hangman.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/hangman.py",
       "author": "Tech-Note"
@@ -26,7 +26,7 @@
       "name": "Memory Match",
       "description": "Flip cards to find matching pairs.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "memory_match.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/memory_match.py",
       "author": "Tech-Note"
@@ -36,7 +36,7 @@
       "name": "Connect Four",
       "description": "Drop pieces to get four in a row against the computer.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "connect_four.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/connect_four.py",
       "author": "Tech-Note"
@@ -46,7 +46,7 @@
       "name": "Stopwatch",
       "description": "Precision stopwatch with lap tracking.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "stopwatch.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/stopwatch.py",
       "author": "Tech-Note"
@@ -56,7 +56,7 @@
       "name": "Password Generator",
       "description": "Generate secure random passwords with custom options.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "password_gen.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/password_gen.py",
       "author": "Tech-Note"
@@ -66,7 +66,7 @@
       "name": "Alarm Clock",
       "description": "Set alarms with labels and get notified at the right time.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "alarm_clock.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/alarm_clock.py",
       "author": "Tech-Note"
@@ -76,7 +76,7 @@
       "name": "Notes",
       "description": "Create, edit, and manage text notes.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "notes_app.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/notes_app.py",
       "author": "Tech-Note"
@@ -86,7 +86,7 @@
       "name": "Todo List",
       "description": "Manage tasks with add, complete, and clear functions.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "todo_list.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/todo_list.py",
       "author": "Tech-Note"
@@ -96,7 +96,7 @@
       "name": "Solitaire",
       "description": "Classic Klondike solitaire. Build foundations from Ace to King by suit.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "solitaire.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/solitaire.py",
       "author": "Tech-Note"
@@ -106,7 +106,7 @@
       "name": "Sudoku",
       "description": "Classic 9x9 number puzzle. Fill rows, columns, and boxes with digits 1 to 9.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "sudoku.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/sudoku.py",
       "author": "Tech-Note"
@@ -116,7 +116,7 @@
       "name": "Blackjack",
       "description": "Beat the dealer to 21. Hit, stand, or double down.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "blackjack.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/blackjack.py",
       "author": "Tech-Note"
@@ -126,7 +126,7 @@
       "name": "2048",
       "description": "Slide numbered tiles to merge them and reach 2048.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "game2048.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/game2048.py",
       "author": "Tech-Note"
@@ -136,7 +136,7 @@
       "name": "Snake",
       "description": "Navigate a growing snake to eat food. Don't hit walls or yourself.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "snake.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/snake.py",
       "author": "Tech-Note"
@@ -146,7 +146,7 @@
       "name": "Minesweeper",
       "description": "Find all hidden mines without detonating them.",
       "category": "Games",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "minesweeper.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/minesweeper.py",
       "author": "Tech-Note"
@@ -156,7 +156,7 @@
       "name": "Typing Test",
       "description": "Measure your typing speed in words per minute with accuracy tracking.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "typing_test.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/typing_test.py",
       "author": "Tech-Note"
@@ -166,7 +166,7 @@
       "name": "Calendar",
       "description": "View months, navigate days, and add events. Events saved locally.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "calendar_app.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/calendar_app.py",
       "author": "Tech-Note"
@@ -176,7 +176,7 @@
       "name": "Weather",
       "description": "Get current weather for any city worldwide.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "weather_app.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/weather_app.py",
       "author": "Tech-Note"
@@ -186,7 +186,7 @@
       "name": "Unit Converter",
       "description": "Convert between length, weight, temperature, speed, volume, and data units.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "unit_converter.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/unit_converter.py",
       "author": "Tech-Note"
@@ -196,9 +196,29 @@
       "name": "Dice Roller",
       "description": "Roll multiple dice with modifiers. Supports d4, d6, d8, d10, d12, d20, d100.",
       "category": "Apps",
-      "version": "1.0",
+      "version": "1.1",
       "filename": "dice_roller.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/dice_roller.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "book_reader",
+      "name": "Book Reader",
+      "description": "Read text files with page navigation, bookmarks, and auto-read.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "book_reader.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/book_reader.py",
+      "author": "Tech-Note"
+    },
+    {
+      "id": "voice_memo",
+      "name": "Voice Memos",
+      "description": "Record and play back voice memos. Save recordings as WAV files.",
+      "category": "Apps",
+      "version": "1.0",
+      "filename": "voice_memo.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/voice_memo.py",
       "author": "Tech-Note"
     }
   ]

@@ -88,7 +88,12 @@ class BrailleNoteApp:
         if not os.path.exists(path):
             path = os.path.join(SOUNDS_DIR, 'startup.mp3')
         if os.path.exists(path):
-            AudioPlayer().play_sound_blocking(path)
+            player = AudioPlayer()
+            player.play_file_background(path)
+            for _ in range(100):
+                if not player.playing:
+                    break
+                time.sleep(0.1)
         return True
 
     def _detect_keyboard_layout(self):
@@ -376,12 +381,6 @@ class BrailleNoteApp:
                     os.remove(resume_path)
             except: pass
 
-        # 8. "Ready for Tomorrow" Sync
-        if settings.get("pre_shutdown_sync", True):
-            # Placeholder for app-specific sync calls
-            print("Performing pre-shutdown sync...")
-            time.sleep(0.2)
-
         # 3. Volume Fade-Out
         if settings.get("smooth_shutdown_audio", True):
             try:
@@ -405,45 +404,27 @@ class BrailleNoteApp:
             self.synth.speak(goodbye_msg)
         except: pass
 
-        # Play shutdown sound blocking (unless it's a silent sleep)
-        if mode != "sleep":
-            try:
-                path = os.path.join(SOUNDS_DIR, 'shutdown.wav')
-                if not os.path.exists(path):
-                    path = _get_sound_path('unlock.mp3')
-                if os.path.exists(path):
-                    AudioPlayer().play_sound_blocking(path)
-            except: pass
-
-        # 9. Speech Cache Clear
-        if settings.get("optimize_speech_engine", True):
-            # Placeholder for SAPI cache clearing logic
-            print("Optimizing speech engine cache...")
-
-        # 10. Startup Speed Optimization
-        if settings.get("fast_boot_optimization", True):
-            try:
-                # Clear large log files
-                for log in ["out.log", "crash.log"]:
-                    p = os.path.join(os.path.dirname(__file__), log)
-                    if os.path.exists(p) and os.path.getsize(p) > 1024 * 1024: # > 1MB
-                        with open(p, 'w') as f:
-                            f.write(f"Log rotated at {time.ctime()}\n")
-            except: pass
-
-        # Wait for speech to finish
         try:
             if hasattr(self.synth, 'wait_until_done'):
-                self.synth.wait_until_done(3000)
+                self.synth.wait_until_done(5000)
             else:
-                time.sleep(1.0)
+                time.sleep(1.5)
         except:
-            time.sleep(1.0)
+            time.sleep(1.5)
 
         if mode == "sleep":
             self.speak("Sleep mode active. Press any key to wake.")
-            self._shutting_down = False # Re-enable for wake
+            self._shutting_down = False
             return
+
+        # Play shutdown sound after speech finishes
+        try:
+            path = os.path.join(SOUNDS_DIR, 'shutdown.wav')
+            if not os.path.exists(path):
+                path = _get_sound_path('unlock.mp3')
+            if os.path.exists(path):
+                AudioPlayer().play_sound_blocking(path)
+        except: pass
 
         try:
             self.window.close()
