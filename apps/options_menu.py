@@ -159,7 +159,7 @@ class OptionsApp(SoftApp):
         elif key == "volume":
             self.speak(f"Volume. Current: {self.settings['volume']}.")
         elif key == "voice":
-            names = self.manager.get_voice_names()
+            names = self.manager.synth.get_voice_names()
             idx = self.settings.get("voice_index", 0)
             self.speak(f"Voice. Current: {names[idx] if names else 'Default'}.")
         elif key == "punctuation_level":
@@ -215,23 +215,23 @@ class OptionsApp(SoftApp):
                 self.speak(self.synth_list[self.synth_index][0])
         elif key == "speech_rate":
             self.settings["rate"] = max(-10, min(10, self.settings["rate"] + direction))
-            self.manager.set_rate(self.settings["rate"])
+            self.manager.synth.set_rate(self.settings["rate"])
             self.speak(str(self.settings["rate"]))
         elif key == "volume":
             self.settings["volume"] = max(0, min(100, self.settings["volume"] + direction * 10))
-            self.manager.set_volume(self.settings["volume"])
+            self.manager.synth.set_volume(self.settings["volume"])
             self.speak(str(self.settings["volume"]))
         elif key == "voice":
-            names = self.manager.get_voice_names()
+            names = self.manager.synth.get_voice_names()
             idx = (self.settings.get("voice_index", 0) + direction) % len(names)
             self.settings["voice_index"] = idx
-            self.manager.set_voice_by_index(idx)
+            self.manager.synth.set_voice_by_index(idx)
             self.speak(names[idx])
         elif key == "punctuation_level":
             opts = ["None", "Some", "Most", "All"]
             curr = opts.index(self.settings[key])
             self.settings[key] = opts[(curr + direction) % len(opts)]
-            self.manager.set_punctuation_level(self.settings[key])
+            self.manager.synth.set_punctuation_level(self.settings[key])
             self.speak(self.settings[key])
         elif key == "char_echo":
             opts = ["Off", "On"]
@@ -252,13 +252,13 @@ class OptionsApp(SoftApp):
             core.menu.ANNOUNCE_POSITION = self.settings[key] == "On"
         elif key == "pitch":
             self.settings["pitch"] = max(0, min(100, self.settings["pitch"] + direction * 10))
-            self.manager.set_pitch(self.settings["pitch"])
+            self.manager.synth.set_pitch(self.settings["pitch"])
             self.speak(str(self.settings["pitch"]))
         elif key == "capital_pitch_change":
             opts = ["Off", "Say Cap", "Raise Pitch"]
             curr = opts.index(self.settings[key])
             self.settings[key] = opts[(curr + direction) % len(opts)]
-            self.manager.set_capital_pitch_change(self.settings[key])
+            self.manager.synth.set_capital_pitch_change(self.settings[key])
             self.speak(self.settings[key])
         elif key == "state_keys":
             opts = ["Off", "On"]
@@ -269,7 +269,7 @@ class OptionsApp(SoftApp):
             opts = ["Off", "On"]
             curr = opts.index(self.settings[key])
             self.settings[key] = opts[(curr + direction) % 2]
-            self.manager.set_volume_ducking(self.settings[key] == "On")
+            self.manager.synth.set_volume_ducking(self.settings[key] == "On")
             self.speak(f"Volume Ducking {self.settings[key]}")
         elif key == "sound_scheme":
             opts = ["Default", "Classic", "Minimal"]

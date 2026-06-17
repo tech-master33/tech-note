@@ -31,7 +31,11 @@ class SapiSynthBase:
     def set_voice(self, voice_name):
         for voice in self.engine.GetVoices():
             if voice_name.lower() in voice.GetDescription().lower():
+                saved_rate = self.engine.Rate
+                saved_volume = self.engine.Volume
                 self.engine.Voice = voice
+                self.engine.Rate = saved_rate
+                self.engine.Volume = saved_volume
                 return True
         return False
 
@@ -75,7 +79,11 @@ class SapiSynthBase:
         try:
             voices = self.engine.GetVoices()
             if 0 <= index < len(voices):
+                saved_rate = self.engine.Rate
+                saved_volume = self.engine.Volume
                 self.engine.Voice = voices[index]
+                self.engine.Rate = saved_rate
+                self.engine.Volume = saved_volume
                 return True
         except:
             pass
@@ -140,9 +148,15 @@ class SapiSynthBase:
     def speak(self, text, interrupt=True):
         if not self.engine:
             return
-        
+
         text = self._filter_punctuation(text, self.punctuation_level)
         text, use_xml = self._apply_capital_pitch(text)
+
+        if not use_xml and self._pitch != 50:
+            safe = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            text = f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"><pitch absmiddle="{self._pitch}">{safe}</pitch></speak>'
+            use_xml = True
+
         self._ducker.duck()
         try:
             flags = 1
