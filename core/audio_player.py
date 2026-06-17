@@ -112,3 +112,8 @@ class AudioPlayer:
                 pass
             self._ffplay_proc = None
         self.playing = False
+
+    def fade_out(self, duration_ms=1000):
+        # Placeholder for actual volume fading logic
+        # For now, we stop immediately to ensure shutdown isn't delayed indefinitely
+        self.stop()

@@ -160,6 +160,10 @@ class SapiSynthBase:
         if self.engine:
             self.engine.Speak("", 1 | 2)
 
+    def wait_until_done(self, timeout_ms=5000):
+        if self.engine:
+            self.engine.WaitUntilDone(timeout_ms)
+
     def reset_temp_params(self):
         pass
 

@@ -18,7 +18,17 @@ class SettingsApp(SoftApp):
             "theme": "Dark", "bg_color": "Black", "font_size": "Medium",
             "time_format": "12h", "startup_sound": "On",
             "keyboard_layout": "US", "update_channel": "stable",
-            "auto_update_on_startup": False
+            "auto_update_on_startup": False,
+            "custom_goodbye": "Goodbye.",
+            "shutdown_pin": False,
+            "night_mode_filter": False,
+            "auto_resume_apps": True,
+            "smooth_shutdown_audio": True,
+            "app_sleep_hibernate": True,
+            "shutdown_key_protection": True,
+            "pre_shutdown_sync": True,
+            "optimize_speech_engine": True,
+            "fast_boot_optimization": True
         }
         self.load_settings()
         self.adjust_mode = None
@@ -48,6 +58,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Theme", lambda: self._enter_adjust("theme")))
         root.add_child(MenuNode("Background Color", lambda: self._enter_adjust("bg_color")))
         root.add_child(MenuNode("Font Size", lambda: self._enter_adjust("font_size")))
+        root.add_child(MenuNode("Night Mode Filter", lambda: self._enter_adjust("night_mode_filter")))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -60,6 +71,13 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_adjust("keyboard_layout")))
         root.add_child(MenuNode("Update Channel", lambda: self._enter_adjust("update_channel")))
         root.add_child(MenuNode("Auto-Update on Startup", lambda: self._enter_adjust("auto_update_on_startup")))
+        root.add_child(MenuNode("Auto-Resume Apps", lambda: self._enter_adjust("auto_resume_apps")))
+        root.add_child(MenuNode("Smooth Shutdown Audio", lambda: self._enter_adjust("smooth_shutdown_audio")))
+        root.add_child(MenuNode("App Sleep/Hibernate", lambda: self._enter_adjust("app_sleep_hibernate")))
+        root.add_child(MenuNode("Shutdown Key Protection", lambda: self._enter_adjust("shutdown_key_protection")))
+        root.add_child(MenuNode("Pre-Shutdown Sync", lambda: self._enter_adjust("pre_shutdown_sync")))
+        root.add_child(MenuNode("Optimize Speech Engine", lambda: self._enter_adjust("optimize_speech_engine")))
+        root.add_child(MenuNode("Fast Boot Optimization", lambda: self._enter_adjust("fast_boot_optimization")))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -213,6 +231,7 @@ class SettingsApp(SoftApp):
 
         root = MenuNode("Account")
         root.add_child(MenuNode("Change Username", lambda: self._start_text_input("username", "Enter new username.")))
+        root.add_child(MenuNode("Change Custom Goodbye", lambda: self._start_text_input("custom_goodbye", "Enter new goodbye message.")))
 
         if self._current_lock_type == "pin":
             root.add_child(MenuNode("Change PIN", self._start_pin_reset))
@@ -220,6 +239,7 @@ class SettingsApp(SoftApp):
             root.add_child(MenuNode("Change Password", lambda: self._start_text_input("password", "Enter new password.")))
 
         root.add_child(MenuNode(f"Lock Type ({lt})", self._toggle_lock_type))
+        root.add_child(MenuNode("Shutdown PIN (" + ("On" if self.settings.get("shutdown_pin") else "Off") + ")", lambda: self._adjust_value(0)))
         root.add_child(MenuNode("Back", self._back_from_account))
         self.account_menu = MenuSystem(root, self.speak)
 
@@ -308,7 +328,10 @@ class SettingsApp(SoftApp):
             self.settings[key] = opts[(curr + direction) % 3]
             self.speak(self.settings[key])
             self._apply_display_settings()
-        elif key == "auto_update_on_startup":
+        elif key in ["auto_update_on_startup", "shutdown_pin", "night_mode_filter",
+                      "auto_resume_apps", "smooth_shutdown_audio", "app_sleep_hibernate",
+                      "shutdown_key_protection", "pre_shutdown_sync", "optimize_speech_engine",
+                      "fast_boot_optimization"]:
             self.settings[key] = not self.settings[key]
             self.speak("On" if self.settings[key] else "Off")
 
@@ -349,6 +372,10 @@ class SettingsApp(SoftApp):
                 account["password"] = val
                 self._save_account(account)
                 self.speak("Password updated.")
+            elif self.text_input_field == "custom_goodbye":
+                self.settings["custom_goodbye"] = val
+                self.save_settings()
+                self.speak(f"Goodbye message set to {val}.")
             self.text_input = None
             self._enter_account_menu()
             return
