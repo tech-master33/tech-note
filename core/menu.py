@@ -142,52 +142,31 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.tutorial_app import TutorialApp
     from apps.game_center import GameCenter
     from apps.app_store import AppStore
+    from apps.book_reader import BookReaderApp
+    from apps.voice_memo import VoiceMemoApp
+    from apps.calendar_app import CalendarApp
+    from apps.notes_app import NotesApp
     root = MenuNode("Main Menu")
     
-    # Tutorial
-    root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
-    
-    # Word Processor
     root.add_child(MenuNode("Word Processor", lambda: app_callback(TechEdit), "w"))
-    
-    # Settings App
-    root.add_child(MenuNode("Settings App", lambda: app_callback(
-        lambda m, w: SettingsApp(m, w, on_reset_account=on_reset_account)
-    ), "s"))
-    
-    # Planner
+    root.add_child(MenuNode("Book Reader", lambda: app_callback(BookReaderApp), "b"))
+    root.add_child(MenuNode("Voice Memos", lambda: app_callback(VoiceMemoApp), "v"))
+    root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
+    root.add_child(MenuNode("Calendar", lambda: app_callback(CalendarApp), "d"))
     root.add_child(MenuNode("Planner", lambda: app_callback(PlannerApp), "p"))
-    
-    # Address List
     root.add_child(MenuNode("Address List", lambda: app_callback(AddressListApp), "a"))
-    
-    # Email
+    root.add_child(MenuNode("Notes", lambda: app_callback(NotesApp), "n"))
     root.add_child(MenuNode("Email", lambda: app_callback(EmailApp), "e"))
-    
-    # Internet
     root.add_child(MenuNode("Internet", lambda: app_callback(InternetApp), "i"))
-    
-    # Chat
     root.add_child(MenuNode("Chat", lambda: app_callback(ChatApp), "h"))
-
-    # Media Center
     media = root.add_child(MenuNode("Media Center", shortcut="m"))
     media.add_child(MenuNode("Media Player", lambda: app_callback(MediaPlayerApp)))
     media.add_child(MenuNode("FM Radio", lambda: app_callback(FMRadioApp)))
-    
-    # Calculator
-    root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
-    
-    # Game Center
-    root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
-    
-    # File Manager
     root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
-    
-    # App Store
+    root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
     root.add_child(MenuNode("App Store", lambda: app_callback(AppStore), "l"))
+    root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
     
-    # Installed apps from App Store
     _add_installed_apps(root, app_callback)
     
     return root

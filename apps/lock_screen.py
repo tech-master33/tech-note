@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import datetime
 import win32con
 import win32api
@@ -16,6 +17,9 @@ class LockScreenApp(SoftApp):
         self._load_account()
         self.input_buf = ""
         self.pin_mode = False
+        self._attempts = 0
+        self._max_attempts = 3
+        self._locked_until = 0
         self._build_menu()
 
     def _load_account(self):
@@ -75,7 +79,7 @@ class LockScreenApp(SoftApp):
             self._handle_input(vk)
             return
 
-        elif vk == win32con.VK_ESCAPE:
+        if vk == win32con.VK_ESCAPE:
             self.speak("Locked.")
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -93,6 +97,10 @@ class LockScreenApp(SoftApp):
             self.window.update_text(self._display_text())
 
     def _start_entry(self):
+        if time.time() < self._locked_until:
+            remaining = int(self._locked_until - time.time())
+            self.speak(f"Too many attempts. Try again in {remaining} seconds.")
+            return
         self.pin_mode = True
         self.input_buf = ""
         if self.lock_type == "pin":
@@ -132,20 +140,40 @@ class LockScreenApp(SoftApp):
 
     def _check_pin(self):
         if self.input_buf == self.account.get("pin"):
+            self._attempts = 0
             self._unlock()
         else:
-            self.speak("Wrong PIN.")
-            self.input_buf = ""
-            self.window.update_text("PIN:")
+            self._attempts += 1
+            if self._attempts >= self._max_attempts:
+                self._locked_until = time.time() + 30
+                self.speak("Too many attempts. Locked for 30 seconds.")
+                self.pin_mode = False
+                self._build_menu()
+                self.window.update_text(self._display_text())
+            else:
+                remaining = self._max_attempts - self._attempts
+                self.speak(f"Wrong PIN. {remaining} attempt{'s' if remaining != 1 else ''} left.")
+                self.input_buf = ""
+                self.window.update_text("PIN:")
 
     def _handle_password(self, vk):
         if vk == win32con.VK_RETURN:
             if self.input_buf == self.account.get("password"):
+                self._attempts = 0
                 self._unlock()
             else:
-                self.speak("Wrong password.")
-                self.input_buf = ""
-                self.window.update_text("Password:")
+                self._attempts += 1
+                if self._attempts >= self._max_attempts:
+                    self._locked_until = time.time() + 30
+                    self.speak("Too many attempts. Locked for 30 seconds.")
+                    self.pin_mode = False
+                    self._build_menu()
+                    self.window.update_text(self._display_text())
+                else:
+                    remaining = self._max_attempts - self._attempts
+                    self.speak(f"Wrong password. {remaining} attempt{'s' if remaining != 1 else ''} left.")
+                    self.input_buf = ""
+                    self.window.update_text("Password:")
             return
         if vk == win32con.VK_BACK:
             if self.input_buf:

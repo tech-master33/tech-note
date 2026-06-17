@@ -51,6 +51,12 @@ class BrailleNoteApp:
         # Apply visual settings to window (may trigger speech)
         self._apply_visual_settings()
 
+        # Startup update check (if enabled)
+        threading.Thread(
+            target=self._check_startup_update,
+            daemon=True
+        ).start()
+
     def speak(self, text, interrupt=True):
         if self.synth:
             self.synth.speak(text, interrupt)
@@ -281,6 +287,13 @@ class BrailleNoteApp:
         self.current_app = TutorialApp(self, self.window)
         self.current_app.on_focus()
 
+    def _check_startup_update(self):
+        try:
+            from core.updater import check_on_startup
+            check_on_startup(synth=self.synth, window=self.window)
+        except Exception:
+            pass
+
     def _restart_process(self):
         subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
         self._exit_app()
@@ -417,22 +430,7 @@ class BrailleNoteApp:
 
         # --- Active App Delegation (apps get ALL keys first) ---
         if self.current_app and self.current_app.active:
-            # Character echo
-            if self._char_echo == "On" and (0x30 <= vk <= 0x5A or vk == win32con.VK_SPACE):
-                try:
-                    if vk == win32con.VK_SPACE:
-                        ch = " "
-                        self.synth.speak("Space")
-                    else:
-                        ch = self._vk_to_char(vk)
-                        if ch:
-                            self.synth.speak(ch)
-                        else:
-                            ch = ""
-                    self._typing_buffer += ch
-                except:
-                    self._typing_buffer += chr(vk) if 0x30 <= vk <= 0x5A else ""
-            
+            # Character echo handled by apps themselves — framework does NOT echo here
             # Word echo on Space
             if self._word_echo == "On" and vk == win32con.VK_SPACE and self._typing_buffer:
                 self.synth.speak(self._typing_buffer)

@@ -108,17 +108,17 @@ class OptionsApp(SoftApp):
                 with open(self.settings_file, 'r') as f:
                     loaded = json.load(f)
                 self.settings.update(loaded)
-                self.manager.set_rate(self.settings.get("rate", 0))
-                self.manager.set_volume(self.settings.get("volume", 100))
-                names = self.manager.get_voice_names()
+                self.manager.synth.set_rate(self.settings.get("rate", 0))
+                self.manager.synth.set_volume(self.settings.get("volume", 100))
+                names = self.manager.synth.get_voice_names()
                 v_idx = self.settings.get("voice_index", 0)
                 if 0 <= v_idx < len(names):
-                    self.manager.set_voice_by_index(v_idx)
+                    self.manager.synth.set_voice_by_index(v_idx)
                 pl = self.settings.get("punctuation_level", "Some")
-                self.manager.set_punctuation_level(pl)
-                self.manager.set_pitch(self.settings.get("pitch", 50))
-                self.manager.set_capital_pitch_change(self.settings.get("capital_pitch_change", "Off"))
-                self.manager.set_volume_ducking(self.settings.get("volume_ducking", "Off") == "On")
+                self.manager.synth.set_punctuation_level(pl)
+                self.manager.synth.set_pitch(self.settings.get("pitch", 50))
+                self.manager.synth.set_capital_pitch_change(self.settings.get("capital_pitch_change", "Off"))
+                self.manager.synth.set_volume_ducking(self.settings.get("volume_ducking", "Off") == "On")
                 import core.menu
                 core.menu.SOUND_SCHEME = self.settings.get("sound_scheme", "Default")
             except Exception:

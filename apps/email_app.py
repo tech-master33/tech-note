@@ -5,6 +5,7 @@ import win32api
 import imaplib
 import smtplib
 import email
+import threading
 from email.mime.text import MIMEText
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
@@ -32,13 +33,13 @@ class EmailApp(SoftApp):
         self.setup_data = {}
         self.compose_data = {}
         self.compose_step = 0
+        self._busy = False
 
     def _load_config(self):
         if os.path.exists(EMAIL_CONFIG_PATH):
             try:
                 with open(EMAIL_CONFIG_PATH, 'r') as f:
                     data = json.load(f)
-                    # Decrypt password if it exists
                     if 'password' in data:
                         try:
                             data['password'] = decrypt(data['password'])
@@ -65,6 +66,7 @@ class EmailApp(SoftApp):
 
     def _show_main_menu(self):
         self.state = STATE_MENU
+        self._busy = False
         root = MenuNode("Email")
         root.add_child(MenuNode("Inbox", self._fetch_inbox, "i"))
         root.add_child(MenuNode("Compose", self._start_compose, "c"))
@@ -82,17 +84,20 @@ class EmailApp(SoftApp):
         self.window.update_text("Setup - Email:")
 
     def _fetch_inbox(self):
+        self._busy = True
         self.speak("Fetching emails...")
         self.window.update_text("Fetching...")
+        threading.Thread(target=self._do_fetch_inbox, daemon=True).start()
+
+    def _do_fetch_inbox(self):
         try:
-            # Simple IMAP fetch
             mail = imaplib.IMAP4_SSL(self.config.get('imap_server', 'imap.gmail.com'))
             mail.login(self.config['email'], self.config['password'])
             mail.select("inbox")
             status, messages = mail.search(None, 'ALL')
             
             ids = messages[0].split()
-            recent_ids = ids[-10:] # Get last 10
+            recent_ids = ids[-10:]
             recent_ids.reverse()
             
             self.emails = []
@@ -104,7 +109,6 @@ class EmailApp(SoftApp):
                         subject = msg['subject']
                         sender = msg['from']
                         
-                        # Extract body
                         body = ""
                         if msg.is_multipart():
                             for part in msg.walk():
@@ -125,13 +129,12 @@ class EmailApp(SoftApp):
             
             if not self.emails:
                 self.speak("Inbox empty.")
-                self._show_main_menu()
             else:
                 self._show_inbox_menu()
-                
-        except Exception as e:
-            self.speak(f"Connection failed: {str(e)}")
-            self._show_main_menu()
+        except Exception:
+            self.speak("Connection failed. Check your email settings.")
+        finally:
+            self._busy = False
 
     def _show_inbox_menu(self):
         self.state = STATE_INBOX
@@ -149,7 +152,6 @@ class EmailApp(SoftApp):
         self.current_email_body = e['body']
         info = f"From: {e['sender']}. Subject: {e['subject']}. Content follows."
         self.speak(info)
-        # For long bodies, maybe speak first few lines or provide navigation
         self.speak(self.current_email_body[:500] + "...")
         self.window.update_text(f"Reading: {e['subject']}")
 
@@ -169,6 +171,9 @@ class EmailApp(SoftApp):
                 self._show_main_menu()
             else:
                 self.exit_app()
+            return
+
+        if self._busy:
             return
 
         if self.state == STATE_MENU:
@@ -203,6 +208,8 @@ class EmailApp(SoftApp):
         if vk == win32con.VK_SPACE:
             if getattr(self.manager, 'space_used_in_chord', False):
                 return
+            if self._busy:
+                return
             if self.state in (STATE_MENU, STATE_INBOX):
                 if self.menu:
                     self.menu.next()
@@ -218,7 +225,6 @@ class EmailApp(SoftApp):
             
             if self.setup_step == 0:
                 self.setup_data['email'] = val
-                # Auto-detect server based on domain
                 domain = val.split('@')[-1].lower() if '@' in val else ""
                 if 'gmail' in domain:
                     self.setup_data['imap_server'] = 'imap.gmail.com'
@@ -270,7 +276,12 @@ class EmailApp(SoftApp):
             pass
 
     def _send_email(self):
+        self._busy = True
         self.speak("Sending...")
+        self.window.update_text("Sending...")
+        threading.Thread(target=self._do_send_email, daemon=True).start()
+
+    def _do_send_email(self):
         try:
             server = smtplib.SMTP(self.config.get('smtp_server', 'smtp.gmail.com'), 587)
             server.starttls()
@@ -285,9 +296,11 @@ class EmailApp(SoftApp):
             server.quit()
             self.speak("Email sent successfully.")
             self._show_main_menu()
-        except Exception as e:
-            self.speak(f"Failed to send: {str(e)}")
-            self.compose_step = 2 # Stay on body to retry
+        except Exception:
+            self.speak("Failed to send. Check your connection.")
+            self.compose_step = 2
+        finally:
+            self._busy = False
 
     def _handle_text_input(self, vk):
         if vk == win32con.VK_BACK:

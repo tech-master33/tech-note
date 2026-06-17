@@ -26,6 +26,18 @@ class InternetApp(SoftApp):
         self.fetching = False
         self.url_input_mode = False
         self.input_buf = ""
+        self._speech_queue = []
+        self._queue_lock = threading.Lock()
+
+    def _queue_speech(self, text):
+        with self._queue_lock:
+            self._speech_queue.append(text)
+
+    def _process_speech_queue(self):
+        with self._queue_lock:
+            while self._speech_queue:
+                text = self._speech_queue.pop(0)
+                self.speak(text)
 
     def _build_menu(self):
         root = MenuNode("Internet")
@@ -49,6 +61,8 @@ class InternetApp(SoftApp):
         self.window.update_text("Internet: " + name)
 
     def on_key(self, vk):
+        self._process_speech_queue()
+
         if self.url_input_mode:
             self._handle_url_input(vk)
             return
@@ -67,7 +81,7 @@ class InternetApp(SoftApp):
         if self.reading_mode:
             if vk in (win32con.VK_BACK):
                 self._previous_content()
-            elif vk == 0x48: # 'H' for headings
+            elif vk == 0x48:
                 self._next_heading()
             return
 
@@ -84,6 +98,8 @@ class InternetApp(SoftApp):
                 self.window.update_text("Internet: " + item.title)
 
     def on_key_up(self, vk):
+        self._process_speech_queue()
+
         if vk == win32con.VK_SPACE:
             if self.url_input_mode:
                 return
@@ -145,12 +161,6 @@ class InternetApp(SoftApp):
         self.speak(text)
         self.window.update_text(text)
 
-    def _progress_ticker(self):
-        while self.fetching:
-            # Subtle auditory feedback
-            self.speak("Working")
-            time.sleep(3.0)
-
     def get_help_text(self):
         if self.reading_mode:
             return "Reading Mode. Space for next line, Backspace for previous. H for next heading. Escape to return to bookmarks."
@@ -162,34 +172,32 @@ class InternetApp(SoftApp):
             return
         
         self.fetching = True
-        threading.Thread(target=self._progress_ticker, daemon=True).start()
         self.speak("Fetching.")
+        threading.Thread(target=self._do_fetch, args=(url,), daemon=True).start()
 
-        def _do_fetch():
-            try:
-                response = requests.get(url, timeout=10)
-                soup = BeautifulSoup(response.text, 'html.parser')
-                self.content = []
-                for element in soup.find_all(['h1', 'h2', 'h3', 'p', 'a']):
-                    if element.name in ['h1', 'h2', 'h3']:
-                        self.content.append(f"Heading: {element.get_text()}")
-                    elif element.name == 'a':
-                        self.content.append(f"Link: {element.get_text()}")
-                    else:
-                        txt = element.get_text().strip()
-                        if txt: self.content.append(txt)
-                
-                self.fetching = False
-                if self.content:
-                    self.reading_mode = True
-                    self.content_index = 0
-                    text = self.content[0]
-                    self.speak("Page loaded. " + text)
-                    self.window.update_text(text)
+    def _do_fetch(self, url):
+        try:
+            response = requests.get(url, timeout=10)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            self.content = []
+            for element in soup.find_all(['h1', 'h2', 'h3', 'p', 'a']):
+                if element.name in ['h1', 'h2', 'h3']:
+                    self.content.append(f"Heading: {element.get_text()}")
+                elif element.name == 'a':
+                    self.content.append(f"Link: {element.get_text()}")
                 else:
-                    self.speak("No content found on page.")
-            except Exception:
-                self.fetching = False
-                self.speak("Error fetching page.")
-
-        threading.Thread(target=_do_fetch, daemon=True).start()
+                    txt = element.get_text().strip()
+                    if txt: self.content.append(txt)
+            
+            self.fetching = False
+            if self.content:
+                self.reading_mode = True
+                self.content_index = 0
+                text = self.content[0]
+                self._queue_speech("Page loaded. " + text)
+                self.window.update_text(text)
+            else:
+                self._queue_speech("No content found on page.")
+        except Exception:
+            self.fetching = False
+            self._queue_speech("Error fetching page.")

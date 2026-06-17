@@ -35,6 +35,7 @@ class MediaPlayerApp(SoftApp):
         if not os.path.exists(file_path):
             self.speak("File not found.")
             return
+        self.player.stop()
         ok = self.player.play_file(file_path)
         if ok:
             self.speak("Playing " + filename)
@@ -60,16 +61,11 @@ class MediaPlayerApp(SoftApp):
             return
 
         if vk in (win32con.VK_BACK):
-            self.player.stop()
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
         elif 0x41 <= vk <= 0x5A:
             self.menu.first_letter_nav(chr(vk))
-        elif vk == 0xBB: # Plus key
-            self.speak("Volume control not available for this player.")
-        elif vk == 0xBD: # Minus key
-            self.speak("Volume control not available for this player.")
 
         item = self.menu.get_current_item()
         if item:
@@ -79,7 +75,6 @@ class MediaPlayerApp(SoftApp):
         if vk == win32con.VK_SPACE:
             if self.manager.space_used_in_chord:
                 return
-            self.player.stop()
             self.menu.next()
             item = self.menu.get_current_item()
             if item:

@@ -57,7 +57,6 @@ class FMRadioApp(SoftApp):
             if getattr(self.manager, 'space_used_in_chord', False):
                 return
             self.menu.next()
-            self.menu.next()
             item = self.menu.get_current_item()
             if item:
                 self.window.update_text("Radio: " + item.title)

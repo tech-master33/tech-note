@@ -12,6 +12,15 @@ APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
 
 
+def _version_newer(v1, v2):
+    try:
+        parts1 = [int(x) for x in v1.split(".")]
+        parts2 = [int(x) for x in v2.split(".")]
+        return parts1 > parts2
+    except:
+        return False
+
+
 class AppStore(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
@@ -85,7 +94,14 @@ class AppStore(SoftApp):
             name = app_info.get("name", "Unknown")
             app_id = app_info.get("id", name)
             is_installed = app_id in self.installed
-            tag = " [Installed]" if is_installed else ""
+            tag = ""
+            if is_installed:
+                installed_ver = self.installed[app_id].get("version", "0")
+                catalog_ver = app_info.get("version", "0")
+                if _version_newer(catalog_ver, installed_ver):
+                    tag = " [Update available]"
+                else:
+                    tag = " [Installed]"
             root.add_child(MenuNode(f"{name}{tag}", lambda a=app_info: self._show_app(a)))
         root.add_child(MenuNode("Back", self._build_menu_back))
         self.menu = MenuSystem(root, self.speak)
@@ -101,13 +117,20 @@ class AppStore(SoftApp):
         ver = app_info.get("version", "1.0")
         app_id = app_info.get("id", name)
         is_installed = app_id in self.installed
+        has_update = False
 
         root = MenuNode(name)
         root.add_child(MenuNode(f"Version {ver}. {desc}"))
+
         if is_installed:
+            installed_ver = self.installed[app_id].get("version", "0")
+            has_update = _version_newer(ver, installed_ver)
+            if has_update:
+                root.add_child(MenuNode(f"Update (v{installed_ver} -> v{ver})", lambda: self._update_app(app_info)))
             root.add_child(MenuNode("Uninstall", lambda: self._uninstall(app_info)))
         else:
             root.add_child(MenuNode("Install", lambda: self._install(app_info)))
+
         root.add_child(MenuNode("Back", self._browse_back))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -157,9 +180,49 @@ class AppStore(SoftApp):
         except urllib.error.URLError:
             self.speak("Download failed. No internet.")
             self.window.update_text("Download failed.")
-        except Exception as e:
-            self.speak(f"Install failed.")
+        except Exception:
+            self.speak("Install failed.")
             self.window.update_text("Install error.")
+
+    def _update_app(self, app_info):
+        name = app_info.get("name", "Unknown")
+        app_id = app_info.get("id", name)
+        download_url = app_info.get("download_url", "")
+        filename = app_info.get("filename", "")
+
+        if not download_url:
+            self.speak("Cannot update. No download URL.")
+            return
+
+        self.speak(f"Updating {name}. Please wait.")
+        self.window.update_text(f"Updating {name}...")
+
+        try:
+            req = urllib.request.Request(download_url, headers={"User-Agent": "TechNote/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                code = resp.read().decode('utf-8')
+
+            if app_id in self.installed:
+                filename = self.installed[app_id].get("filename", filename)
+
+            if not filename:
+                filename = app_id + ".py"
+
+            filepath = os.path.join(APPS_DIR, filename)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(code)
+
+            self.installed[app_id]["version"] = app_info.get("version", "1.0")
+            self._save_installed()
+
+            self.speak(f"{name} updated to version {app_info.get('version', '1.0')}.")
+            self.window.update_text(f"{name} updated.")
+        except urllib.error.URLError:
+            self.speak("Download failed. No internet.")
+            self.window.update_text("Download failed.")
+        except Exception:
+            self.speak("Update failed.")
+            self.window.update_text("Update error.")
 
     def _uninstall(self, app_info):
         name = app_info.get("name", "Unknown")
@@ -196,7 +259,19 @@ class AppStore(SoftApp):
         for app_id, info in self.installed.items():
             name = info.get("name", app_id)
             cat = info.get("category", "App")
-            root.add_child(MenuNode(f"{name} ({cat})"))
+            ver = info.get("version", "?")
+
+            catalog_ver = None
+            for a in self.catalog:
+                if a.get("id", a.get("name", "")) == app_id:
+                    catalog_ver = a.get("version")
+                    break
+
+            tag = ""
+            if catalog_ver and _version_newer(catalog_ver, ver):
+                tag = f" [Update: v{catalog_ver}]"
+
+            root.add_child(MenuNode(f"{name} v{ver} ({cat}){tag}"))
         root.add_child(MenuNode("Back", self._build_menu_back))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
