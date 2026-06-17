@@ -26,7 +26,7 @@ class StealthWindow:
         self.bg_color = win32api.RGB(0, 0, 0) # Default Black
         self.font_height = 48
         self.font_weight = 700
-        self.block_close = False
+        self.block_close = True
         
         self.thread = threading.Thread(target=self._create_window)
         self.thread.daemon = True
