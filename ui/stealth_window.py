@@ -26,6 +26,7 @@ class StealthWindow:
         self.bg_color = win32api.RGB(0, 0, 0) # Default Black
         self.font_height = 48
         self.font_weight = 700
+        self.block_close = False
         
         self.thread = threading.Thread(target=self._create_window)
         self.thread.daemon = True
@@ -163,10 +164,14 @@ class StealthWindow:
             return 0
         elif msg == win32con.WM_SYSCOMMAND:
             if wparam & 0xFFF0 == win32con.SC_CLOSE:
+                if self.block_close:
+                    return 0
                 win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
                 return 0
             return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
         elif msg == win32con.WM_CLOSE:
+            if self.block_close:
+                return 0
             win32gui.DestroyWindow(hwnd)
             return 0
         elif msg == 0x003D:  # WM_GETOBJECT
