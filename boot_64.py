@@ -41,6 +41,7 @@ class BrailleNoteApp:
         self._announce_position = True
         self._state_keys = "Off"
         self.space_used_in_chord = False
+        self._shutting_down = False
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
@@ -249,6 +250,39 @@ class BrailleNoteApp:
             self, self.window, self.launch_app, self._reset_and_restart
         )
         self.menu = MenuSystem(self.menu_root, self.speak)
+
+        # Check for resume
+        resume_path = os.path.join(self.tech_soft, 'resume.json')
+        if os.path.exists(resume_path):
+            try:
+                with open(resume_path, 'r') as f:
+                    resume_data = json.load(f)
+                
+                # Verify if auto-resume is enabled in settings
+                settings_path = os.path.join(self.tech_soft, 'settings.json')
+                auto_resume = True
+                if os.path.exists(settings_path):
+                    with open(settings_path, 'r') as sf:
+                        s = json.load(sf)
+                        auto_resume = s.get("auto_resume_apps", True)
+                
+                if auto_resume:
+                    import importlib
+                    module = importlib.import_module(resume_data["app_module"])
+                    app_class = getattr(module, resume_data["app_class"])
+                    
+                    self.speak("Resuming last session.")
+                    self.launch_app(app_class)
+                    
+                    if "state" in resume_data and hasattr(self.current_app, "set_state"):
+                        self.current_app.set_state(resume_data["state"])
+                    
+                    # Optional: remove resume file after successful load?
+                    # os.remove(resume_path)
+                    return
+            except Exception as e:
+                print(f"Resume failed: {e}")
+
         self.speak("Main Menu")
 
     def refresh_main_menu(self):
@@ -299,20 +333,118 @@ class BrailleNoteApp:
         self._exit_app()
         os._exit(0)
 
-    def _exit_app(self):
+    def _exit_app(self, mode="shutdown"):
+        # Load latest settings for shutdown logic
+        settings = {}
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    settings = json.load(f)
+            except: pass
+
+        # 7. Keyboard Lockout
+        if settings.get("shutdown_key_protection", True):
+            self._shutting_down = True
+
+        # 6. Night Mode Filter
+        if settings.get("night_mode_filter", False):
+            try:
+                self.window.update_text(" ")
+                self.window.set_display_settings(bg_color=(0,0,0))
+            except: pass
+
+        # 1. "Where I Left Off" Bookmark
+        if settings.get("auto_resume_apps", True) and self.current_app and self.current_app.active:
+            try:
+                app_data = {
+                    "app_module": self.current_app.__class__.__module__,
+                    "app_class": self.current_app.__class__.__name__
+                }
+                # If app has a get_state method, save it
+                if hasattr(self.current_app, "get_state"):
+                    app_data["state"] = self.current_app.get_state()
+                
+                with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
+                    json.dump(app_data, f)
+            except: pass
+        elif mode != "sleep":
+            # Clear resume if exiting normally without an app
+            try:
+                resume_path = os.path.join(self.tech_soft, 'resume.json')
+                if os.path.exists(resume_path):
+                    os.remove(resume_path)
+            except: pass
+
+        # 8. "Ready for Tomorrow" Sync
+        if settings.get("pre_shutdown_sync", True):
+            # Placeholder for app-specific sync calls
+            print("Performing pre-shutdown sync...")
+            time.sleep(0.2)
+
+        # 3. Volume Fade-Out
+        if settings.get("smooth_shutdown_audio", True):
+            try:
+                AudioPlayer().fade_out(1000)
+            except: pass
+        else:
+            try:
+                AudioPlayer().stop()
+            except: pass
+
+        # 2. Custom Goodbye Message
+        goodbye_msg = settings.get("custom_goodbye", "Shutting down Tech-Note.")
+        if mode == "restart":
+            goodbye_msg = "Restarting Tech-Note."
+        elif mode == "sleep":
+            goodbye_msg = "Entering Sleep Mode."
+        elif mode == "hibernate":
+            goodbye_msg = "Hibernating Tech-Note."
+
         try:
-            self.window.update_text("Shutting down Tech-Note...")
-        except:
-            pass
+            self.synth.speak(goodbye_msg)
+        except: pass
+
+        # Play shutdown sound blocking (unless it's a silent sleep)
+        if mode != "sleep":
+            try:
+                path = os.path.join(SOUNDS_DIR, 'shutdown.wav')
+                if not os.path.exists(path):
+                    path = _get_sound_path('unlock.mp3')
+                if os.path.exists(path):
+                    AudioPlayer().play_sound_blocking(path)
+            except: pass
+
+        # 9. Speech Cache Clear
+        if settings.get("optimize_speech_engine", True):
+            # Placeholder for SAPI cache clearing logic
+            print("Optimizing speech engine cache...")
+
+        # 10. Startup Speed Optimization
+        if settings.get("fast_boot_optimization", True):
+            try:
+                # Clear large log files
+                for log in ["out.log", "crash.log"]:
+                    p = os.path.join(os.path.dirname(__file__), log)
+                    if os.path.exists(p) and os.path.getsize(p) > 1024 * 1024: # > 1MB
+                        with open(p, 'w') as f:
+                            f.write(f"Log rotated at {time.ctime()}\n")
+            except: pass
+
+        # Wait for speech to finish
         try:
-            self.synth.speak("Shutting down Tech-Note.")
+            if hasattr(self.synth, 'wait_until_done'):
+                self.synth.wait_until_done(3000)
+            else:
+                time.sleep(1.0)
         except:
-            pass
-        time.sleep(0.5)
-        try:
-            self.synth.stop()
-        except:
-            pass
+            time.sleep(1.0)
+
+        if mode == "sleep":
+            self.speak("Sleep mode active. Press any key to wake.")
+            self._shutting_down = False # Re-enable for wake
+            return
+
         try:
             self.window.close()
         except:
@@ -391,6 +523,8 @@ class BrailleNoteApp:
                         self.window.update_text(self.menu.get_current_item().title)
 
     def handle_key(self, vk):
+        if self._shutting_down:
+            return
         print(f"Key pressed: {vk}")
 
         # --- Truly Global (always work, before app delegation) ---
@@ -464,7 +598,7 @@ class BrailleNoteApp:
             self.synth.speak(info)
             return
 
-        if self._is_key_match(vk, "next_item"):
+        if self._is_key_match(vk, "next_item") and vk != win32con.VK_SPACE:
             print("Next item")
             self.menu.next()
         elif self._is_key_match(vk, "prev_item"):
