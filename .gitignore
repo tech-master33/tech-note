@@ -14,5 +14,13 @@ temp/
 netlify.toml
 *.lock
 public/
-netlify-site/apps/
 project/
+
+# User data
+notes.json
+habits.json
+alarms.json
+installed_apps.json
+settings.json
+account.json
+resume.json
