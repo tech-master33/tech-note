@@ -517,6 +517,16 @@ class BrailleNoteApp:
             self._exit_app()
             return
 
+        # Block global shortcuts when locked
+        from apps.lock_screen import LockScreenApp
+        if isinstance(self.current_app, LockScreenApp):
+            if self.current_app and self.current_app.active:
+                try:
+                    self.current_app.on_key(vk)
+                except Exception as e:
+                    print(f"Lock screen on_key error: {e}")
+                return
+
         # Power menu (layout-aware backtick)
         is_setup = isinstance(self.current_app, TechNoteSetup)
         if vk == self._power_vk or (is_setup and vk in (0xC0, 0xDF)) or self._is_key_match(vk, "power_menu"):
