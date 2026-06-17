@@ -2,6 +2,7 @@ import os
 import json
 import re
 import win32con
+import win32api
 from core.app_base import SoftApp
 from core.menu import MenuSystem, MenuNode
 from core.config import TECH_SOFT
@@ -164,14 +165,14 @@ class TechCalc(SoftApp):
         elif vk == 0x6E:
             char = "."
         elif vk == 0x37:
-            shift = bool(win32con.VK_SHIFT & 0x8000)
+            shift = bool(win32api.GetKeyState(win32con.VK_SHIFT) & 0x8000)
             char = "%" if shift else "7"
         elif vk == 0x38:
             char = "*"
         elif vk == 0x39:
             char = "("
         elif vk == 0x30:
-            shift = bool(win32con.VK_SHIFT & 0x8000)
+            shift = bool(win32api.GetKeyState(win32con.VK_SHIFT) & 0x8000)
             char = ")" if shift else "0"
         elif vk == 0xDB:
             char = "("

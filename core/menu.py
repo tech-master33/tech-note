@@ -22,18 +22,29 @@ def _get_scheme_fallback(name):
     default_dir = os.path.join(SOUNDS_DIR, 'default')
     return os.path.join(default_dir, name)
 
-def play_click():
+def play_move():
     if SOUND_SCHEME == "Minimal":
         return
     path = _get_sound_path('Focus.wav')
-    if not os.path.exists(path):
-        path = _get_sound_path('clicked.ogg')
+    if os.path.exists(path):
+        _audio_player.play_file(path)
+    elif SOUND_SCHEME != "Default":
+        fallback = _get_scheme_fallback('Focus.wav')
+        if os.path.exists(fallback):
+            _audio_player.play_file(fallback)
+
+def play_click():
+    if SOUND_SCHEME == "Minimal":
+        return
+    path = _get_sound_path('clicked.ogg')
     if not os.path.exists(path):
         path = _get_sound_path('clicked.wav')
     if os.path.exists(path):
         _audio_player.play_file(path)
     elif SOUND_SCHEME != "Default":
-        fallback = _get_scheme_fallback('Focus.wav')
+        fallback = _get_scheme_fallback('clicked.ogg')
+        if not os.path.exists(fallback):
+            fallback = _get_scheme_fallback('clicked.wav')
         if os.path.exists(fallback):
             _audio_player.play_file(fallback)
 
@@ -67,12 +78,14 @@ class MenuSystem:
         if not self.current_node.children:
             return
         self.current_index = (self.current_index + 1) % len(self.current_node.children)
+        play_move()
         self.announce_current()
 
     def previous(self):
         if not self.current_node.children:
             return
         self.current_index = (self.current_index - 1) % len(self.current_node.children)
+        play_move()
         self.announce_current()
 
     def select(self):
@@ -99,6 +112,7 @@ class MenuSystem:
             parent = self.current_node.parent
             self.current_index = parent.children.index(self.current_node)
             self.current_node = parent
+            play_move()
             self.announce_current()
         else:
             self.speak("Main Menu")
@@ -112,6 +126,7 @@ class MenuSystem:
             item = self.current_node.children[idx]
             if item.title.lower().startswith(char):
                 self.current_index = idx
+                play_move()
                 self.announce_current()
                 return
 
@@ -142,52 +157,34 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.tutorial_app import TutorialApp
     from apps.game_center import GameCenter
     from apps.app_store import AppStore
+    from apps.book_reader import BookReaderApp
+    from apps.voice_memo import VoiceMemoApp
+    from apps.calendar_app import CalendarApp
+    from apps.notes_app import NotesApp
     root = MenuNode("Main Menu")
     
-    # Tutorial
-    root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
-    
-    # Word Processor
     root.add_child(MenuNode("Word Processor", lambda: app_callback(TechEdit), "w"))
-    
-    # Settings App
-    root.add_child(MenuNode("Settings App", lambda: app_callback(
-        lambda m, w: SettingsApp(m, w, on_reset_account=on_reset_account)
-    ), "s"))
-    
-    # Planner
+    root.add_child(MenuNode("Book Reader", lambda: app_callback(BookReaderApp), "b"))
+    root.add_child(MenuNode("Voice Memos", lambda: app_callback(VoiceMemoApp), "v"))
+    root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
+    root.add_child(MenuNode("Calendar", lambda: app_callback(CalendarApp), "d"))
     root.add_child(MenuNode("Planner", lambda: app_callback(PlannerApp), "p"))
-    
-    # Address List
     root.add_child(MenuNode("Address List", lambda: app_callback(AddressListApp), "a"))
-    
-    # Email
+    root.add_child(MenuNode("Notes", lambda: app_callback(NotesApp), "n"))
     root.add_child(MenuNode("Email", lambda: app_callback(EmailApp), "e"))
-    
-    # Internet
     root.add_child(MenuNode("Internet", lambda: app_callback(InternetApp), "i"))
-    
-    # Chat
     root.add_child(MenuNode("Chat", lambda: app_callback(ChatApp), "h"))
-
-    # Media Center
     media = root.add_child(MenuNode("Media Center", shortcut="m"))
     media.add_child(MenuNode("Media Player", lambda: app_callback(MediaPlayerApp)))
     media.add_child(MenuNode("FM Radio", lambda: app_callback(FMRadioApp)))
-    
-    # Calculator
-    root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
-    
-    # Game Center
-    root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
-    
-    # File Manager
     root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
-    
-    # App Store
+    root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
     root.add_child(MenuNode("App Store", lambda: app_callback(AppStore), "l"))
+    root.add_child(MenuNode("Settings", lambda: app_callback(
+        lambda m, w: SettingsApp(m, w, on_reset_account=on_reset_account)
+    ), "s"))
+    root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
     
-    # Installed apps from App Store
     _add_installed_apps(root, app_callback)
     
     return root

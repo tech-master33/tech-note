@@ -17,7 +17,8 @@ class SettingsApp(SoftApp):
         self.settings = {
             "theme": "Dark", "bg_color": "Black", "font_size": "Medium",
             "time_format": "12h", "startup_sound": "On",
-            "keyboard_layout": "US", "update_channel": "stable"
+            "keyboard_layout": "US", "update_channel": "stable",
+            "auto_update_on_startup": False
         }
         self.load_settings()
         self.adjust_mode = None
@@ -58,6 +59,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Startup Sound", lambda: self._enter_adjust("startup_sound")))
         root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_adjust("keyboard_layout")))
         root.add_child(MenuNode("Update Channel", lambda: self._enter_adjust("update_channel")))
+        root.add_child(MenuNode("Auto-Update on Startup", lambda: self._enter_adjust("auto_update_on_startup")))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -67,8 +69,9 @@ class SettingsApp(SoftApp):
         self._announce_main()
 
     def _about(self):
-        self.speak("Tech-Note. A self voicing keyboard driven interface for Windows.")
-        self.window.update_text("Tech-Note v1.0")
+        from core.version import VERSION
+        self.speak(f"Tech-Note version {VERSION}. A self voicing keyboard driven interface for Windows.")
+        self.window.update_text(f"Tech-Note v{VERSION}")
 
     def load_settings(self):
         if os.path.exists(self.settings_file):
@@ -138,10 +141,6 @@ class SettingsApp(SoftApp):
                 return
             if vk == win32con.VK_BACK:
                 self.account_menu.previous()
-            elif vk == win32con.VK_DOWN:
-                self.account_menu.next()
-            elif vk == win32con.VK_UP:
-                self.account_menu.previous()
             elif vk == win32con.VK_RETURN:
                 self.account_menu.select()
             elif 0x41 <= vk <= 0x5A:
@@ -161,10 +160,6 @@ class SettingsApp(SoftApp):
             return
 
         if vk == win32con.VK_BACK:
-            self.menu.previous()
-        elif vk == win32con.VK_DOWN:
-            self.menu.next()
-        elif vk == win32con.VK_UP:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -313,6 +308,9 @@ class SettingsApp(SoftApp):
             self.settings[key] = opts[(curr + direction) % 3]
             self.speak(self.settings[key])
             self._apply_display_settings()
+        elif key == "auto_update_on_startup":
+            self.settings[key] = not self.settings[key]
+            self.speak("On" if self.settings[key] else "Off")
 
         self.window.update_text(key.replace('_', ' ').title() + ": " + str(self.settings[key]))
         self.save_settings()
@@ -416,56 +414,11 @@ class SettingsApp(SoftApp):
             self.speak("Could not switch branch.")
 
     def _check_for_updates(self):
-        self.speak("Checking for updates. Please wait.")
-        self.window.update_text("Updating...")
         try:
-            branch = "main" if self.settings.get("update_channel") == "stable" else "testing"
-            subprocess.run(
-                ["git", "checkout", branch], cwd=BASE_DIR,
-                capture_output=True, text=True, timeout=30
-            )
-            result = subprocess.run(
-                ["git", "pull"], cwd=BASE_DIR,
-                capture_output=True, text=True, timeout=60
-            )
-            if result.returncode != 0:
-                subprocess.run(
-                    ["git", "branch", "--set-upstream-to", f"origin/{branch}", branch],
-                    cwd=BASE_DIR, capture_output=True, text=True, timeout=30
-                )
-                result = subprocess.run(
-                    ["git", "pull"], cwd=BASE_DIR,
-                    capture_output=True, text=True, timeout=60
-                )
-            if result.returncode == 0:
-                out = result.stdout.strip()
-                if "Already up to date" in out:
-                    self.speak("Already up to date.")
-                else:
-                    self.speak("Update downloaded.")
-                    self._install_requirements()
-                    self._restart_app()
-            else:
-                self.speak("Update failed. Check your internet.")
-        except subprocess.TimeoutExpired:
-            self.speak("Update timed out.")
-        except FileNotFoundError:
-            self.speak("Git not found.")
+            from core.updater import check_now
+            check_now(synth=self.synth, window=self.window)
         except Exception:
-            self.speak("Update error.")
-
-    def _install_requirements(self):
-        req_path = os.path.join(BASE_DIR, 'requirements.txt')
-        if not os.path.exists(req_path):
-            return
-        try:
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-r", req_path],
-                cwd=BASE_DIR, capture_output=True, text=True, timeout=120
-            )
-            self.speak("Requirements updated.")
-        except Exception:
-            self.speak("Failed to update requirements.")
+            self.speak("Update check failed.")
 
     def _start_pin_reset(self):
         if not os.path.exists(ACCOUNT_PATH):

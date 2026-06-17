@@ -18,7 +18,23 @@ class GameCenter(SoftApp):
 
     def _build_menu(self):
         root = MenuNode("Game Center")
-        root.add_child(MenuNode("Puzzle", self._open_puzzle))
+
+        builtins = [
+            ("Puzzle", "puzzle_game", "PuzzleGame"),
+            ("Snake", "snake", "SnakeGame"),
+            ("Solitaire", "solitaire", "SolitaireGame"),
+            ("Sudoku", "sudoku", "SudokuGame"),
+            ("Minesweeper", "minesweeper", "MinesweeperGame"),
+            ("Memory Match", "memory_match", "MemoryMatchGame"),
+            ("2048", "game2048", "Game2048"),
+            ("Blackjack", "blackjack", "BlackjackGame"),
+            ("Hangman", "hangman", "HangmanGame"),
+            ("Connect Four", "connect_four", "ConnectFourGame"),
+            ("Tic Tac Toe", "tictactoe", "TicTacToeGame"),
+        ]
+
+        for name, module, cls_name in builtins:
+            root.add_child(MenuNode(name, lambda m=module, c=cls_name: self._load_builtin(m, c)))
 
         installed_games = self._load_installed_games()
         for name, loader in installed_games:
@@ -26,6 +42,14 @@ class GameCenter(SoftApp):
 
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
+
+    def _load_builtin(self, module_name, class_name):
+        try:
+            mod = importlib.import_module(f"apps.{module_name}")
+            cls = getattr(mod, class_name)
+            self.manager.launch_app(lambda m, w, c=cls: c(m, w))
+        except Exception as e:
+            self.speak(f"Failed to load {module_name}.")
 
     def _load_installed_games(self):
         games = []
@@ -65,17 +89,13 @@ class GameCenter(SoftApp):
                                        if isinstance(v, type) and hasattr(v, 'on_key') and hasattr(v, 'exit_app')]
                             cls = classes[0] if classes else None
                         if cls:
-                            self.manager.launch_app(lambda c=cls: c)
+                            self.manager.launch_app(lambda m, w, c=cls: c(m, w))
                     except Exception as e:
                         print(f"Failed to load game {mn}: {e}")
                 return load
 
             games.append((name, make_loader()))
         return games
-
-    def _open_puzzle(self):
-        from apps.puzzle_game import PuzzleGame
-        self.manager.launch_app(lambda m, w: PuzzleGame(m, w))
 
     def on_focus(self):
         item = self.menu.get_current_item()

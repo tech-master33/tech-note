@@ -1,5 +1,7 @@
 import os
+import time
 import string
+import shutil
 import win32con
 import win32file
 import win32api
@@ -52,6 +54,28 @@ def _get_drive_list():
     return drives
 
 
+def _format_size(size_bytes):
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+
+
+def _format_date(timestamp):
+    try:
+        t = time.localtime(timestamp)
+        return time.strftime("%B %d, %Y", t)
+    except:
+        return "Unknown"
+
+
+SORT_MODES = ["Name", "Date", "Size", "Type"]
+
+
 class TechFiles(SoftApp):
     DRIVE_MENU = 0
     FILE_MENU = 1
@@ -63,6 +87,12 @@ class TechFiles(SoftApp):
         self.path = None
         self.state = self.FILE_MENU
         self._saved_menu = None
+        self.items = []
+        self.sort_mode = 0
+        self.clipboard = None
+        self.input_mode = None
+        self.input_buf = ""
+        self.confirm_delete = False
         self._open_drive(0)
 
     def _open_drive(self, index):
@@ -70,9 +100,17 @@ class TechFiles(SoftApp):
             self.drive_index = index
             name, root_path = self.drives[index]
             self.path = root_path
-            self.speak(f"File Manager. {name}")
             self.state = self.FILE_MENU
             self.refresh()
+
+    def _display_path(self):
+        if not self.path:
+            return "File Manager"
+        label, root = self.drives[self.drive_index]
+        relative = self.path[len(root):]
+        if relative:
+            return f"{label}:{os.sep}{relative}"
+        return f"{label}:{os.sep}"
 
     def _show_drive_menu(self):
         self._saved_menu = self.menu
@@ -89,10 +127,34 @@ class TechFiles(SoftApp):
 
     def refresh(self):
         try:
-            self.items = sorted(os.listdir(self.path))
+            self.items = os.listdir(self.path)
         except (FileNotFoundError, PermissionError):
             self.items = []
+        self._sort_items()
         self._build_menu()
+
+    def _sort_items(self):
+        mode = SORT_MODES[self.sort_mode]
+        items_with_info = []
+        for item in self.items:
+            full = os.path.join(self.path, item)
+            try:
+                is_dir = os.path.isdir(full)
+                stat = os.stat(full)
+                items_with_info.append((item, is_dir, stat.st_mtime, stat.st_size))
+            except:
+                items_with_info.append((item, False, 0, 0))
+
+        if mode == "Name":
+            items_with_info.sort(key=lambda x: x[0].lower())
+        elif mode == "Date":
+            items_with_info.sort(key=lambda x: x[2], reverse=True)
+        elif mode == "Size":
+            items_with_info.sort(key=lambda x: (x[1], -x[3]))
+        elif mode == "Type":
+            items_with_info.sort(key=lambda x: (not x[1], x[0].lower()))
+
+        self.items = [x[0] for x in items_with_info]
 
     def _build_menu(self):
         label = os.path.basename(self.path) or self.path
@@ -110,6 +172,16 @@ class TechFiles(SoftApp):
             root.add_child(MenuNode("Empty Folder"))
 
         self.menu = MenuSystem(root, self.speak)
+        self._announce_folder()
+
+    def _announce_folder(self):
+        count = len(self.items)
+        path = self._display_path()
+        sort = SORT_MODES[self.sort_mode]
+        self.speak(f"{path}. {count} item{'s' if count != 1 else ''}. Sorted by {sort}.")
+        item = self.menu.get_current_item()
+        if item:
+            self.window.update_text(f"{path} - {item.title}")
 
     def _go_up(self):
         if self.path is None:
@@ -125,23 +197,46 @@ class TechFiles(SoftApp):
         filename = os.path.basename(path)
         self.speak(f"File: {filename}")
 
+    def _show_file_info(self):
+        item = self.menu.get_current_item()
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            return
+        clean = item.title.replace("Folder: ", "")
+        full = os.path.join(self.path, clean)
+        try:
+            stat = os.stat(full)
+            is_dir = os.path.isdir(full)
+            size = _format_size(stat.st_size) if not is_dir else f"{len(os.listdir(full))} items"
+            modified = _format_date(stat.st_mtime)
+            read_only = "Read-only" if os.access(full, os.W_OK) == False else "Read-write"
+            if is_dir:
+                self.speak(f"{clean}. Folder. {size}. Modified {modified}.")
+            else:
+                self.speak(f"{clean}. {size}. Modified {modified}. {read_only}.")
+        except Exception:
+            self.speak("Cannot read file info.")
+
     def on_focus(self):
         if self.state == self.DRIVE_MENU:
             return
-        self._build_menu()
-        item = self.menu.get_current_item()
-        title = item.title if item else "File Manager"
-        self.window.update_text("Files: " + title)
-        self.speak("File Manager. " + title)
+        self.refresh()
 
     def on_key(self, vk):
+        if self.input_mode:
+            self._handle_input(vk)
+            return
+
+        if self.confirm_delete:
+            self._handle_delete_confirm(vk)
+            return
+
         if vk == win32con.VK_ESCAPE:
             if self.state == self.DRIVE_MENU:
                 self.menu = self._saved_menu
                 self.state = self.FILE_MENU
                 item = self.menu.get_current_item()
                 if item:
-                    self.window.update_text("Files: " + item.title)
+                    self.window.update_text(f"{self._display_path()} - {item.title}")
                 return
             self.exit_app()
             return
@@ -150,8 +245,39 @@ class TechFiles(SoftApp):
             self._delete_current()
             return
 
+        if vk == win32con.VK_F2 and self.state == self.FILE_MENU:
+            self._rename_current()
+            return
+
+        if vk == win32con.VK_F3 and self.state == self.FILE_MENU:
+            self._new_folder()
+            return
+
+        if vk == 0x49 and self.state == self.FILE_MENU:
+            self._show_file_info()
+            return
+
         if self.window.space_down and vk == 0x44:
             self._show_drive_menu()
+            return
+
+        if vk == win32con.VK_F5:
+            self.sort_mode = (self.sort_mode + 1) % len(SORT_MODES)
+            self.speak(f"Sorted by {SORT_MODES[self.sort_mode]}.")
+            self.refresh()
+            return
+
+        if vk == win32con.VK_F7:
+            self._start_search()
+            return
+
+        if self.clipboard and vk == win32con.VK_F8:
+            self._paste()
+            return
+
+        if vk == win32con.VK_F9 and self.clipboard:
+            self.clipboard = None
+            self.speak("Clipboard cleared.")
             return
 
         if vk == win32con.VK_BACK:
@@ -163,7 +289,7 @@ class TechFiles(SoftApp):
 
         item = self.menu.get_current_item()
         if item:
-            self.window.update_text("Files: " + item.title)
+            self.window.update_text(f"{self._display_path()} - {item.title}")
 
     def on_key_up(self, vk):
         if vk == win32con.VK_SPACE:
@@ -172,24 +298,178 @@ class TechFiles(SoftApp):
             self.menu.next()
             item = self.menu.get_current_item()
             if item:
-                self.window.update_text("Files: " + item.title)
+                self.window.update_text(f"{self._display_path()} - {item.title}")
 
     def _delete_current(self):
         item = self.menu.get_current_item()
-        if item and item.title not in ("Parent Folder", "Empty Folder"):
-            clean = item.title.replace("Folder: ", "")
-            full = os.path.join(self.path, clean)
-            try:
-                if os.path.isfile(full):
-                    os.remove(full)
-                    self.speak("File deleted.")
-                elif os.path.isdir(full):
-                    import shutil
-                    shutil.rmtree(full)
-                    self.speak("Folder deleted.")
-                self.refresh()
-            except Exception:
-                self.speak("Delete failed.")
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            return
+        clean = item.title.replace("Folder: ", "")
+        self.confirm_delete = True
+        self.speak(f"Delete {clean}? Press Enter to confirm, Escape to cancel.")
+        self.window.update_text(f"Delete {clean}? Enter=Yes, Escape=No")
+
+    def _handle_delete_confirm(self, vk):
+        self.confirm_delete = False
+        if vk == win32con.VK_RETURN:
+            item = self.menu.get_current_item()
+            if item and item.title not in ("Parent Folder", "Empty Folder"):
+                clean = item.title.replace("Folder: ", "")
+                full = os.path.join(self.path, clean)
+                try:
+                    if os.path.isfile(full):
+                        os.remove(full)
+                        self.speak("File deleted.")
+                    elif os.path.isdir(full):
+                        shutil.rmtree(full)
+                        self.speak("Folder deleted.")
+                    self.refresh()
+                except Exception:
+                    self.speak("Delete failed.")
+        else:
+            self.speak("Cancelled.")
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text(f"{self._display_path()} - {item.title}")
+
+    def _rename_current(self):
+        item = self.menu.get_current_item()
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            return
+        clean = item.title.replace("Folder: ", "")
+        self.input_mode = "rename"
+        self.input_buf = clean
+        self.speak(f"Rename {clean}. Enter new name.")
+        self.window.update_text(f"Rename: {clean}")
+
+    def _new_folder(self):
+        self.input_mode = "new_folder"
+        self.input_buf = ""
+        self.speak("Enter folder name.")
+        self.window.update_text("New Folder: ")
+
+    def _start_search(self):
+        self.input_mode = "search"
+        self.input_buf = ""
+        self.speak("Search. Enter filename.")
+        self.window.update_text("Search: ")
+
+    def _handle_input(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self.input_mode = None
+            self.speak("Cancelled.")
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text(f"{self._display_path()} - {item.title}")
+            return
+
+        if vk == win32con.VK_RETURN:
+            val = self.input_buf.strip()
+            if not val:
+                self.speak("Cannot be empty.")
+                return
+
+            if self.input_mode == "rename":
+                self._do_rename(val)
+            elif self.input_mode == "new_folder":
+                self._do_new_folder(val)
+            elif self.input_mode == "search":
+                self._do_search(val)
+            self.input_mode = None
+            return
+
+        if vk == win32con.VK_BACK:
+            if self.input_buf:
+                self.input_buf = self.input_buf[:-1]
+                self.window.update_text(f"{self.input_mode}: {self.input_buf}")
+            return
+
+        ch = self._vk_to_char(vk)
+        if ch:
+            self.input_buf += ch
+            self.window.update_text(f"{self.input_mode}: {self.input_buf}")
+
+    def _do_rename(self, new_name):
+        item = self.menu.get_current_item()
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            return
+        old_name = item.title.replace("Folder: ", "")
+        old_path = os.path.join(self.path, old_name)
+        new_path = os.path.join(self.path, new_name)
+        try:
+            if os.path.exists(new_path):
+                self.speak("Name already exists.")
+                return
+            os.rename(old_path, new_path)
+            self.speak(f"Renamed to {new_name}.")
+            self.refresh()
+        except Exception:
+            self.speak("Rename failed.")
+
+    def _do_new_folder(self, name):
+        path = os.path.join(self.path, name)
+        try:
+            if os.path.exists(path):
+                self.speak("Name already exists.")
+                return
+            os.makedirs(path)
+            self.speak(f"Created folder {name}.")
+            self.refresh()
+        except Exception:
+            self.speak("Failed to create folder.")
+
+    def _do_search(self, query):
+        matches = []
+        query_lower = query.lower()
+        for item in self.items:
+            if query_lower in item.lower():
+                matches.append(item)
+
+        if not matches:
+            self.speak(f"No matches for {query}.")
+            return
+
+        root = MenuNode(f"Search: {query}")
+        for m in matches:
+            full = os.path.join(self.path, m)
+            if os.path.isdir(full):
+                root.add_child(MenuNode(f"Folder: {m}", lambda p=full: self._open_dir(p)))
+            else:
+                root.add_child(MenuNode(m, lambda p=full: self._open_file(p)))
+        root.add_child(MenuNode("Back", self._back_from_search))
+        self._saved_menu = self.menu
+        self.menu = MenuSystem(root, self.speak)
+        self.speak(f"{len(matches)} match{'es' if len(matches) != 1 else ''}. " + self.menu.get_current_item().title)
+        self.window.update_text(f"Search: {self.menu.get_current_item().title}")
+
+    def _back_from_search(self):
+        self.menu = self._saved_menu
+        self._announce_folder()
+
+    def _paste(self):
+        if not self.clipboard:
+            self.speak("Clipboard empty.")
+            return
+        src = self.clipboard["path"]
+        name = os.path.basename(src)
+        dst = os.path.join(self.path, name)
+        try:
+            if os.path.exists(dst):
+                self.speak("Name already exists in this folder.")
+                return
+            if self.clipboard["mode"] == "cut":
+                shutil.move(src, dst)
+                self.speak(f"Moved {name}.")
+            else:
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+                self.speak(f"Copied {name}.")
+            self.clipboard = None
+            self.refresh()
+        except Exception:
+            self.speak("Paste failed.")
 
     def get_help_text(self):
-        return "File Manager. Space for next, Backspace for previous. Enter to open. Space+D for drive menu. F1 to delete. Escape to exit."
+        return "File Manager. Space next, Backspace previous. Enter open. F1 delete, F2 rename, F3 new folder. F5 sort, F7 search. F8 paste, F9 clear clipboard. I info. Space+D drives. Escape exit."

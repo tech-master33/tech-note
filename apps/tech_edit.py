@@ -1,7 +1,6 @@
 import os
 import json
 import win32con
-import win32api
 from core.app_base import SoftApp
 from core.config import TECH_SOFT
 
@@ -13,26 +12,36 @@ class TechEdit(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.text = ""
+        self.cursor = 0
         self.filename = None
         self.state = STATE_EDIT
         self.doc_dir = os.path.join(TECH_SOFT, 'documents')
         os.makedirs(self.doc_dir, exist_ok=True)
         
-        # For Open dialog
         self.file_list = []
         self.file_index = 0
-        
-        # For Save As dialog
         self.input_buf = ""
 
     def on_focus(self):
         if self.state == STATE_EDIT:
+            self._update_display()
             self.speak("Word Processor. F1 Save, F2 Save As, F3 Open.")
-            self.window.update_text("Tech Edit")
         elif self.state == STATE_OPEN:
             self._enter_open_state()
         elif self.state == STATE_SAVE_AS:
             self._enter_save_as_state()
+
+    def _update_display(self):
+        if not self.text:
+            self.window.update_text("Word Processor - Empty document")
+            return
+        before = self.text[:self.cursor]
+        at_cursor = self.text[self.cursor] if self.cursor < len(self.text) else " "
+        after = self.text[self.cursor + 1:]
+        display = f"{before}[{at_cursor}]{after}"
+        lines = display.count('\n') + 1
+        pos = f"Line {lines}, Col {len(before.split(chr(10))[-1]) + 1}"
+        self.window.update_text(f"{pos} - {display}")
 
     def _enter_open_state(self):
         self.state = STATE_OPEN
@@ -59,7 +68,7 @@ class TechEdit(SoftApp):
                 with open(os.path.join(self.doc_dir, self.filename), 'w') as f:
                     json.dump({"text": self.text}, f)
                 self.speak("File saved.")
-            except Exception as e:
+            except Exception:
                 self.speak("Failed to save file.")
 
     def on_key(self, vk):
@@ -86,17 +95,45 @@ class TechEdit(SoftApp):
             return
 
         if vk == win32con.VK_BACK:
-            if self.text:
-                self.text = self.text[:-1]
-                # Optional: speak the deleted character or "Deleted"
-                self.speak("Deleted")
+            if self.cursor > 0:
+                self.text = self.text[:self.cursor - 1] + self.text[self.cursor:]
+                self.cursor -= 1
+                self._update_display()
             return
 
-        # Simple text input for demo (can be expanded)
+        if vk == win32con.VK_HOME:
+            self.cursor = 0
+            self._update_display()
+            return
+
+        if vk == win32con.VK_END:
+            self.cursor = len(self.text)
+            self._update_display()
+            return
+
+        if vk == win32con.VK_LEFT:
+            if self.cursor > 0:
+                self.cursor -= 1
+                self._update_display()
+            return
+
+        if vk == win32con.VK_RIGHT:
+            if self.cursor < len(self.text):
+                self.cursor += 1
+                self._update_display()
+            return
+
+        if vk == win32con.VK_RETURN:
+            self.text = self.text[:self.cursor] + '\n' + self.text[self.cursor:]
+            self.cursor += 1
+            self._update_display()
+            return
+
         ch = self._vk_to_char(vk)
-        if ch and ch != " ":
-            self.text += ch
-            self.speak(ch)
+        if ch:
+            self.text = self.text[:self.cursor] + ch + self.text[self.cursor:]
+            self.cursor += 1
+            self._update_display()
 
     def _handle_open_key(self, vk):
         if vk == win32con.VK_ESCAPE:
@@ -107,7 +144,7 @@ class TechEdit(SoftApp):
         if not self.file_list:
             return
 
-        if vk in (win32con.VK_BACK):
+        if vk == win32con.VK_BACK:
             self.file_index = (self.file_index - 1) % len(self.file_list)
             self._announce_file()
         elif vk == win32con.VK_RETURN:
@@ -120,8 +157,9 @@ class TechEdit(SoftApp):
                 return
             
             if self.state == STATE_EDIT:
-                self.text += " "
-                self.speak("Space")
+                self.text = self.text[:self.cursor] + ' ' + self.text[self.cursor:]
+                self.cursor += 1
+                self._update_display()
             elif self.state == STATE_OPEN:
                 if self.file_list:
                     self.file_index = (self.file_index + 1) % len(self.file_list)
@@ -138,9 +176,10 @@ class TechEdit(SoftApp):
                 data = json.load(f)
                 self.text = data.get("text", "")
             self.filename = filename
+            self.cursor = len(self.text)
             self.state = STATE_EDIT
-            self.speak(f"Opened {filename}")
-            self.window.update_text(f"Editing: {filename}")
+            self.speak(f"Opened {filename}. {len(self.text)} characters.")
+            self._update_display()
         except Exception:
             self.speak("Failed to open file.")
 
@@ -175,4 +214,4 @@ class TechEdit(SoftApp):
             self.speak(ch)
 
     def get_help_text(self):
-        return "Word Processor. Type to enter text. F1 to Save, F2 for Save As, F3 to Open. Press Escape to exit."
+        return "Word Processor. Type to enter text. Home/End for start/end of line. Left/Right to move cursor. F1 Save, F2 Save As, F3 Open. Escape to exit."
