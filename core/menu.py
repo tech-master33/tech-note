@@ -197,7 +197,7 @@ def _add_installed_apps(root, app_callback):
     import sys
     from core.config import TECH_SOFT
     INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
-    APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
+    APPS_DIR = os.path.join(TECH_SOFT, "store_apps")
     
     if not os.path.exists(INSTALLED_FILE):
         return

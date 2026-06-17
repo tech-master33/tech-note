@@ -14,7 +14,11 @@ temp/
 netlify.toml
 *.lock
 public/
+netlify-site/apps/
 project/
+
+# App Store downloaded apps (runtime, not source)
+.tech-soft/store_apps/
 
 # User data
 notes.json

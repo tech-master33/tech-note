@@ -8,7 +8,7 @@ from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT
 
 CATALOG_URL = "https://steady-licorice-d12c5f.netlify.app/catalog.json"
-APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
+APPS_DIR = os.path.join(TECH_SOFT, "store_apps")
 INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
 
 
@@ -153,6 +153,7 @@ class AppStore(SoftApp):
         self.window.update_text(f"Installing {name}...")
 
         try:
+            os.makedirs(APPS_DIR, exist_ok=True)
             req = urllib.request.Request(download_url, headers={"User-Agent": "TechNote/1.0"})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 code = resp.read().decode('utf-8')
@@ -198,6 +199,7 @@ class AppStore(SoftApp):
         self.window.update_text(f"Updating {name}...")
 
         try:
+            os.makedirs(APPS_DIR, exist_ok=True)
             req = urllib.request.Request(download_url, headers={"User-Agent": "TechNote/1.0"})
             with urllib.request.urlopen(req, timeout=30) as resp:
                 code = resp.read().decode('utf-8')
