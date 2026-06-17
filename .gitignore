@@ -17,10 +17,33 @@ public/
 netlify-site/apps/
 project/
 
-# App Store downloaded apps (runtime, not source)
-.tech-soft/store_apps/
+# App Store apps (users must install via App Store, not pre-included)
+apps/tictactoe.py
+apps/hangman.py
+apps/memory_match.py
+apps/connect_four.py
+apps/solitaire.py
+apps/sudoku.py
+apps/blackjack.py
+apps/game2048.py
+apps/snake.py
+apps/minesweeper.py
+apps/stopwatch.py
+apps/password_gen.py
+apps/alarm_clock.py
+apps/typing_test.py
+apps/calendar_app.py
+apps/weather_app.py
+apps/unit_converter.py
+apps/dice_roller.py
+apps/book_reader.py
+apps/voice_memo.py
+apps/habit_tracker.py
+apps/todo_list.py
+apps/notes_app.py
 
 # User data
+.tech-soft/
 notes.json
 habits.json
 alarms.json
