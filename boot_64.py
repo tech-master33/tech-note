@@ -509,15 +509,7 @@ class BrailleNoteApp:
             return
         print(f"Key pressed: {vk}")
 
-        # --- Truly Global (always work, before app delegation) ---
-
-        # Alt+F4 to exit
-        if vk == win32con.VK_F4 and (win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000):
-            print("Global Alt+F4: Exiting")
-            self._exit_app()
-            return
-
-        # Block global shortcuts when locked
+        # Block all global shortcuts when locked
         from apps.lock_screen import LockScreenApp
         if isinstance(self.current_app, LockScreenApp):
             if self.current_app and self.current_app.active:
