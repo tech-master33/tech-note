@@ -1,21 +1,21 @@
-function hash(password, salt) {
+async function hash(password, salt) {
   if (!salt) salt = crypto.getRandomValues(new Uint8Array(16));
   const enc = new TextEncoder();
-  const key = crypto.subtle.importSync('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
-  const bits = crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
   const keyHex = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
   const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
   return saltHex + ':' + keyHex;
 }
 
-function check(password, stored) {
+async function check(password, stored) {
   if (!stored || !stored.includes(':')) return false;
   const saltHex = stored.split(':')[0];
   const storedKey = stored.split(':')[1];
   const salt = new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b, 16)));
   const enc = new TextEncoder();
-  const key = crypto.subtle.importSync('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
-  const bits = crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
   const keyHex = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
   return keyHex === storedKey;
 }
@@ -45,13 +45,21 @@ function getDb() {
     next_room_id: 1,
     next_msg_id: 1,
   };
+  return DB;
+}
+
+async function initAdmins() {
+  const db = getDb();
+  if (db.admins_initialized) return;
   const ADMIN_USERS = ['natan', 'tech'];
   const ADMIN_PASSWORDS = { natan: 'Natan2014!', tech: 'tech' };
   for (const u of ADMIN_USERS) {
-    const id = DB.next_user_id++;
-    DB.users[u] = { id, username: u, password_hash: hash(ADMIN_PASSWORDS[u]), role: 'admin' };
+    if (!db.users[u]) {
+      const id = db.next_user_id++;
+      db.users[u] = { id, username: u, password_hash: await hash(ADMIN_PASSWORDS[u]), role: 'admin' };
+    }
   }
-  return DB;
+  db.admins_initialized = true;
 }
 
 async function register(body) {
@@ -61,19 +69,20 @@ async function register(body) {
   const db = getDb();
   if (db.users[u]) return jsonResp(409, { error: 'Username taken' });
   const id = db.next_user_id++;
-  db.users[u] = { id, username: u, password_hash: hash(p), role: 'user' };
+  db.users[u] = { id, username: u, password_hash: await hash(p), role: 'user' };
   return jsonResp(201, { user_id: id, username: u });
 }
 
 async function login(body) {
   const u = (body.username || '').trim();
   const p = body.password || '';
+  await initAdmins();
   const db = getDb();
   const user = db.users[u];
   if (!user) return jsonResp(401, { error: 'Invalid credentials' });
   if (!user.password_hash) {
-    user.password_hash = hash(p);
-  } else if (!check(p, user.password_hash)) {
+    user.password_hash = await hash(p);
+  } else if (!(await check(p, user.password_hash))) {
     return jsonResp(401, { error: 'Invalid credentials' });
   }
   return jsonResp(200, { user_id: user.id, username: user.username, role: user.role });
@@ -83,9 +92,9 @@ async function changePassword(uid, body) {
   const db = getDb();
   const user = Object.values(db.users).find(u => u.id === uid);
   if (!user) return jsonResp(404, { error: 'User not found' });
-  if (!check(body.old_password || '', user.password_hash))
+  if (!(await check(body.old_password || '', user.password_hash)))
     return jsonResp(401, { error: 'Old password is incorrect' });
-  user.password_hash = hash(body.new_password);
+  user.password_hash = await hash(body.new_password);
   return jsonResp(200, { success: true });
 }
 
