@@ -1,5 +1,6 @@
 import os
 import json
+import datetime
 import win32con
 import urllib.request
 import urllib.error
@@ -7,9 +8,14 @@ from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT
 
-CATALOG_URL = "https://steady-licorice-d12c5f.netlify.app/catalog.json"
-APPS_DIR = os.path.join(TECH_SOFT, "store_apps")
+CATALOG_URL = "https://tech-master33.github.io/tech-note/catalog.json"
+APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
 INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
+FAVORITES_FILE = os.path.join(TECH_SOFT, "favorites.json")
+DOWNLOADS_FILE = os.path.join(TECH_SOFT, "download_counts.json")
+CATALOG_CACHE = os.path.join(TECH_SOFT, "catalog_cache.json")
+
+CATEGORIES = ["Games", "Productivity", "Utilities", "Media"]
 
 
 def _version_newer(v1, v2):
@@ -21,38 +27,156 @@ def _version_newer(v1, v2):
         return False
 
 
+def _is_new(app_info):
+    added = app_info.get("added_date", "")
+    if not added:
+        return False
+    try:
+        added_date = datetime.date.fromisoformat(added)
+        return (datetime.date.today() - added_date).days <= 7
+    except:
+        return False
+
+
 class AppStore(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.catalog = []
-        self.installed = self._load_installed()
+        self.installed = self._load_json(INSTALLED_FILE, {})
+        self.favorites = self._load_json(FAVORITES_FILE, [])
+        self.downloads = self._load_json(DOWNLOADS_FILE, {})
+        self._history = []
+        self._search_mode = False
+        self._search_text = ""
+        self._confirm_delete = None
         self._build_menu()
 
-    def _load_installed(self):
-        if os.path.exists(INSTALLED_FILE):
+    def _load_json(self, path, default):
+        if os.path.exists(path):
             try:
-                with open(INSTALLED_FILE, 'r') as f:
+                with open(path, 'r') as f:
                     return json.load(f)
             except:
                 pass
-        return {}
+        return default
 
-    def _save_installed(self):
+    def _save_json(self, path, data):
         try:
-            os.makedirs(os.path.dirname(INSTALLED_FILE), exist_ok=True)
-            with open(INSTALLED_FILE, 'w') as f:
-                json.dump(self.installed, f)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as f:
+                json.dump(data, f, indent=2)
         except:
             pass
 
+    def _save_installed(self):
+        self._save_json(INSTALLED_FILE, self.installed)
+
+    def _save_favorites(self):
+        self._save_json(FAVORITES_FILE, self.favorites)
+
+    def _save_downloads(self):
+        self._save_json(DOWNLOADS_FILE, self.downloads)
+
+    def _push_history(self):
+        self._history.append(self.menu)
+
+    def _pop_history(self):
+        if self._history:
+            self.menu = self._history.pop()
+            self.menu.announce_current()
+            return True
+        return False
+
     def _build_menu(self):
         root = MenuNode("App Store")
-        root.add_child(MenuNode("Games", self._show_category))
-        root.add_child(MenuNode("Apps", self._show_category))
+        root.add_child(MenuNode("Search", self._start_search))
+        root.add_child(MenuNode("Favorites", self._show_favorites))
+        for cat in CATEGORIES:
+            root.add_child(MenuNode(cat, self._show_category))
         root.add_child(MenuNode("My Installed Apps", self._show_installed))
         root.add_child(MenuNode("Refresh Catalog", self._fetch_catalog))
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
+
+    def _start_search(self):
+        self._search_mode = True
+        self._search_text = ""
+        self.speak("Type to search apps. Enter to search. Escape to cancel.")
+        self.window.update_text("Search: ")
+
+    def _do_search(self):
+        self._search_mode = False
+        query = self._search_text.strip().lower()
+        if not query:
+            self.speak("No search text.")
+            return
+        if not self.catalog:
+            self._fetch_catalog()
+        if not self.catalog:
+            self.speak("No catalog available.")
+            return
+        results = [a for a in self.catalog if query in a.get("name", "").lower() or query in a.get("description", "").lower()]
+        if not results:
+            self.speak("No results found.")
+            return
+        self._push_history()
+        root = MenuNode(f"Search: {self._search_text}")
+        for app_info in results:
+            root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
+        root.add_child(MenuNode("Back", self._back_from_search))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _back_from_search(self):
+        if self._pop_history():
+            return
+        self._build_menu()
+        self.menu.announce_current()
+
+    def _show_favorites(self):
+        if not self.favorites:
+            self.speak("No favorites yet.")
+            return
+        if not self.catalog:
+            self._fetch_catalog()
+        fav_apps = [a for a in self.catalog if a.get("id", a.get("name", "")) in self.favorites]
+        if not fav_apps:
+            self.speak("No favorites found in catalog.")
+            return
+        self._push_history()
+        root = MenuNode("Favorites")
+        for app_info in fav_apps:
+            root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
+        root.add_child(MenuNode("Back", self._back_from_favorites))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _back_from_favorites(self):
+        if self._pop_history():
+            return
+        self._build_menu()
+        self.menu.announce_current()
+
+    def _app_label(self, app_info):
+        name = app_info.get("name", "Unknown")
+        app_id = app_info.get("id", name)
+        tags = []
+        if app_id in self.favorites:
+            tags.append("*")
+        if _is_new(app_info):
+            tags.append("New")
+        if app_id in self.installed:
+            installed_ver = self.installed[app_id].get("version", "0")
+            catalog_ver = app_info.get("version", "0")
+            if _version_newer(catalog_ver, installed_ver):
+                tags.append("Update")
+            else:
+                tags.append("Installed")
+        dl = self.downloads.get(app_id, 0)
+        if dl > 0:
+            tags.append(f"{dl} dl")
+        tag_str = f" [{', '.join(tags)}]" if tags else ""
+        return f"{name}{tag_str}"
 
     def _fetch_catalog(self):
         self.speak("Fetching catalog. Please wait.")
@@ -62,12 +186,18 @@ class AppStore(SoftApp):
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
             self.catalog = data.get("apps", [])
+            self._save_json(CATALOG_CACHE, self.catalog)
             count = len(self.catalog)
             self.speak(f"Found {count} items in catalog.")
             self.window.update_text(f"{count} items found.")
         except urllib.error.URLError:
-            self.speak("No internet connection.")
-            self.window.update_text("No internet.")
+            cached = self._load_json(CATALOG_CACHE, [])
+            if cached:
+                self.catalog = cached
+                self.speak(f"Offline. Using cached catalog. {len(self.catalog)} items.")
+            else:
+                self.speak("No internet connection and no cached catalog.")
+                self.window.update_text("No internet.")
         except Exception:
             self.speak("Failed to load catalog.")
             self.window.update_text("Catalog error.")
@@ -89,25 +219,17 @@ class AppStore(SoftApp):
             self.speak(f"No {cat_name} available.")
             return
 
+        self._push_history()
         root = MenuNode(cat_name)
         for app_info in apps:
-            name = app_info.get("name", "Unknown")
-            app_id = app_info.get("id", name)
-            is_installed = app_id in self.installed
-            tag = ""
-            if is_installed:
-                installed_ver = self.installed[app_id].get("version", "0")
-                catalog_ver = app_info.get("version", "0")
-                if _version_newer(catalog_ver, installed_ver):
-                    tag = " [Update available]"
-                else:
-                    tag = " [Installed]"
-            root.add_child(MenuNode(f"{name}{tag}", lambda a=app_info: self._show_app(a)))
-        root.add_child(MenuNode("Back", self._build_menu_back))
+            root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
+        root.add_child(MenuNode("Back", self._back_from_category))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
 
-    def _build_menu_back(self):
+    def _back_from_category(self):
+        if self._pop_history():
+            return
         self._build_menu()
         self.menu.announce_current()
 
@@ -117,27 +239,75 @@ class AppStore(SoftApp):
         ver = app_info.get("version", "1.0")
         app_id = app_info.get("id", name)
         is_installed = app_id in self.installed
-        has_update = False
+        is_fav = app_id in self.favorites
+        dl = self.downloads.get(app_id, 0)
 
+        self._push_history()
         root = MenuNode(name)
         root.add_child(MenuNode(f"Version {ver}. {desc}"))
+
+        features = app_info.get("features", [])
+        if features:
+            root.add_child(MenuNode(f"Features: {', '.join(features)}"))
+
+        controls = app_info.get("controls", [])
+        if controls:
+            root.add_child(MenuNode(f"Controls: {', '.join(controls)}"))
+
+        if dl > 0:
+            root.add_child(MenuNode(f"Downloaded {dl} times"))
+
+        if _is_new(app_info):
+            root.add_child(MenuNode("Newly added!"))
 
         if is_installed:
             installed_ver = self.installed[app_id].get("version", "0")
             has_update = _version_newer(ver, installed_ver)
             if has_update:
                 root.add_child(MenuNode(f"Update (v{installed_ver} -> v{ver})", lambda: self._update_app(app_info)))
-            root.add_child(MenuNode("Uninstall", lambda: self._uninstall(app_info)))
+            root.add_child(MenuNode("Uninstall", lambda: self._start_uninstall(app_info)))
         else:
             root.add_child(MenuNode("Install", lambda: self._install(app_info)))
 
-        root.add_child(MenuNode("Back", self._browse_back))
+        if is_fav:
+            root.add_child(MenuNode("Remove from Favorites", lambda: self._toggle_favorite(app_id)))
+        else:
+            root.add_child(MenuNode("Add to Favorites", lambda: self._toggle_favorite(app_id)))
+
+        root.add_child(MenuNode("Back", self._back_from_app))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
 
-    def _browse_back(self):
+    def _back_from_app(self):
+        if self._pop_history():
+            return
         self._build_menu()
         self.menu.announce_current()
+
+    def _toggle_favorite(self, app_id):
+        if app_id in self.favorites:
+            self.favorites.remove(app_id)
+            self.speak("Removed from favorites.")
+        else:
+            self.favorites.append(app_id)
+            self.speak("Added to favorites.")
+        self._save_favorites()
+
+    def _start_uninstall(self, app_info):
+        name = app_info.get("name", "Unknown")
+        self._confirm_delete = app_info
+        self.speak(f"Are you sure you want to uninstall {name}? Enter to confirm, Escape to cancel.")
+        self.window.update_text(f"Uninstall {name}? Enter=Yes, Esc=No")
+
+    def _confirm_uninstall(self):
+        app_info = self._confirm_delete
+        self._confirm_delete = None
+        if app_info:
+            self._uninstall(app_info)
+
+    def _cancel_uninstall(self):
+        self._confirm_delete = None
+        self.speak("Uninstall cancelled.")
 
     def _install(self, app_info):
         name = app_info.get("name", "Unknown")
@@ -173,6 +343,9 @@ class AppStore(SoftApp):
                 "entry_point": app_info.get("entry_point", ""),
             }
             self._save_installed()
+
+            self.downloads[app_id] = self.downloads.get(app_id, 0) + 1
+            self._save_downloads()
 
             self.speak(f"{name} installed.")
             self.window.update_text(f"{name} installed.")
@@ -257,6 +430,7 @@ class AppStore(SoftApp):
             self.speak("No apps installed.")
             return
 
+        self._push_history()
         root = MenuNode("Installed Apps")
         for app_id, info in self.installed.items():
             name = info.get("name", app_id)
@@ -274,17 +448,54 @@ class AppStore(SoftApp):
                 tag = f" [Update: v{catalog_ver}]"
 
             root.add_child(MenuNode(f"{name} v{ver} ({cat}){tag}"))
-        root.add_child(MenuNode("Back", self._build_menu_back))
+        root.add_child(MenuNode("Back", self._back_from_installed))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
 
+    def _back_from_installed(self):
+        if self._pop_history():
+            return
+        self._build_menu()
+        self.menu.announce_current()
+
     def on_focus(self):
+        if self._search_mode:
+            self.window.update_text(f"Search: {self._search_text}")
+            return
         item = self.menu.get_current_item()
         title = item.title if item else "App Store"
-        self.speak("App Store. " + title)
-        self.window.update_text("App Store: " + title)
+        installed_count = len(self.installed)
+        self.speak(f"App Store. {installed_count} apps installed. {title}")
+        self.window.update_text(f"App Store: {title}")
 
     def on_key(self, vk):
+        if self._confirm_delete:
+            if vk == win32con.VK_RETURN:
+                self._confirm_uninstall()
+                return
+            if vk == win32con.VK_ESCAPE:
+                self._cancel_uninstall()
+                return
+            return
+
+        if self._search_mode:
+            if vk == win32con.VK_ESCAPE:
+                self._search_mode = False
+                self.speak("Search cancelled.")
+                return
+            if vk == win32con.VK_RETURN:
+                self._do_search()
+                return
+            if vk == win32con.VK_BACK:
+                self._search_text = self._search_text[:-1]
+                self.window.update_text(f"Search: {self._search_text}")
+                return
+            ch = self._vk_to_char(vk)
+            if ch:
+                self._search_text += ch
+                self.window.update_text(f"Search: {self._search_text}")
+            return
+
         if vk == win32con.VK_ESCAPE:
             self.exit_app()
             return
@@ -300,6 +511,8 @@ class AppStore(SoftApp):
             self.window.update_text("App Store: " + item.title)
 
     def on_key_up(self, vk):
+        if self._confirm_delete or self._search_mode:
+            return
         if vk == win32con.VK_SPACE:
             if getattr(self.manager, 'space_used_in_chord', False):
                 return
@@ -309,4 +522,8 @@ class AppStore(SoftApp):
                 self.window.update_text("App Store: " + item.title)
 
     def get_help_text(self):
-        return "App Store. Browse Games and Apps. Space for next, Backspace for previous. Enter to select."
+        if self._confirm_delete:
+            return "Confirm uninstall? Enter to confirm, Escape to cancel."
+        if self._search_mode:
+            return "Type to search. Enter to search. Escape to cancel."
+        return "App Store. Space next, Backspace previous, Enter select, S search."

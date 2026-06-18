@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Submit an App - TechNote App Store</title>
+<style>
+body { font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; background: #f8f9fa; }
+.header { background: #1a1a2e; color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; text-align: center; }
+.header h1 { color: white; margin: 0; }
+.header p { color: #a0a0c0; margin: 8px 0 0; }
+.section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+h2 { color: #1a1a2e; margin-top: 0; }
+label { display: block; margin-top: 12px; font-weight: 500; color: #1a1a2e; }
+input, textarea, select { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+textarea { height: 100px; resize: vertical; }
+.btn { display: inline-block; background: #1a1a2e; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; margin-top: 16px; text-decoration: none; }
+.btn:hover { background: #2a2a4e; }
+.back { display: inline-block; margin-bottom: 20px; color: #0f3460; text-decoration: none; }
+.back:hover { text-decoration: underline; }
+.steps { background: #f0f0f5; padding: 16px; border-radius: 8px; margin-top: 16px; }
+.steps h3 { margin-top: 0; color: #1a1a2e; }
+.steps ol { margin: 8px 0; padding-left: 20px; }
+.steps li { margin: 6px 0; }
+code { background: #e8e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+.footer { text-align: center; margin-top: 30px; color: #999; font-size: 0.85em; }
+.footer a { color: #0f3460; }
+</style>
+</head>
+<body>
+
+<a href="../" class="back">&larr; Back to App Store</a>
+
+<div class="header">
+  <h1>Submit an App</h1>
+  <p>Share your app with the TechNote community</p>
+</div>
+
+<div class="section">
+  <h2>How It Works</h2>
+  <p>Fill out the form below with your app details. Click the submit button to open your email client with the details pre-filled. The TechNote team will review your submission and add it to the App Store if approved.</p>
+
+  <form id="submitForm">
+    <label for="appname">App Name *</label>
+    <input type="text" id="appname" name="appname" required placeholder="My Cool App">
+
+    <label for="category">Category *</label>
+    <select id="category" name="category" required>
+      <option value="Games">Games</option>
+      <option value="Productivity">Productivity</option>
+      <option value="Utilities">Utilities</option>
+      <option value="Media">Media</option>
+    </select>
+
+    <label for="description">Description *</label>
+    <textarea id="description" name="description" required placeholder="A short description of your app (1-2 sentences)"></textarea>
+
+    <label for="author">Author Name *</label>
+    <input type="text" id="author" name="author" required placeholder="Your name">
+
+    <label for="email">Your Email *</label>
+    <input type="email" id="email" name="email" required placeholder="you@example.com">
+
+    <label for="github">GitHub or Download URL *</label>
+    <input type="url" id="github" name="github" required placeholder="https://github.com/you/your-app">
+
+    <label for="features">Key Features (optional)</label>
+    <textarea id="features" name="features" placeholder="Feature 1, Feature 2, Feature 3"></textarea>
+
+    <label for="controls">Controls (optional)</label>
+    <textarea id="controls" name="controls" placeholder="Space: Next, Enter: Select, Escape: Exit"></textarea>
+
+    <button type="submit" class="btn">Submit via Email</button>
+  </form>
+</div>
+
+<div class="section">
+  <h2>Submission Guidelines</h2>
+  <div class="steps">
+    <h3>Requirements</h3>
+    <ol>
+      <li>App must be a single <code>.py</code> file</li>
+      <li>Must inherit from <code>SoftApp</code> (TechNote app framework)</li>
+      <li>Must use <code>self.speak()</code> for all voice output</li>
+      <li>Must handle keyboard input via <code>on_key()</code> and <code>on_key_up()</code></li>
+      <li>No external dependencies beyond Python standard library</li>
+      <li>No harmful, malicious, or inappropriate content</li>
+    </ol>
+  </div>
+  <div class="steps">
+    <h3>Review Process</h3>
+    <ol>
+      <li>You submit via email</li>
+      <li>Team reviews your code</li>
+      <li>If approved, your app is added to the catalog</li>
+      <li>You get notified when it goes live</li>
+    </ol>
+  </div>
+</div>
+
+<div class="footer">
+  <p><a href="../">Back to App Store</a> &bull; <a href="https://github.com/tech-master33/tech-note">GitHub</a></p>
+</div>
+
+<script>
+document.getElementById('submitForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var name = document.getElementById('appname').value;
+  var cat = document.getElementById('category').value;
+  var desc = document.getElementById('description').value;
+  var author = document.getElementById('author').value;
+  var email = document.getElementById('email').value;
+  var github = document.getElementById('github').value;
+  var features = document.getElementById('features').value;
+  var controls = document.getElementById('controls').value;
+
+  var subject = encodeURIComponent('App Submission: ' + name);
+  var body = encodeURIComponent(
+    'App Submission for TechNote App Store\n' +
+    '=====================================\n\n' +
+    'App Name: ' + name + '\n' +
+    'Category: ' + cat + '\n' +
+    'Description: ' + desc + '\n' +
+    'Author: ' + author + '\n' +
+    'Email: ' + email + '\n' +
+    'GitHub/Download URL: ' + github + '\n\n' +
+    (features ? 'Features: ' + features + '\n' : '') +
+    (controls ? 'Controls: ' + controls + '\n' : '') +
+    '\n---\nSent from TechNote App Store Submission Form'
+  );
+
+  window.location.href = 'mailto:tech-master33@users.noreply.github.com?subject=' + subject + '&body=' + body;
+});
+</script>
+
+</body>
+</html>
