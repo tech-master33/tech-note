@@ -94,7 +94,7 @@ def approve(submission_id):
         "category": submission.get('category', 'Apps'),
         "version": "1.0",
         "filename": app_id + ".py",
-        "download_url": f"https://tech-master33.github.io/tech-note/apps/{app_id}.py",
+        "download_url": f"https://tech-note.surge.sh/apps/{app_id}.py",
         "author": submission.get('author', 'Tech-Note'),
         "features": submission.get('features', []),
         "controls": submission.get('controls', []),
