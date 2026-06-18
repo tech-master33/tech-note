@@ -17,6 +17,11 @@ public/
 netlify-site/apps/
 project/
 
+# Cloudflare Worker
+worker/.wrangler/
+wrangler-state/
+.wrangler/
+
 # App Store apps (users must install via App Store, not pre-included)
 apps/tictactoe.py
 apps/hangman.py
