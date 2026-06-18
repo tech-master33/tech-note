@@ -1,112 +1,233 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TechNote App Store</title>
 <style>
-body { font-family: sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; background: #f8f9fa; }
-.header { background: #1a1a2e; color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; text-align: center; }
-.header h1 { color: white; margin: 0; font-size: 1.8em; }
-.header p { color: #a0a0c0; margin: 8px 0 0; }
-.section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-.section h2 { color: #1a1a2e; margin-top: 0; border-bottom: 2px solid #e8e8f0; padding-bottom: 8px; }
-.app-list { list-style: none; padding: 0; margin: 0; }
-.app-list li { padding: 10px 12px; border-bottom: 1px solid #f0f0f5; display: flex; justify-content: space-between; align-items: center; }
-.app-list li:last-child { border-bottom: none; }
-.app-list a { color: #0f3460; text-decoration: none; font-weight: 500; }
-.app-list a:hover { text-decoration: underline; }
-.desc { color: #666; font-size: 0.9em; }
-.badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 8px; }
-.badge.new { background: #fff3e0; color: #e65100; }
-.meta { color: #666; font-size: 0.85em; margin-top: 20px; text-align: center; }
-.install { background: #1a1a2e; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-.install h2 { color: white; margin-top: 0; }
-.install ol { color: #c0c0e0; }
+:root { --bg: #f0f2f5; --card: #ffffff; --text: #333; --heading: #1a1a2e; --link: #0f3460; --border: #e0e3e8; --muted: #666; --accent: #1a1a2e; --accent-hover: #2a2a4e; --code-bg: #e8eaf0; --tag-bg: #e8f5e9; --tag-text: #2e7d32; --new-bg: #fff3e0; --new-text: #e65100; --input-bg: #fff; --input-border: #ddd; }
+[data-theme="dark"] { --bg: #0d1117; --card: #161b22; --text: #c9d1d9; --heading: #e6edf3; --link: #58a6ff; --border: #30363d; --muted: #8b949e; --accent: #58a6ff; --accent-hover: #79c0ff; --code-bg: #1c2128; --tag-bg: #1f3a2e; --tag-text: #58d68d; --new-bg: #3d2b1a; --new-text: #f0a050; --input-bg: #0d1117; --input-border: #30363d; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+.header { background: var(--accent); color: white; padding: 40px 30px; border-radius: 16px; margin-bottom: 24px; text-align: center; position: relative; }
+.header h1 { font-size: 2em; margin-bottom: 8px; }
+.header p { color: rgba(255,255,255,0.7); font-size: 1.05em; }
+.theme-toggle { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.15); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+.theme-toggle:hover { background: rgba(255,255,255,0.25); }
+.search-bar { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; gap: 10px; align-items: center; }
+.search-bar input { flex: 1; padding: 12px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 16px; background: var(--input-bg); color: var(--text); outline: none; transition: border-color 0.2s; }
+.search-bar input:focus { border-color: var(--accent); }
+.search-bar .clear-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.2em; padding: 8px; display: none; }
+.search-bar .clear-btn.visible { display: block; }
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.tab { padding: 8px 18px; border: 2px solid var(--border); border-radius: 20px; background: var(--card); color: var(--text); cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+.tab:hover { border-color: var(--accent); color: var(--accent); }
+.tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+.section { background: var(--card); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.section h2 { color: var(--heading); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid var(--border); font-size: 1.2em; }
+.section.hidden { display: none; }
+.app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.app-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-decoration: none; color: var(--text); transition: all 0.2s; display: block; }
+.app-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.app-card .name { font-weight: 600; color: var(--heading); margin-bottom: 4px; font-size: 1.05em; }
+.app-card .desc { color: var(--muted); font-size: 0.9em; }
+.app-card .badges { margin-top: 8px; }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500; margin-right: 6px; }
+.badge.cat { background: var(--tag-bg); color: var(--tag-text); }
+.badge.new { background: var(--new-bg); color: var(--new-text); }
+.stats { display: flex; gap: 20px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
+.stat { background: var(--card); border-radius: 12px; padding: 16px 24px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); min-width: 120px; }
+.stat .num { font-size: 1.8em; font-weight: 700; color: var(--accent); }
+.stat .label { color: var(--muted); font-size: 0.85em; }
+.install { background: var(--accent); color: white; padding: 24px; border-radius: 12px; margin-bottom: 20px; }
+.install h2 { color: white; margin-bottom: 12px; border-bottom-color: rgba(255,255,255,0.2); }
+.install ol { padding-left: 20px; color: rgba(255,255,255,0.85); }
+.install li { margin: 6px 0; }
 .install strong { color: white; }
-.footer { text-align: center; margin-top: 30px; color: #999; font-size: 0.85em; }
-.footer a { color: #0f3460; }
+.footer { text-align: center; padding: 30px 0; color: var(--muted); font-size: 0.85em; }
+.footer a { color: var(--link); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+.no-results { text-align: center; padding: 40px 20px; color: var(--muted); display: none; }
+.no-results.visible { display: block; }
+@media (max-width: 600px) { .app-grid { grid-template-columns: 1fr; } .tabs { gap: 6px; } .tab { padding: 6px 14px; font-size: 13px; } .stats { gap: 10px; } .stat { min-width: 90px; padding: 12px 16px; } }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>TechNote App Store</h1>
-  <p>Free games and apps for your self-voicing keyboard interface</p>
+<div class="container">
+  <div class="header">
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" id="themeBtn">🌙</button>
+    <h1>TechNote App Store</h1>
+    <p>Free games and apps for your self-voicing keyboard interface</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="num">24</div><div class="label">Apps</div></div>
+    <div class="stat"><div class="num">5</div><div class="label">Categories</div></div>
+    <div class="stat"><div class="num">100%</div><div class="label">Free</div></div>
+  </div>
+
+  <div class="install">
+    <h2>How to Install</h2>
+    <ol>
+      <li>Open <strong>TechNote</strong></li>
+      <li>Navigate to <strong>App Store</strong> from the main menu</li>
+      <li>Browse by category or <strong>Search</strong> for an app</li>
+      <li>Press <strong>Enter</strong> on an app, then <strong>Enter</strong> to install</li>
+    </ol>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Search apps..." aria-label="Search apps">
+    <button class="clear-btn" id="clearBtn" onclick="clearSearch()" aria-label="Clear search">✕</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" onclick="filterCategory('all')" role="tab" data-cat="all">All</button>
+    <button class="tab" onclick="filterCategory('games')" role="tab" data-cat="games">Games</button>
+    <button class="tab" onclick="filterCategory('productivity')" role="tab" data-cat="productivity">Productivity</button>
+    <button class="tab" onclick="filterCategory('utilities')" role="tab" data-cat="utilities">Utilities</button>
+    <button class="tab" onclick="filterCategory('media')" role="tab" data-cat="media">Media</button>
+    <button class="tab" onclick="filterCategory('ai')" role="tab" data-cat="ai">AI Clients</button>
+  </div>
+
+  <div class="no-results" id="noResults">No apps found matching your search.</div>
+
+  <div class="section" data-category="games" id="sec-games">
+    <h2>Games</h2>
+    <div class="app-grid">
+      <a href="app/tictactoe.html" class="app-card"><div class="name">Tic Tac Toe</div><div class="desc">Classic two-player vs computer</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/hangman.html" class="app-card"><div class="name">Hangman</div><div class="desc">Guess letters to find the word</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/memory_match.html" class="app-card"><div class="name">Memory Match</div><div class="desc">Find matching pairs</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/connect_four.html" class="app-card"><div class="name">Connect Four</div><div class="desc">Drop discs to connect four</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/solitaire.html" class="app-card"><div class="name">Solitaire</div><div class="desc">Classic Klondike card game</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/sudoku.html" class="app-card"><div class="name">Sudoku</div><div class="desc">Number puzzle with three difficulties</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/blackjack.html" class="app-card"><div class="name">Blackjack</div><div class="desc">Beat the dealer to 21</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/game2048.html" class="app-card"><div class="name">2048</div><div class="desc">Slide and merge tiles</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/snake.html" class="app-card"><div class="name">Snake</div><div class="desc">Eat food, grow longer</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      <a href="app/minesweeper.html" class="app-card"><div class="name">Minesweeper</div><div class="desc">Find the mines</div><div class="badges"><span class="badge cat">Games</span></div></a>
+    </div>
+  </div>
+
+  <div class="section" data-category="productivity" id="sec-productivity">
+    <h2>Productivity</h2>
+    <div class="app-grid">
+      <a href="app/todo_list.html" class="app-card"><div class="name">Todo List</div><div class="desc">Manage your tasks</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
+      <a href="app/habit_tracker.html" class="app-card"><div class="name">Habit Tracker</div><div class="desc">Track daily habits and streaks</div><div class="badges"><span class="badge cat">Productivity</span><span class="badge new">New</span></div></a>
+      <a href="app/calendar.html" class="app-card"><div class="name">Calendar</div><div class="desc">View dates and add events</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
+      <a href="app/typing_test.html" class="app-card"><div class="name">Typing Test</div><div class="desc">Measure your typing speed</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
+    </div>
+  </div>
+
+  <div class="section" data-category="utilities" id="sec-utilities">
+    <h2>Utilities</h2>
+    <div class="app-grid">
+      <a href="app/password_gen.html" class="app-card"><div class="name">Password Generator</div><div class="desc">Create secure passwords</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+      <a href="app/unit_converter.html" class="app-card"><div class="name">Unit Converter</div><div class="desc">Convert measurements</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+      <a href="app/dice_roller.html" class="app-card"><div class="name">Dice Roller</div><div class="desc">Roll dice for games</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+      <a href="app/alarm_clock.html" class="app-card"><div class="name">Alarm Clock</div><div class="desc">Set alarms with snooze</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+      <a href="app/weather.html" class="app-card"><div class="name">Weather</div><div class="desc">Current weather by city</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+    </div>
+  </div>
+
+  <div class="section" data-category="media" id="sec-media">
+    <h2>Media</h2>
+    <div class="app-grid">
+      <a href="app/stopwatch.html" class="app-card"><div class="name">Stopwatch</div><div class="desc">Precision timing with laps</div><div class="badges"><span class="badge cat">Media</span></div></a>
+      <a href="app/book_reader.html" class="app-card"><div class="name">Book Reader</div><div class="desc">Read text files with bookmarks</div><div class="badges"><span class="badge cat">Media</span><span class="badge new">New</span></div></a>
+      <a href="app/voice_memo.html" class="app-card"><div class="name">Voice Memos</div><div class="desc">Record and play back audio</div><div class="badges"><span class="badge cat">Media</span><span class="badge new">New</span></div></a>
+    </div>
+  </div>
+
+  <div class="section" data-category="ai" id="sec-ai">
+    <h2>AI Clients</h2>
+    <div class="app-grid">
+      <a href="app/opencode_client.html" class="app-card"><div class="name">OpenCode AI Client</div><div class="desc">27 providers, sessions, model selection</div><div class="badges"><span class="badge cat">AI Clients</span><span class="badge new">New</span></div></a>
+      <a href="app/chatgpt_client.html" class="app-card"><div class="name">ChatGPT Client</div><div class="desc">OpenAI + Zen, chat history, voice output</div><div class="badges"><span class="badge cat">AI Clients</span><span class="badge new">New</span></div></a>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p><a href="https://github.com/tech-master33/tech-note">Get TechNote</a> · <a href="submit.html">Submit an App</a></p>
+    <p style="margin-top:8px;">TechNote App Store © 2026</p>
+  </div>
 </div>
 
-<div class="install">
-  <h2>How to Install</h2>
-  <ol>
-    <li>Open <strong>TechNote</strong></li>
-    <li>Navigate to <strong>App Store</strong> from the main menu</li>
-    <li>Browse by category or <strong>Search</strong> for an app</li>
-    <li>Press <strong>Enter</strong> on an app, then <strong>Enter</strong> to install</li>
-  </ol>
-</div>
+<script>
+function toggleTheme() {
+  var html = document.documentElement;
+  var current = html.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙';
+}
+(function() {
+  var saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+    document.getElementById('themeBtn').textContent = saved === 'dark' ? '☀️' : '🌙';
+  }
+})();
 
-<div class="section">
-  <h2>Games</h2>
-  <ul class="app-list">
-    <li><a href="app/tictactoe.html">Tic Tac Toe</a> <span class="desc">Classic two-player vs computer</span></li>
-    <li><a href="app/hangman.html">Hangman</a> <span class="desc">Guess letters to find the word</span></li>
-    <li><a href="app/memory_match.html">Memory Match</a> <span class="desc">Find matching pairs</span></li>
-    <li><a href="app/connect_four.html">Connect Four</a> <span class="desc">Drop discs to connect four</span></li>
-    <li><a href="app/solitaire.html">Solitaire</a> <span class="desc">Classic Klondike card game</span></li>
-    <li><a href="app/sudoku.html">Sudoku</a> <span class="desc">Number puzzle with three difficulties</span></li>
-    <li><a href="app/blackjack.html">Blackjack</a> <span class="desc">Beat the dealer to 21</span></li>
-    <li><a href="app/game2048.html">2048</a> <span class="desc">Slide and merge tiles</span></li>
-    <li><a href="app/snake.html">Snake</a> <span class="desc">Eat food, grow longer</span></li>
-    <li><a href="app/minesweeper.html">Minesweeper</a> <span class="desc">Find the mines</span></li>
-  </ul>
-</div>
+var currentCategory = 'all';
+var searchInput = document.getElementById('searchInput');
+var clearBtn = document.getElementById('clearBtn');
+var noResults = document.getElementById('noResults');
 
-<div class="section">
-  <h2>Productivity</h2>
-  <ul class="app-list">
-    <li><a href="app/todo_list.html">Todo List</a> <span class="desc">Manage your tasks</span></li>
-    <li><a href="app/habit_tracker.html">Habit Tracker</a> <span class="desc">Track daily habits and streaks</span> <span class="badge new">New</span></li>
-    <li><a href="app/calendar.html">Calendar</a> <span class="desc">View dates and add events</span></li>
-    <li><a href="app/typing_test.html">Typing Test</a> <span class="desc">Measure your typing speed</span></li>
-  </ul>
-</div>
+searchInput.addEventListener('input', function() {
+  clearBtn.classList.toggle('visible', this.value.length > 0);
+  applyFilters();
+});
 
-<div class="section">
-  <h2>Utilities</h2>
-  <ul class="app-list">
-    <li><a href="app/password_gen.html">Password Generator</a> <span class="desc">Create secure passwords</span></li>
-    <li><a href="app/unit_converter.html">Unit Converter</a> <span class="desc">Convert measurements</span></li>
-    <li><a href="app/dice_roller.html">Dice Roller</a> <span class="desc">Roll dice for games</span></li>
-    <li><a href="app/alarm_clock.html">Alarm Clock</a> <span class="desc">Set alarms with snooze</span></li>
-    <li><a href="app/weather.html">Weather</a> <span class="desc">Current weather by city</span></li>
-  </ul>
-</div>
+function clearSearch() {
+  searchInput.value = '';
+  clearBtn.classList.remove('visible');
+  applyFilters();
+  searchInput.focus();
+}
 
-<div class="section">
-  <h2>Media</h2>
-  <ul class="app-list">
-    <li><a href="app/stopwatch.html">Stopwatch</a> <span class="desc">Precision timing with laps</span></li>
-    <li><a href="app/book_reader.html">Book Reader</a> <span class="desc">Read text files with bookmarks</span> <span class="badge new">New</span></li>
-    <li><a href="app/voice_memo.html">Voice Memos</a> <span class="desc">Record and play back audio</span> <span class="badge new">New</span></li>
-  </ul>
-</div>
+function filterCategory(cat) {
+  currentCategory = cat;
+  document.querySelectorAll('.tab').forEach(function(t) {
+    t.classList.toggle('active', t.getAttribute('data-cat') === cat);
+  });
+  applyFilters();
+}
 
-<div class="section">
-  <h2>AI Clients</h2>
-  <ul class="app-list">
-    <li><a href="app/opencode_client.html">OpenCode AI Client</a> <span class="desc">27 providers, sessions, model selection</span> <span class="badge new">New</span></li>
-    <li><a href="app/chatgpt_client.html">ChatGPT Client</a> <span class="desc">OpenAI + Zen, chat history, voice output</span> <span class="badge new">New</span></li>
-  </ul>
-</div>
+function applyFilters() {
+  var query = searchInput.value.toLowerCase().trim();
+  var sections = document.querySelectorAll('.section[data-category]');
+  var anyVisible = false;
 
-<div class="meta">
-  <p>24 apps available &bull; All free &bull; No ads</p>
-  <p><a href="https://github.com/tech-master33/tech-note">Get TechNote</a> &bull; <a href="submit.html">Submit an App</a></p>
-</div>
+  sections.forEach(function(sec) {
+    var secCat = sec.getAttribute('data-category');
+    var catMatch = currentCategory === 'all' || secCat === currentCategory;
 
-<div class="footer">
-  <p>TechNote App Store &copy; 2026</p>
-</div>
+    if (!catMatch) {
+      sec.classList.add('hidden');
+      return;
+    }
+
+    var cards = sec.querySelectorAll('.app-card');
+    var sectionVisible = false;
+
+    cards.forEach(function(card) {
+      var name = card.querySelector('.name').textContent.toLowerCase();
+      var desc = card.querySelector('.desc').textContent.toLowerCase();
+      var searchMatch = !query || name.indexOf(query) !== -1 || desc.indexOf(query) !== -1;
+      card.style.display = searchMatch ? '' : 'none';
+      if (searchMatch) sectionVisible = true;
+    });
+
+    sec.classList.toggle('hidden', !sectionVisible);
+    if (sectionVisible) anyVisible = true;
+  });
+
+  noResults.classList.toggle('visible', !anyVisible);
+}
+</script>
 
 </body>
 </html>

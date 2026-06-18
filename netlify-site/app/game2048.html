@@ -1,59 +1,91 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2048 - TechNote App Store</title>
 <style>
-body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
-h1 { color: #1a1a2e; }
-h2 { color: #16213e; margin-top: 30px; }
-a { color: #0f3460; }
-.meta { color: #666; font-size: 0.9em; margin-bottom: 20px; }
-.back { display: inline-block; margin-bottom: 20px; }
-.preview { background: #f4f4f4; border: 1px solid #ddd; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 14px; white-space: pre; margin: 16px 0; line-height: 1.4; }
-.badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; margin-right: 6px; }
+:root { --bg: #f0f2f5; --card: #ffffff; --text: #333; --heading: #1a1a2e; --link: #0f3460; --border: #e0e3e8; --muted: #666; --accent: #1a1a2e; --tag-bg: #e8f5e9; --tag-text: #2e7d32; --kbd-bg: #1a1a2e; --kbd-text: #fff; }
+[data-theme="dark"] { --bg: #0d1117; --card: #161b22; --text: #c9d1d9; --heading: #e6edf3; --link: #58a6ff; --border: #30363d; --muted: #8b949e; --accent: #58a6ff; --tag-bg: #1f3a2e; --tag-text: #58d68d; --kbd-bg: #21262d; --kbd-text: #c9d1d9; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+.container { max-width: 700px; margin: 0 auto; padding: 20px; }
+.header { background: var(--accent); color: white; padding: 40px 30px; border-radius: 16px; margin-bottom: 24px; text-align: center; position: relative; }
+.header h1 { font-size: 1.8em; margin-bottom: 8px; }
+.header .meta { color: rgba(255,255,255,0.7); font-size: 0.95em; }
+.theme-toggle { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.15); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; }
+.theme-toggle:hover { background: rgba(255,255,255,0.25); }
+.back { display: inline-block; margin-bottom: 16px; color: var(--link); text-decoration: none; font-weight: 500; }
+.back:hover { text-decoration: underline; }
+.badge { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 0.8em; font-weight: 500; margin-right: 6px; }
+.badge.cat { background: var(--tag-bg); color: var(--tag-text); }
+.section { background: var(--card); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.section h2 { color: var(--heading); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid var(--border); font-size: 1.15em; }
+.section ul { padding-left: 20px; }
+.section li { margin: 6px 0; }
+.controls { list-style: none; padding: 0; }
+.controls li { padding: 8px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+.controls li:last-child { border-bottom: none; }
+kbd { background: var(--kbd-bg); color: var(--kbd-text); padding: 3px 10px; border-radius: 5px; font-size: 0.85em; font-family: monospace; min-width: 80px; text-align: center; }
+.footer { text-align: center; padding: 30px 0; color: var(--muted); font-size: 0.85em; }
+.footer a { color: var(--link); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+.related { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.related a { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; color: var(--text); text-decoration: none; font-size: 0.9em; transition: border-color 0.2s; }
+.related a:hover { border-color: var(--accent); }
 </style>
 </head>
 <body>
+<div class="container">
+  <a href="../index.html" class="back">← Back to App Store</a>
 
-<a href="../" class="back">&larr; Back to App Store</a>
+  <div class="header">
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" id="themeBtn">🌙</button>
+    <h1>2048</h1>
+    <div class="meta"><span class="badge cat">Games</span> Version 1.1 · Tech-Note</div>
+  </div>
 
-<h1>2048</h1>
-<div class="meta">
-  <span class="badge">Games</span> Version 1.1 &bull; Sliding Tile Puzzle
+  <div class="section">
+    <h2>About</h2>
+    <p>Slide numbered tiles to merge them and reach 2048.</p>
+  </div>
+
+  <div class="section">
+    <h2>Features</h2>
+    <ul>
+    <li>Score tracking</li>
+    <li>Undo moves</li>
+    <li>Auto-save</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>Controls</h2>
+    <ul class="controls">
+    <li><kbd>Space</kbd> Next direction</li>
+    <li><kbd>Enter</kbd> Slide</li>
+    <li><kbd>Z</kbd> Undo</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>How to Install</h2>
+    <p>Open TechNote → App Store → 2048 → Press Enter to install.</p>
+  </div>
+
+  <div class="section">
+    <h2>More Apps</h2>
+    <div class="related">
+      <a href="tictactoe.html">Tic Tac Toe</a>
+      <a href="hangman.html">Hangman</a>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p><a href="../index.html">App Store</a> · <a href="https://github.com/tech-master33/tech-note">Get TechNote</a></p>
+  </div>
 </div>
-
-<h2>About</h2>
-<p>Slide numbered tiles on a 4x4 grid. When two tiles with the same number touch, they merge into one with double the value. Keep merging to reach the legendary 2048 tile. A new tile appears after every move — plan carefully or run out of space.</p>
-
-<h2>Preview</h2>
-<div class="preview">Score: 2048  Best: 3120
-
-    2     4     8    16
-   32    64   128   256
-  512  1024  2048     4
-    8    16    32     2</div>
-
-<h2>Controls</h2>
-<ul>
-  <li><strong>Space</strong> — Next direction</li>
-  <li><strong>Backspace</strong> — Previous direction</li>
-  <li><strong>Enter</strong> — Slide tiles</li>
-  <li><strong>N</strong> — New game</li>
-  <li><strong>Escape</strong> — Exit</li>
-</ul>
-
-<h2>Features</h2>
-<ul>
-  <li>Score and best score tracking</li>
-  <li>Continue playing after reaching 2048</li>
-  <li>Game over detection when no moves remain</li>
-  <li>Voice announces score after each move</li>
-</ul>
-
-<h2>How to Install</h2>
-<p>Open TechNote &rarr; App Store &rarr; 2048 &rarr; Press Enter to install.</p>
-
+<script>function toggleTheme(){var h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);document.getElementById('themeBtn').textContent=n==='dark'?'☀️':'🌙';}
+(function(){var s=localStorage.getItem('theme');if(s){document.documentElement.setAttribute('data-theme',s);document.getElementById('themeBtn').textContent=s==='dark'?'☀️':'🌙';}})();</script>
 </body>
 </html>
