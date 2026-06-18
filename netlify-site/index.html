@@ -5,169 +5,222 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TechNote App Store</title>
 <style>
-:root { --bg: #f0f2f5; --card: #ffffff; --text: #333; --heading: #1a1a2e; --link: #0f3460; --border: #e0e3e8; --muted: #666; --accent: #1a1a2e; --accent-hover: #2a2a4e; --code-bg: #e8eaf0; --tag-bg: #e8f5e9; --tag-text: #2e7d32; --new-bg: #fff3e0; --new-text: #e65100; --input-bg: #fff; --input-border: #ddd; }
-[data-theme="dark"] { --bg: #0d1117; --card: #161b22; --text: #c9d1d9; --heading: #e6edf3; --link: #58a6ff; --border: #30363d; --muted: #8b949e; --accent: #58a6ff; --accent-hover: #79c0ff; --code-bg: #1c2128; --tag-bg: #1f3a2e; --tag-text: #58d68d; --new-bg: #3d2b1a; --new-text: #f0a050; --input-bg: #0d1117; --input-border: #30363d; }
+:root {
+  --bg: #f0f2f5; --card: #ffffff; --text: #1a1a1a; --heading: #0d0d0d;
+  --link: #0a2d6e; --border: #c8ccd4; --muted: #444444; --accent: #0d0d2b;
+  --accent-hover: #1a1a4e; --accent-text: #ffffff;
+  --tag-bg: #d4edda; --tag-text: #155724; --new-bg: #fff3cd; --new-text: #856404;
+  --input-bg: #ffffff; --input-border: #6c757d; --input-focus: #0d0d2b;
+  --kbd-bg: #0d0d2b; --kbd-text: #ffffff;
+  --focus-ring: #0056b3; --skip-bg: #0d0d2b; --skip-text: #ffffff;
+  --card-hover-border: #0d0d2b;
+}
+[data-theme="dark"] {
+  --bg: #0a0a0f; --card: #141420; --text: #f0f0f5; --heading: #ffffff;
+  --link: #6db3f8; --border: #4a4a6a; --muted: #b0b0c0; --accent: #6db3f8;
+  --accent-hover: #8ec5ff; --accent-text: #0a0a0f;
+  --tag-bg: #1a3a2a; --tag-text: #7ddf7d; --new-bg: #3d3010; --new-text: #ffd966;
+  --input-bg: #1a1a2a; --input-border: #6a6a8a; --input-focus: #6db3f8;
+  --kbd-bg: #2a2a40; --kbd-text: #f0f0f5;
+  --focus-ring: #6db3f8; --skip-bg: #6db3f8; --skip-text: #0a0a0f;
+  --card-hover-border: #6db3f8;
+}
+@media (prefers-contrast: high) {
+  :root {
+    --text: #000000; --heading: #000000; --muted: #222222;
+    --border: #555555; --link: #0000cc;
+  }
+  [data-theme="dark"] {
+    --text: #ffffff; --heading: #ffffff; --muted: #e0e0e0;
+    --border: #999999; --link: #66bbff;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; font-size: 17px; }
+.skip-link { position: absolute; top: -100px; left: 16px; background: var(--skip-bg); color: var(--skip-text); padding: 12px 24px; border-radius: 0 0 8px 8px; font-weight: 600; z-index: 1000; text-decoration: none; font-size: 16px; }
+.skip-link:focus { top: 0; }
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; border-radius: 4px; }
 .container { max-width: 900px; margin: 0 auto; padding: 20px; }
-.header { background: var(--accent); color: white; padding: 40px 30px; border-radius: 16px; margin-bottom: 24px; text-align: center; position: relative; }
-.header h1 { font-size: 2em; margin-bottom: 8px; }
-.header p { color: rgba(255,255,255,0.7); font-size: 1.05em; }
-.theme-toggle { position: absolute; top: 16px; right: 16px; background: rgba(255,255,255,0.15); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 1.2em; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
-.theme-toggle:hover { background: rgba(255,255,255,0.25); }
-.search-bar { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; gap: 10px; align-items: center; }
-.search-bar input { flex: 1; padding: 12px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 16px; background: var(--input-bg); color: var(--text); outline: none; transition: border-color 0.2s; }
-.search-bar input:focus { border-color: var(--accent); }
-.search-bar .clear-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.2em; padding: 8px; display: none; }
-.search-bar .clear-btn.visible { display: block; }
-.tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
-.tab { padding: 8px 18px; border: 2px solid var(--border); border-radius: 20px; background: var(--card); color: var(--text); cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+.header { background: var(--accent); color: var(--accent-text); padding: 44px 32px; border-radius: 16px; margin-bottom: 28px; text-align: center; position: relative; }
+.header h1 { font-size: 2em; margin-bottom: 10px; letter-spacing: -0.02em; }
+.header p { color: rgba(255,255,255,0.85); font-size: 1.1em; }
+.theme-toggle { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); color: white; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 1.3em; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+.theme-toggle:hover { background: rgba(255,255,255,0.35); }
+.stats { display: flex; gap: 20px; justify-content: center; margin-bottom: 28px; flex-wrap: wrap; }
+.stat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px 28px; text-align: center; min-width: 130px; }
+.stat .num { font-size: 2em; font-weight: 700; color: var(--accent); }
+.stat .label { color: var(--muted); font-size: 0.95em; margin-top: 2px; }
+.install { background: var(--accent); color: var(--accent-text); padding: 28px; border-radius: 14px; margin-bottom: 24px; }
+.install h2 { color: var(--accent-text); margin-bottom: 14px; font-size: 1.3em; }
+.install ol { padding-left: 24px; color: rgba(255,255,255,0.9); }
+.install li { margin: 8px 0; font-size: 1.05em; }
+.install strong { color: #ffffff; }
+.search-bar { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 22px; display: flex; gap: 12px; align-items: center; }
+.search-bar label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+.search-bar input { flex: 1; padding: 14px 18px; border: 2px solid var(--input-border); border-radius: 10px; font-size: 17px; background: var(--input-bg); color: var(--text); outline: none; transition: border-color 0.2s; }
+.search-bar input:focus { border-color: var(--input-focus); box-shadow: 0 0 0 3px rgba(0,86,179,0.25); }
+.search-bar .clear-btn { background: var(--muted); border: none; color: #fff; width: 38px; height: 38px; border-radius: 50%; cursor: pointer; font-size: 1.1em; display: none; align-items: center; justify-content: center; flex-shrink: 0; }
+.search-bar .clear-btn.visible { display: flex; }
+.tabs { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+.tab { padding: 10px 20px; border: 2px solid var(--border); border-radius: 24px; background: var(--card); color: var(--text); cursor: pointer; font-size: 15px; font-weight: 600; transition: all 0.2s; min-height: 44px; }
 .tab:hover { border-color: var(--accent); color: var(--accent); }
-.tab.active { background: var(--accent); color: white; border-color: var(--accent); }
-.section { background: var(--card); border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.section h2 { color: var(--heading); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid var(--border); font-size: 1.2em; }
+.tab.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.section { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin-bottom: 24px; }
+.section h2 { color: var(--heading); margin-bottom: 18px; padding-bottom: 12px; border-bottom: 2px solid var(--border); font-size: 1.25em; }
 .section.hidden { display: none; }
-.app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
-.app-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-decoration: none; color: var(--text); transition: all 0.2s; display: block; }
-.app-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-.app-card .name { font-weight: 600; color: var(--heading); margin-bottom: 4px; font-size: 1.05em; }
-.app-card .desc { color: var(--muted); font-size: 0.9em; }
-.app-card .badges { margin-top: 8px; }
-.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500; margin-right: 6px; }
+.app-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.app-card { background: var(--bg); border: 2px solid var(--border); border-radius: 12px; padding: 18px; text-decoration: none; color: var(--text); transition: border-color 0.2s, box-shadow 0.2s; display: block; min-height: 44px; }
+.app-card:hover, .app-card:focus { border-color: var(--card-hover-border); box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+.app-card .name { font-weight: 700; color: var(--heading); margin-bottom: 5px; font-size: 1.1em; }
+.app-card .desc { color: var(--muted); font-size: 0.95em; line-height: 1.5; }
+.app-card .badges { margin-top: 10px; }
+.badge { display: inline-block; padding: 3px 12px; border-radius: 14px; font-size: 0.8em; font-weight: 600; margin-right: 6px; }
 .badge.cat { background: var(--tag-bg); color: var(--tag-text); }
 .badge.new { background: var(--new-bg); color: var(--new-text); }
-.stats { display: flex; gap: 20px; justify-content: center; margin-bottom: 24px; flex-wrap: wrap; }
-.stat { background: var(--card); border-radius: 12px; padding: 16px 24px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); min-width: 120px; }
-.stat .num { font-size: 1.8em; font-weight: 700; color: var(--accent); }
-.stat .label { color: var(--muted); font-size: 0.85em; }
-.install { background: var(--accent); color: white; padding: 24px; border-radius: 12px; margin-bottom: 20px; }
-.install h2 { color: white; margin-bottom: 12px; border-bottom-color: rgba(255,255,255,0.2); }
-.install ol { padding-left: 20px; color: rgba(255,255,255,0.85); }
-.install li { margin: 6px 0; }
-.install strong { color: white; }
-.footer { text-align: center; padding: 30px 0; color: var(--muted); font-size: 0.85em; }
-.footer a { color: var(--link); text-decoration: none; }
-.footer a:hover { text-decoration: underline; }
-.no-results { text-align: center; padding: 40px 20px; color: var(--muted); display: none; }
+.no-results { text-align: center; padding: 48px 24px; color: var(--muted); display: none; font-size: 1.1em; }
 .no-results.visible { display: block; }
-@media (max-width: 600px) { .app-grid { grid-template-columns: 1fr; } .tabs { gap: 6px; } .tab { padding: 6px 14px; font-size: 13px; } .stats { gap: 10px; } .stat { min-width: 90px; padding: 12px 16px; } }
+.footer { text-align: center; padding: 36px 0; color: var(--muted); font-size: 0.95em; }
+.footer a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
+.footer a:hover { text-decoration-thickness: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  .app-grid { grid-template-columns: 1fr; }
+  .tabs { gap: 8px; }
+  .tab { padding: 8px 16px; font-size: 14px; min-height: 40px; }
+  .stats { gap: 12px; }
+  .stat { min-width: 100px; padding: 14px 18px; }
+  .stat .num { font-size: 1.6em; }
+}
 </style>
 </head>
 <body>
 
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
 <div class="container">
-  <div class="header">
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" id="themeBtn">🌙</button>
+  <header class="header" role="banner">
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Switch to dark mode" id="themeBtn">🌙</button>
     <h1>TechNote App Store</h1>
     <p>Free games and apps for your self-voicing keyboard interface</p>
-  </div>
+  </header>
 
-  <div class="stats">
-    <div class="stat"><div class="num">24</div><div class="label">Apps</div></div>
-    <div class="stat"><div class="num">5</div><div class="label">Categories</div></div>
-    <div class="stat"><div class="num">100%</div><div class="label">Free</div></div>
-  </div>
-
-  <div class="install">
-    <h2>How to Install</h2>
-    <ol>
-      <li>Open <strong>TechNote</strong></li>
-      <li>Navigate to <strong>App Store</strong> from the main menu</li>
-      <li>Browse by category or <strong>Search</strong> for an app</li>
-      <li>Press <strong>Enter</strong> on an app, then <strong>Enter</strong> to install</li>
-    </ol>
-  </div>
-
-  <div class="search-bar">
-    <input type="text" id="searchInput" placeholder="Search apps..." aria-label="Search apps">
-    <button class="clear-btn" id="clearBtn" onclick="clearSearch()" aria-label="Clear search">✕</button>
-  </div>
-
-  <div class="tabs" role="tablist">
-    <button class="tab active" onclick="filterCategory('all')" role="tab" data-cat="all">All</button>
-    <button class="tab" onclick="filterCategory('games')" role="tab" data-cat="games">Games</button>
-    <button class="tab" onclick="filterCategory('productivity')" role="tab" data-cat="productivity">Productivity</button>
-    <button class="tab" onclick="filterCategory('utilities')" role="tab" data-cat="utilities">Utilities</button>
-    <button class="tab" onclick="filterCategory('media')" role="tab" data-cat="media">Media</button>
-    <button class="tab" onclick="filterCategory('ai')" role="tab" data-cat="ai">AI Clients</button>
-  </div>
-
-  <div class="no-results" id="noResults">No apps found matching your search.</div>
-
-  <div class="section" data-category="games" id="sec-games">
-    <h2>Games</h2>
-    <div class="app-grid">
-      <a href="app/tictactoe.html" class="app-card"><div class="name">Tic Tac Toe</div><div class="desc">Classic two-player vs computer</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/hangman.html" class="app-card"><div class="name">Hangman</div><div class="desc">Guess letters to find the word</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/memory_match.html" class="app-card"><div class="name">Memory Match</div><div class="desc">Find matching pairs</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/connect_four.html" class="app-card"><div class="name">Connect Four</div><div class="desc">Drop discs to connect four</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/solitaire.html" class="app-card"><div class="name">Solitaire</div><div class="desc">Classic Klondike card game</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/sudoku.html" class="app-card"><div class="name">Sudoku</div><div class="desc">Number puzzle with three difficulties</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/blackjack.html" class="app-card"><div class="name">Blackjack</div><div class="desc">Beat the dealer to 21</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/game2048.html" class="app-card"><div class="name">2048</div><div class="desc">Slide and merge tiles</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/snake.html" class="app-card"><div class="name">Snake</div><div class="desc">Eat food, grow longer</div><div class="badges"><span class="badge cat">Games</span></div></a>
-      <a href="app/minesweeper.html" class="app-card"><div class="name">Minesweeper</div><div class="desc">Find the mines</div><div class="badges"><span class="badge cat">Games</span></div></a>
+  <main id="main-content">
+    <div class="stats" role="region" aria-label="Store statistics">
+      <div class="stat"><div class="num">24</div><div class="label">Apps</div></div>
+      <div class="stat"><div class="num">5</div><div class="label">Categories</div></div>
+      <div class="stat"><div class="num">100%</div><div class="label">Free</div></div>
     </div>
-  </div>
 
-  <div class="section" data-category="productivity" id="sec-productivity">
-    <h2>Productivity</h2>
-    <div class="app-grid">
-      <a href="app/todo_list.html" class="app-card"><div class="name">Todo List</div><div class="desc">Manage your tasks</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
-      <a href="app/habit_tracker.html" class="app-card"><div class="name">Habit Tracker</div><div class="desc">Track daily habits and streaks</div><div class="badges"><span class="badge cat">Productivity</span><span class="badge new">New</span></div></a>
-      <a href="app/calendar.html" class="app-card"><div class="name">Calendar</div><div class="desc">View dates and add events</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
-      <a href="app/typing_test.html" class="app-card"><div class="name">Typing Test</div><div class="desc">Measure your typing speed</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
+    <div class="install" role="region" aria-label="Installation instructions">
+      <h2>How to Install</h2>
+      <ol>
+        <li>Open <strong>TechNote</strong></li>
+        <li>Navigate to <strong>App Store</strong> from the main menu</li>
+        <li>Browse by category or <strong>Search</strong> for an app</li>
+        <li>Press <strong>Enter</strong> on an app, then <strong>Enter</strong> to install</li>
+      </ol>
     </div>
-  </div>
 
-  <div class="section" data-category="utilities" id="sec-utilities">
-    <h2>Utilities</h2>
-    <div class="app-grid">
-      <a href="app/password_gen.html" class="app-card"><div class="name">Password Generator</div><div class="desc">Create secure passwords</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
-      <a href="app/unit_converter.html" class="app-card"><div class="name">Unit Converter</div><div class="desc">Convert measurements</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
-      <a href="app/dice_roller.html" class="app-card"><div class="name">Dice Roller</div><div class="desc">Roll dice for games</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
-      <a href="app/alarm_clock.html" class="app-card"><div class="name">Alarm Clock</div><div class="desc">Set alarms with snooze</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
-      <a href="app/weather.html" class="app-card"><div class="name">Weather</div><div class="desc">Current weather by city</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+    <div class="search-bar" role="search">
+      <label for="searchInput">Search apps by name or description</label>
+      <input type="text" id="searchInput" placeholder="Search apps..." autocomplete="off" aria-describedby="searchHint">
+      <span id="searchHint" class="sr-only">Type to filter apps. Results update as you type.</span>
+      <button class="clear-btn" id="clearBtn" onclick="clearSearch()" aria-label="Clear search">✕</button>
     </div>
-  </div>
 
-  <div class="section" data-category="media" id="sec-media">
-    <h2>Media</h2>
-    <div class="app-grid">
-      <a href="app/stopwatch.html" class="app-card"><div class="name">Stopwatch</div><div class="desc">Precision timing with laps</div><div class="badges"><span class="badge cat">Media</span></div></a>
-      <a href="app/book_reader.html" class="app-card"><div class="name">Book Reader</div><div class="desc">Read text files with bookmarks</div><div class="badges"><span class="badge cat">Media</span><span class="badge new">New</span></div></a>
-      <a href="app/voice_memo.html" class="app-card"><div class="name">Voice Memos</div><div class="desc">Record and play back audio</div><div class="badges"><span class="badge cat">Media</span><span class="badge new">New</span></div></a>
+    <nav class="tabs" role="tablist" aria-label="Filter by category">
+      <button class="tab active" onclick="filterCategory('all')" role="tab" aria-selected="true" data-cat="all">All</button>
+      <button class="tab" onclick="filterCategory('games')" role="tab" aria-selected="false" data-cat="games">Games</button>
+      <button class="tab" onclick="filterCategory('productivity')" role="tab" aria-selected="false" data-cat="productivity">Productivity</button>
+      <button class="tab" onclick="filterCategory('utilities')" role="tab" aria-selected="false" data-cat="utilities">Utilities</button>
+      <button class="tab" onclick="filterCategory('media')" role="tab" aria-selected="false" data-cat="media">Media</button>
+      <button class="tab" onclick="filterCategory('ai')" role="tab" aria-selected="false" data-cat="ai">AI Clients</button>
+    </nav>
+
+    <div class="no-results" id="noResults" role="status" aria-live="polite">No apps found matching your search.</div>
+
+    <div class="section" data-category="games" id="sec-games" role="region" aria-label="Games">
+      <h2>Games</h2>
+      <div class="app-grid">
+        <a href="app/tictactoe.html" class="app-card" aria-label="Tic Tac Toe - Classic two-player vs computer"><div class="name">Tic Tac Toe</div><div class="desc">Classic two-player vs computer</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/hangman.html" class="app-card" aria-label="Hangman - Guess letters to find the word"><div class="name">Hangman</div><div class="desc">Guess letters to find the word</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/memory_match.html" class="app-card" aria-label="Memory Match - Find matching pairs"><div class="name">Memory Match</div><div class="desc">Find matching pairs</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/connect_four.html" class="app-card" aria-label="Connect Four - Drop discs to connect four"><div class="name">Connect Four</div><div class="desc">Drop discs to connect four</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/solitaire.html" class="app-card" aria-label="Solitaire - Classic Klondike card game"><div class="name">Solitaire</div><div class="desc">Classic Klondike card game</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/sudoku.html" class="app-card" aria-label="Sudoku - Number puzzle with three difficulties"><div class="name">Sudoku</div><div class="desc">Number puzzle with three difficulties</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/blackjack.html" class="app-card" aria-label="Blackjack - Beat the dealer to 21"><div class="name">Blackjack</div><div class="desc">Beat the dealer to 21</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/game2048.html" class="app-card" aria-label="2048 - Slide and merge tiles"><div class="name">2048</div><div class="desc">Slide and merge tiles</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/snake.html" class="app-card" aria-label="Snake - Eat food, grow longer"><div class="name">Snake</div><div class="desc">Eat food, grow longer</div><div class="badges"><span class="badge cat">Games</span></div></a>
+        <a href="app/minesweeper.html" class="app-card" aria-label="Minesweeper - Find the mines"><div class="name">Minesweeper</div><div class="desc">Find the mines</div><div class="badges"><span class="badge cat">Games</span></div></a>
+      </div>
     </div>
-  </div>
 
-  <div class="section" data-category="ai" id="sec-ai">
-    <h2>AI Clients</h2>
-    <div class="app-grid">
-      <a href="app/opencode_client.html" class="app-card"><div class="name">OpenCode AI Client</div><div class="desc">27 providers, sessions, model selection</div><div class="badges"><span class="badge cat">AI Clients</span><span class="badge new">New</span></div></a>
-      <a href="app/chatgpt_client.html" class="app-card"><div class="name">ChatGPT Client</div><div class="desc">OpenAI + Zen, chat history, voice output</div><div class="badges"><span class="badge cat">AI Clients</span><span class="badge new">New</span></div></a>
+    <div class="section" data-category="productivity" id="sec-productivity" role="region" aria-label="Productivity">
+      <h2>Productivity</h2>
+      <div class="app-grid">
+        <a href="app/todo_list.html" class="app-card" aria-label="Todo List - Manage your tasks"><div class="name">Todo List</div><div class="desc">Manage your tasks</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
+        <a href="app/habit_tracker.html" class="app-card" aria-label="Habit Tracker - Track daily habits and streaks, New"><div class="name">Habit Tracker</div><div class="desc">Track daily habits and streaks</div><div class="badges"><span class="badge cat">Productivity</span><span class="badge new">New</span></div></a>
+        <a href="app/calendar.html" class="app-card" aria-label="Calendar - View dates and add events"><div class="name">Calendar</div><div class="desc">View dates and add events</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
+        <a href="app/typing_test.html" class="app-card" aria-label="Typing Test - Measure your typing speed"><div class="name">Typing Test</div><div class="desc">Measure your typing speed</div><div class="badges"><span class="badge cat">Productivity</span></div></a>
+      </div>
     </div>
-  </div>
 
-  <div class="footer">
+    <div class="section" data-category="utilities" id="sec-utilities" role="region" aria-label="Utilities">
+      <h2>Utilities</h2>
+      <div class="app-grid">
+        <a href="app/password_gen.html" class="app-card" aria-label="Password Generator - Create secure passwords"><div class="name">Password Generator</div><div class="desc">Create secure passwords</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+        <a href="app/unit_converter.html" class="app-card" aria-label="Unit Converter - Convert measurements"><div class="name">Unit Converter</div><div class="desc">Convert measurements</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+        <a href="app/dice_roller.html" class="app-card" aria-label="Dice Roller - Roll dice for games"><div class="name">Dice Roller</div><div class="desc">Roll dice for games</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+        <a href="app/alarm_clock.html" class="app-card" aria-label="Alarm Clock - Set alarms with snooze"><div class="name">Alarm Clock</div><div class="desc">Set alarms with snooze</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+        <a href="app/weather.html" class="app-card" aria-label="Weather - Current weather by city"><div class="name">Weather</div><div class="desc">Current weather by city</div><div class="badges"><span class="badge cat">Utilities</span></div></a>
+      </div>
+    </div>
+
+    <div class="section" data-category="media" id="sec-media" role="region" aria-label="Media">
+      <h2>Media</h2>
+      <div class="app-grid">
+        <a href="app/stopwatch.html" class="app-card" aria-label="Stopwatch - Precision timing with laps"><div class="name">Stopwatch</div><div class="desc">Precision timing with laps</div><div class="badges"><span class="badge cat">Media</span></div></a>
+        <a href="app/book_reader.html" class="app-card" aria-label="Book Reader - Read text files with bookmarks, New"><div class="name">Book Reader</div><div class="desc">Read text files with bookmarks</div><div class="badges"><span class="badge cat">Media</span><span class="badge new">New</span></div></a>
+        <a href="app/voice_memo.html" class="app-card" aria-label="Voice Memos - Record and play back audio, New"><div class="name">Voice Memos</div><div class="desc">Record and play back audio</div><div class="badges"><span class="badge cat">Media</span><span class="badge new">New</span></div></a>
+      </div>
+    </div>
+
+    <div class="section" data-category="ai" id="sec-ai" role="region" aria-label="AI Clients">
+      <h2>AI Clients</h2>
+      <div class="app-grid">
+        <a href="app/opencode_client.html" class="app-card" aria-label="OpenCode AI Client - 27 providers, sessions, model selection, New"><div class="name">OpenCode AI Client</div><div class="desc">27 providers, sessions, model selection</div><div class="badges"><span class="badge cat">AI Clients</span><span class="badge new">New</span></div></a>
+        <a href="app/chatgpt_client.html" class="app-card" aria-label="ChatGPT Client - OpenAI plus Zen, chat history, voice output, New"><div class="name">ChatGPT Client</div><div class="desc">OpenAI + Zen, chat history, voice output</div><div class="badges"><span class="badge cat">AI Clients</span><span class="badge new">New</span></div></a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer" role="contentinfo">
     <p><a href="https://github.com/tech-master33/tech-note">Get TechNote</a> · <a href="submit.html">Submit an App</a></p>
-    <p style="margin-top:8px;">TechNote App Store © 2026</p>
-  </div>
+    <p style="margin-top:10px;">TechNote App Store &copy; 2026</p>
+  </footer>
 </div>
 
 <script>
 function toggleTheme() {
-  var html = document.documentElement;
-  var current = html.getAttribute('data-theme');
-  var next = current === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-theme', next);
+  var h = document.documentElement;
+  var next = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  h.setAttribute('data-theme', next);
   localStorage.setItem('theme', next);
-  document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙';
+  var btn = document.getElementById('themeBtn');
+  btn.textContent = next === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+  btn.setAttribute('aria-label', next === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
 }
 (function() {
   var saved = localStorage.getItem('theme');
   if (saved) {
     document.documentElement.setAttribute('data-theme', saved);
-    document.getElementById('themeBtn').textContent = saved === 'dark' ? '☀️' : '🌙';
+    var btn = document.getElementById('themeBtn');
+    btn.textContent = saved === 'dark' ? '\u2600\uFE0F' : '\uD83C\uDF19';
+    btn.setAttribute('aria-label', saved === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
   }
 })();
 
@@ -191,7 +244,9 @@ function clearSearch() {
 function filterCategory(cat) {
   currentCategory = cat;
   document.querySelectorAll('.tab').forEach(function(t) {
-    t.classList.toggle('active', t.getAttribute('data-cat') === cat);
+    var isActive = t.getAttribute('data-cat') === cat;
+    t.classList.toggle('active', isActive);
+    t.setAttribute('aria-selected', isActive);
   });
   applyFilters();
 }
@@ -200,15 +255,12 @@ function applyFilters() {
   var query = searchInput.value.toLowerCase().trim();
   var sections = document.querySelectorAll('.section[data-category]');
   var anyVisible = false;
+  var totalVisible = 0;
 
   sections.forEach(function(sec) {
     var secCat = sec.getAttribute('data-category');
     var catMatch = currentCategory === 'all' || secCat === currentCategory;
-
-    if (!catMatch) {
-      sec.classList.add('hidden');
-      return;
-    }
+    if (!catMatch) { sec.classList.add('hidden'); return; }
 
     var cards = sec.querySelectorAll('.app-card');
     var sectionVisible = false;
@@ -218,7 +270,7 @@ function applyFilters() {
       var desc = card.querySelector('.desc').textContent.toLowerCase();
       var searchMatch = !query || name.indexOf(query) !== -1 || desc.indexOf(query) !== -1;
       card.style.display = searchMatch ? '' : 'none';
-      if (searchMatch) sectionVisible = true;
+      if (searchMatch) { sectionVisible = true; totalVisible++; }
     });
 
     sec.classList.toggle('hidden', !sectionVisible);
@@ -226,6 +278,11 @@ function applyFilters() {
   });
 
   noResults.classList.toggle('visible', !anyVisible);
+  if (query) {
+    noResults.textContent = anyVisible
+      ? totalVisible + ' app' + (totalVisible !== 1 ? 's' : '') + ' found'
+      : 'No apps found matching "' + searchInput.value + '"';
+  }
 }
 </script>
 
