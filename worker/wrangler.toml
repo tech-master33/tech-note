@@ -2,4 +2,8 @@ name = "tech-chat"
 main = "index.js"
 compatibility_date = "2026-06-18"
 
+[[kv_namespaces]]
+binding = "CHAT_DATA"
+id = "213af5e001694a3ca1f75291ac87c09d"
+
 [vars]

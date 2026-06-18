@@ -1,8 +1,11 @@
+// Tech-Chat Worker with KV + DMs
+// Voice messages = text with ` prefix (base64 encoded audio)
+
 async function hash(password, salt) {
   if (!salt) salt = crypto.getRandomValues(new Uint8Array(16));
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
   const keyHex = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
   const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
   return saltHex + ':' + keyHex;
@@ -10,12 +13,11 @@ async function hash(password, salt) {
 
 async function check(password, stored) {
   if (!stored || !stored.includes(':')) return false;
-  const saltHex = stored.split(':')[0];
-  const storedKey = stored.split(':')[1];
+  const [saltHex, storedKey] = stored.split(':');
   const salt = new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b, 16)));
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
   const keyHex = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
   return keyHex === storedKey;
 }
@@ -32,204 +34,330 @@ function jsonResp(code, data) {
   });
 }
 
-let DB = null;
-
-function getDb() {
-  if (DB) return DB;
-  DB = {
-    users: {},
-    rooms: {},
-    room_members: {},
-    messages: [],
-    next_user_id: 1,
-    next_room_id: 1,
-    next_msg_id: 1,
-  };
-  return DB;
+function corsResp() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+    },
+  });
 }
 
-async function initAdmins() {
-  const db = getDb();
-  if (db.admins_initialized) return;
+async function kvGet(env, key) { return await env.CHAT_DATA.get(key, { type: 'json' }); }
+async function kvPut(env, key, value) { await env.CHAT_DATA.put(key, JSON.stringify(value)); }
+async function kvDelete(env, key) { await env.CHAT_DATA.delete(key); }
+async function kvList(env, prefix) { const l = await env.CHAT_DATA.list({ prefix }); return l.keys.map(k => k.name); }
+
+async function nextId(env, type) {
+  const key = `counter:${type}`;
+  const current = await env.CHAT_DATA.get(key, { type: 'number' }) || 0;
+  const next = current + 1;
+  await env.CHAT_DATA.put(key, next.toString());
+  return next;
+}
+
+async function initAdmins(env) {
+  const initialized = await kvGet(env, 'initialized');
+  if (initialized) return;
   const ADMIN_USERS = ['natan', 'tech'];
   const ADMIN_PASSWORDS = { natan: 'Natan2014!', tech: 'tech' };
+  const users = await kvGet(env, 'users') || {};
   for (const u of ADMIN_USERS) {
-    if (!db.users[u]) {
-      const id = db.next_user_id++;
-      db.users[u] = { id, username: u, password_hash: await hash(ADMIN_PASSWORDS[u]), role: 'admin' };
+    if (!users[u]) {
+      const id = await nextId(env, 'users');
+      users[u] = { id, username: u, password_hash: await hash(ADMIN_PASSWORDS[u]), role: 'admin' };
     }
   }
-  db.admins_initialized = true;
+  await kvPut(env, 'users', users);
+  await kvPut(env, 'initialized', true);
 }
 
-async function register(body) {
+// --- Auth ---
+async function register(env, body) {
   const u = (body.username || '').trim();
   const p = body.password || '';
   if (!u || !p) return jsonResp(400, { error: 'Username and password required' });
-  const db = getDb();
-  if (db.users[u]) return jsonResp(409, { error: 'Username taken' });
-  const id = db.next_user_id++;
-  db.users[u] = { id, username: u, password_hash: await hash(p), role: 'user' };
+  if (u.length > 32) return jsonResp(400, { error: 'Username too long' });
+  const users = await kvGet(env, 'users') || {};
+  if (users[u]) return jsonResp(409, { error: 'Username taken' });
+  const id = await nextId(env, 'users');
+  users[u] = { id, username: u, password_hash: await hash(p), role: 'user' };
+  await kvPut(env, 'users', users);
   return jsonResp(201, { user_id: id, username: u });
 }
 
-async function login(body) {
+async function login(env, body) {
   const u = (body.username || '').trim();
   const p = body.password || '';
-  await initAdmins();
-  const db = getDb();
-  const user = db.users[u];
+  await initAdmins(env);
+  const users = await kvGet(env, 'users') || {};
+  const user = users[u];
   if (!user) return jsonResp(401, { error: 'Invalid credentials' });
   if (!user.password_hash) {
     user.password_hash = await hash(p);
+    await kvPut(env, 'users', users);
   } else if (!(await check(p, user.password_hash))) {
     return jsonResp(401, { error: 'Invalid credentials' });
   }
   return jsonResp(200, { user_id: user.id, username: user.username, role: user.role });
 }
 
-async function changePassword(uid, body) {
-  const db = getDb();
-  const user = Object.values(db.users).find(u => u.id === uid);
+async function changePassword(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const user = Object.values(users).find(u => u.id === uid);
   if (!user) return jsonResp(404, { error: 'User not found' });
   if (!(await check(body.old_password || '', user.password_hash)))
     return jsonResp(401, { error: 'Old password is incorrect' });
   user.password_hash = await hash(body.new_password);
+  await kvPut(env, 'users', users);
   return jsonResp(200, { success: true });
 }
 
-async function getRooms(uid) {
-  const db = getDb();
-  const rooms = Object.values(db.rooms).map(r => {
-    const members = db.room_members[r.id] || [];
+// --- Rooms ---
+async function getRooms(env, uid) {
+  const rooms = await kvGet(env, 'rooms') || {};
+  const memberships = await kvGet(env, 'memberships') || {};
+  const unread = await kvGet(env, 'unread') || {};
+  const result = Object.values(rooms).map(r => {
+    const members = memberships[r.id] || [];
     return {
       ...r,
       member_count: members.length,
-      is_member: uid ? members.includes(uid) : false,
+      is_member: members.includes(uid),
+      unread_count: (unread[uid] && unread[uid][r.id]) || 0,
     };
   });
-  rooms.sort((a, b) => a.name.localeCompare(b.name));
-  return jsonResp(200, { rooms });
+  result.sort((a, b) => a.name.localeCompare(b.name));
+  return jsonResp(200, { rooms: result });
 }
 
-async function createRoom(uid, body) {
+async function createRoom(env, uid, body) {
   const n = (body.name || '').trim();
   if (!n) return jsonResp(400, { error: 'Room name required' });
-  const db = getDb();
-  const id = db.next_room_id++;
-  db.rooms[id] = { id, name: n, description: body.description || '', created_by: uid };
-  db.room_members[id] = [uid];
-  return jsonResp(201, { room: db.rooms[id] });
+  const rooms = await kvGet(env, 'rooms') || {};
+  const memberships = await kvGet(env, 'memberships') || {};
+  const id = await nextId(env, 'rooms');
+  rooms[id] = { id, name: n, description: body.description || '', created_by: uid, created_at: new Date().toISOString() };
+  memberships[id] = [uid];
+  await kvPut(env, 'rooms', rooms);
+  await kvPut(env, 'memberships', memberships);
+  return jsonResp(201, { room: rooms[id] });
 }
 
-async function joinRoom(uid, rid) {
-  const db = getDb();
-  if (!db.room_members[rid]) db.room_members[rid] = [];
-  if (!db.room_members[rid].includes(uid)) db.room_members[rid].push(uid);
+async function joinRoom(env, uid, rid) {
+  const memberships = await kvGet(env, 'memberships') || {};
+  if (!memberships[rid]) memberships[rid] = [];
+  if (!memberships[rid].includes(uid)) memberships[rid].push(uid);
+  await kvPut(env, 'memberships', memberships);
   return jsonResp(200, { success: true });
 }
 
-async function leaveRoom(uid, rid) {
-  const db = getDb();
-  if (db.room_members[rid]) {
-    db.room_members[rid] = db.room_members[rid].filter(m => m !== uid);
-  }
+async function leaveRoom(env, uid, rid) {
+  const memberships = await kvGet(env, 'memberships') || {};
+  if (memberships[rid]) memberships[rid] = memberships[rid].filter(m => m !== uid);
+  await kvPut(env, 'memberships', memberships);
   return jsonResp(200, { success: true });
 }
 
-async function getMessages(rid, sinceId) {
-  const db = getDb();
+async function deleteRoom(env, uid, rid) {
+  const users = await kvGet(env, 'users') || {};
+  const user = Object.values(users).find(u => u.id === uid);
+  if (!user || user.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
+  const rooms = await kvGet(env, 'rooms') || {};
+  const memberships = await kvGet(env, 'memberships') || {};
+  delete rooms[rid];
+  delete memberships[rid];
+  await kvPut(env, 'rooms', rooms);
+  await kvPut(env, 'memberships', memberships);
+  return jsonResp(200, { success: true });
+}
+
+// --- Messages ---
+async function getMessages(env, rid, sinceId, limit) {
   sinceId = parseInt(sinceId) || 0;
-  const msgs = db.messages.filter(m => m.room_id === rid && m.id > sinceId);
-  return jsonResp(200, { messages: msgs });
+  limit = Math.min(parseInt(limit) || 50, 200);
+  const msgs = await kvGet(env, `msgs:${rid}`) || [];
+  return jsonResp(200, { messages: msgs.filter(m => m.id > sinceId).slice(-limit) });
 }
 
-async function sendMessage(uid, rid, body) {
+async function sendMessage(env, uid, rid, body) {
   const c = (body.content || '').trim();
   if (!c) return jsonResp(400, { error: 'Content required' });
-  const db = getDb();
-  const user = Object.values(db.users).find(u => u.id === uid);
-  const id = db.next_msg_id++;
+  const users = await kvGet(env, 'users') || {};
+  const user = Object.values(users).find(u => u.id === uid);
+  const msgs = await kvGet(env, `msgs:${rid}`) || [];
+  const id = await nextId(env, 'messages');
   const msg = {
     id, room_id: rid, sender_id: uid,
     sender_username: user ? user.username : '?',
-    type: body.type || 'text', content: c,
+    content: c,
     created_at: new Date().toISOString(),
   };
-  db.messages.push(msg);
-  const keep = {};
-  for (let i = db.messages.length - 1; i >= 0; i--) {
-    const m = db.messages[i];
-    if (!keep[m.room_id]) keep[m.room_id] = 0;
-    keep[m.room_id]++;
+  msgs.push(msg);
+  if (msgs.length > 500) msgs.splice(0, msgs.length - 500);
+  await kvPut(env, `msgs:${rid}`, msgs);
+  // Update unread
+  const memberships = await kvGet(env, 'memberships') || {};
+  const members = memberships[rid] || [];
+  const unread = await kvGet(env, 'unread') || {};
+  for (const mid of members) {
+    if (mid === uid) continue;
+    if (!unread[mid]) unread[mid] = {};
+    unread[mid][rid] = (unread[mid][rid] || 0) + 1;
   }
-  const filtered = [];
-  for (let i = db.messages.length - 1; i >= 0; i--) {
-    const m = db.messages[i];
-    if (keep[m.room_id] > 0 && keep[m.room_id] <= 200) {
-      filtered.unshift(m);
-    } else {
-      keep[m.room_id]--;
-    }
-  }
-  db.messages = filtered;
+  await kvPut(env, 'unread', unread);
   return jsonResp(201, { message: msg });
 }
 
-async function getUsers() {
-  const db = getDb();
-  const users = Object.values(db.users).map(u => ({
-    id: u.id, username: u.username, role: u.role,
-  }));
-  users.sort((a, b) => a.username.localeCompare(b.username));
-  return jsonResp(200, { users });
+async function deleteMessage(env, uid, rid, msgId) {
+  const users = await kvGet(env, 'users') || {};
+  const user = Object.values(users).find(u => u.id === uid);
+  if (!user) return jsonResp(404, { error: 'User not found' });
+  const msgs = await kvGet(env, `msgs:${rid}`) || [];
+  const msg = msgs.find(m => m.id === msgId);
+  if (!msg) return jsonResp(404, { error: 'Message not found' });
+  if (msg.sender_id !== uid && user.role !== 'admin')
+    return jsonResp(403, { error: 'Cannot delete others message' });
+  msgs.splice(msgs.indexOf(msg), 1);
+  await kvPut(env, `msgs:${rid}`, msgs);
+  return jsonResp(200, { success: true });
 }
 
-async function searchUsers(query) {
-  const db = getDb();
+// --- DMs ---
+async function getDMList(env, uid) {
+  const dms = await kvGet(env, 'dms') || {};
+  const users = await kvGet(env, 'users') || {};
+  const unread = await kvGet(env, 'dm_unread') || {};
+  const conversations = [];
+  for (const [key, lastMsg] of Object.entries(dms)) {
+    const [a, b] = key.split('-').map(Number);
+    if (a !== uid && b !== uid) continue;
+    const otherId = a === uid ? b : a;
+    const other = Object.values(users).find(u => u.id === otherId);
+    if (!other) continue;
+    conversations.push({
+      user_id: otherId,
+      username: other.username,
+      last_message: lastMsg,
+      unread_count: (unread[uid] && unread[uid][otherId]) || 0,
+    });
+  }
+  conversations.sort((a, b) => (b.last_message?.created_at || '').localeCompare(a.last_message?.created_at || ''));
+  return jsonResp(200, { conversations });
+}
+
+async function getDMessages(env, uid, otherId, sinceId, limit) {
+  sinceId = parseInt(sinceId) || 0;
+  limit = Math.min(parseInt(limit) || 50, 200);
+  const key = uid < otherId ? `${uid}-${otherId}` : `${otherId}-${uid}`;
+  const msgs = await kvGet(env, `dm:${key}`) || [];
+  const unread = await kvGet(env, 'dm_unread') || {};
+  if (unread[uid]) unread[uid][otherId] = 0;
+  await kvPut(env, 'dm_unread', unread);
+  return jsonResp(200, { messages: msgs.filter(m => m.id > sinceId).slice(-limit) });
+}
+
+async function sendDM(env, uid, otherId, body) {
+  const c = (body.content || '').trim();
+  if (!c) return jsonResp(400, { error: 'Content required' });
+  const users = await kvGet(env, 'users') || {};
+  const sender = Object.values(users).find(u => u.id === uid);
+  const receiver = Object.values(users).find(u => u.id === otherId);
+  if (!receiver) return jsonResp(404, { error: 'User not found' });
+  const key = uid < otherId ? `${uid}-${otherId}` : `${otherId}-${uid}`;
+  const msgs = await kvGet(env, `dm:${key}`) || [];
+  const id = await nextId(env, 'messages');
+  const msg = {
+    id, sender_id: uid, receiver_id: otherId,
+    sender_username: sender ? sender.username : '?',
+    content: c,
+    created_at: new Date().toISOString(),
+  };
+  msgs.push(msg);
+  if (msgs.length > 500) msgs.splice(0, msgs.length - 500);
+  await kvPut(env, `dm:${key}`, msgs);
+  const dms = await kvGet(env, 'dms') || {};
+  dms[key] = msg;
+  await kvPut(env, 'dms', dms);
+  const unread = await kvGet(env, 'dm_unread') || {};
+  if (!unread[otherId]) unread[otherId] = {};
+  unread[otherId][uid] = (unread[otherId][uid] || 0) + 1;
+  await kvPut(env, 'dm_unread', unread);
+  return jsonResp(201, { message: msg });
+}
+
+async function deleteDM(env, uid, msgId) {
+  const users = await kvGet(env, 'users') || {};
+  const user = Object.values(users).find(u => u.id === uid);
+  if (!user) return jsonResp(404, { error: 'User not found' });
+  const keys = await kvList(env, 'dm:');
+  for (const key of keys) {
+    const msgs = await kvGet(env, key) || [];
+    const msg = msgs.find(m => m.id === msgId);
+    if (msg) {
+      if (msg.sender_id !== uid && user.role !== 'admin')
+        return jsonResp(403, { error: 'Cannot delete others message' });
+      msgs.splice(msgs.indexOf(msg), 1);
+      await kvPut(env, key, msgs);
+      return jsonResp(200, { success: true });
+    }
+  }
+  return jsonResp(404, { error: 'Message not found' });
+}
+
+// --- Users ---
+async function getUsers(env) {
+  const users = await kvGet(env, 'users') || {};
+  const result = Object.values(users).map(u => ({ id: u.id, username: u.username, role: u.role }));
+  result.sort((a, b) => a.username.localeCompare(b.username));
+  return jsonResp(200, { users: result });
+}
+
+async function searchUsers(env, query) {
+  const users = await kvGet(env, 'users') || {};
   const q = query.toLowerCase();
-  const users = Object.values(db.users)
-    .filter(u => u.username.toLowerCase().includes(q))
-    .map(u => ({ id: u.id, username: u.username, role: u.role }));
-  return jsonResp(200, { users });
+  return jsonResp(200, { users: Object.values(users).filter(u => u.username.toLowerCase().includes(q)).map(u => ({ id: u.id, username: u.username, role: u.role })) });
 }
 
-async function grantAdmin(uid, body) {
-  const db = getDb();
-  const me = Object.values(db.users).find(u => u.id === uid);
+// --- Admin ---
+async function grantAdmin(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const me = Object.values(users).find(u => u.id === uid);
   if (!me || me.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
-  const target = db.users[body.username];
+  const target = users[body.username];
   if (!target) return jsonResp(404, { error: 'User not found' });
   target.role = 'admin';
+  await kvPut(env, 'users', users);
   return jsonResp(200, { success: true });
 }
 
-async function revokeAdmin(uid, body) {
-  const db = getDb();
-  const me = Object.values(db.users).find(u => u.id === uid);
+async function revokeAdmin(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const me = Object.values(users).find(u => u.id === uid);
   if (!me || me.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
-  const target = db.users[body.username];
+  const target = users[body.username];
   if (!target) return jsonResp(404, { error: 'User not found' });
-  const ADMIN_USERS = ['natan', 'tech'];
-  if (ADMIN_USERS.includes(target.username))
-    return jsonResp(403, { error: 'Cannot revoke default admin' });
+  if (['natan', 'tech'].includes(target.username)) return jsonResp(403, { error: 'Cannot revoke default admin' });
   target.role = 'user';
+  await kvPut(env, 'users', users);
   return jsonResp(200, { success: true });
 }
 
+// --- Router ---
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const method = request.method;
     let path = url.pathname;
 
+    if (method === 'OPTIONS') return corsResp();
     if (path.startsWith('/api/')) path = path.slice(4);
     else if (path === '/api') path = '/';
 
-    if (method === 'OPTIONS') return jsonResp(200, {});
-
     let body = {};
-    if (method !== 'GET' && method !== 'OPTIONS') {
+    if (method !== 'GET' && method !== 'OPTIONS' && method !== 'DELETE') {
       try { body = await request.json(); } catch (e) {}
     }
 
@@ -241,33 +369,39 @@ export default {
       return jsonResp(401, { error: 'Authentication required' });
 
     try {
-      if (path === '/register' && method === 'POST') return await register(body);
-      if (path === '/login' && method === 'POST') return await login(body);
-      if (path === '/password' && method === 'POST') return await changePassword(uid, body);
+      if (path === '/status') return jsonResp(200, { status: 'ok', version: '3.1.0' });
+      if (path === '/register' && method === 'POST') return await register(env, body);
+      if (path === '/login' && method === 'POST') return await login(env, body);
+      if (path === '/password' && method === 'POST') return await changePassword(env, uid, body);
 
-      if (path === '/rooms' && method === 'GET') return await getRooms(uid);
-      if (path === '/rooms' && method === 'POST') return await createRoom(uid, body);
+      if (path === '/rooms' && method === 'GET') return await getRooms(env, uid);
+      if (path === '/rooms' && method === 'POST') return await createRoom(env, uid, body);
 
       const parts = path.split('/').filter(Boolean);
       if (parts[0] === 'rooms' && parts.length >= 2) {
         const rid = parseInt(parts[1]);
         if (!rid) return jsonResp(400, { error: 'Invalid room id' });
         const action = parts[2];
-        if (action === 'join' && method === 'POST') return await joinRoom(uid, rid);
-        if (action === 'leave' && method === 'POST') return await leaveRoom(uid, rid);
-        if (action === 'messages' && method === 'GET') return await getMessages(rid, url.searchParams.get('since_id'));
-        if (action === 'messages' && method === 'POST') return await sendMessage(uid, rid, body);
+        if (action === 'join' && method === 'POST') return await joinRoom(env, uid, rid);
+        if (action === 'leave' && method === 'POST') return await leaveRoom(env, uid, rid);
+        if (action === 'delete' && method === 'POST') return await deleteRoom(env, uid, rid);
+        if (action === 'messages' && method === 'GET') return await getMessages(env, rid, url.searchParams.get('since_id'), url.searchParams.get('limit'));
+        if (action === 'messages' && method === 'POST') return await sendMessage(env, uid, rid, body);
+        if (action === 'message' && parts[3] && method === 'DELETE') return await deleteMessage(env, uid, rid, parseInt(parts[3]));
       }
+
+      if (parts[0] === 'dm' && parts.length === 1 && method === 'GET') return await getDMList(env, uid);
+      if (parts[0] === 'dm' && parts.length === 2 && method === 'GET') return await getDMessages(env, uid, parseInt(parts[1]), url.searchParams.get('since_id'), url.searchParams.get('limit'));
+      if (parts[0] === 'dm' && parts.length === 2 && method === 'POST') return await sendDM(env, uid, parseInt(parts[1]), body);
+      if (parts[0] === 'dm' && parts[1] === 'message' && parts[2] && method === 'DELETE') return await deleteDM(env, uid, parseInt(parts[2]));
 
       if (path === '/users' && method === 'GET') {
         const query = url.searchParams.get('query');
-        if (query) return await searchUsers(query);
-        return await getUsers();
+        return query ? await searchUsers(env, query) : await getUsers(env);
       }
 
-      if (path === '/admin/grant' && method === 'POST') return await grantAdmin(uid, body);
-      if (path === '/admin/revoke' && method === 'POST') return await revokeAdmin(uid, body);
-      if (path === '/status') return jsonResp(200, { status: 'ok' });
+      if (path === '/admin/grant' && method === 'POST') return await grantAdmin(env, uid, body);
+      if (path === '/admin/revoke' && method === 'POST') return await revokeAdmin(env, uid, body);
 
       return jsonResp(404, { error: 'Not found' });
     } catch (e) {
