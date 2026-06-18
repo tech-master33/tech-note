@@ -5,50 +5,108 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TechNote App Store</title>
 <style>
-body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; line-height: 1.6; color: #333; }
-h1 { color: #1a1a2e; }
-h2 { color: #16213e; margin-top: 30px; }
-a { color: #0f3460; }
+body { font-family: sans-serif; max-width: 700px; margin: 0 auto; padding: 20px; line-height: 1.6; color: #333; background: #f8f9fa; }
+.header { background: #1a1a2e; color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; text-align: center; }
+.header h1 { color: white; margin: 0; font-size: 1.8em; }
+.header p { color: #a0a0c0; margin: 8px 0 0; }
+.section { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.section h2 { color: #1a1a2e; margin-top: 0; border-bottom: 2px solid #e8e8f0; padding-bottom: 8px; }
+.app-list { list-style: none; padding: 0; margin: 0; }
+.app-list li { padding: 10px 12px; border-bottom: 1px solid #f0f0f5; display: flex; justify-content: space-between; align-items: center; }
+.app-list li:last-child { border-bottom: none; }
+.app-list a { color: #0f3460; text-decoration: none; font-weight: 500; }
+.app-list a:hover { text-decoration: underline; }
+.desc { color: #666; font-size: 0.9em; }
+.badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 8px; }
+.badge.new { background: #fff3e0; color: #e65100; }
+.meta { color: #666; font-size: 0.85em; margin-top: 20px; text-align: center; }
+.install { background: #1a1a2e; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+.install h2 { color: white; margin-top: 0; }
+.install ol { color: #c0c0e0; }
+.install strong { color: white; }
+.footer { text-align: center; margin-top: 30px; color: #999; font-size: 0.85em; }
+.footer a { color: #0f3460; }
 </style>
 </head>
 <body>
 
-<h1>Welcome to TechNote App Store</h1>
+<div class="header">
+  <h1>TechNote App Store</h1>
+  <p>Free games and apps for your self-voicing keyboard interface</p>
+</div>
 
-<h2>What is this?</h2>
-<p>This is the App Store for TechNote. It hosts free games and apps that you can download directly into TechNote. Browse the catalog below or use the App Store inside TechNote to install them.</p>
+<div class="install">
+  <h2>How to Install</h2>
+  <ol>
+    <li>Open <strong>TechNote</strong></li>
+    <li>Navigate to <strong>App Store</strong> from the main menu</li>
+    <li>Browse by category or <strong>Search</strong> for an app</li>
+    <li>Press <strong>Enter</strong> on an app, then <strong>Enter</strong> to install</li>
+  </ol>
+</div>
 
-<h2>Why am I seeing this?</h2>
-<p>You are seeing this page because you visited the App Store in your browser. To install apps, open TechNote and press Enter on App Store from the main menu.</p>
+<div class="section">
+  <h2>Games</h2>
+  <ul class="app-list">
+    <li><a href="app/tictactoe.html">Tic Tac Toe</a> <span class="desc">Classic two-player vs computer</span></li>
+    <li><a href="app/hangman.html">Hangman</a> <span class="desc">Guess letters to find the word</span></li>
+    <li><a href="app/memory_match.html">Memory Match</a> <span class="desc">Find matching pairs</span></li>
+    <li><a href="app/connect_four.html">Connect Four</a> <span class="desc">Drop discs to connect four</span></li>
+    <li><a href="app/solitaire.html">Solitaire</a> <span class="desc">Classic Klondike card game</span></li>
+    <li><a href="app/sudoku.html">Sudoku</a> <span class="desc">Number puzzle with three difficulties</span></li>
+    <li><a href="app/blackjack.html">Blackjack</a> <span class="desc">Beat the dealer to 21</span></li>
+    <li><a href="app/game2048.html">2048</a> <span class="desc">Slide and merge tiles</span></li>
+    <li><a href="app/snake.html">Snake</a> <span class="desc">Eat food, grow longer</span></li>
+    <li><a href="app/minesweeper.html">Minesweeper</a> <span class="desc">Find the mines</span></li>
+  </ul>
+</div>
 
-<h2>Available Apps</h2>
-<ul>
-  <li><a href="app/tictactoe.html">Tic Tac Toe</a> — Classic two-player game</li>
-  <li><a href="app/hangman.html">Hangman</a> — Guess the word letter by letter</li>
-  <li><a href="app/memory_match.html">Memory Match</a> — Find matching pairs</li>
-  <li><a href="app/connect_four.html">Connect Four</a> — Drop discs to connect four</li>
-  <li><a href="app/solitaire.html">Solitaire</a> — Classic Klondike card game</li>
-  <li><a href="app/sudoku.html">Sudoku</a> — Number puzzle with three difficulties</li>
-  <li><a href="app/blackjack.html">Blackjack</a> — Beat the dealer to 21</li>
-  <li><a href="app/game2048.html">2048</a> — Slide and merge tiles</li>
-  <li><a href="app/snake.html">Snake</a> — Eat food, grow longer</li>
-  <li><a href="app/minesweeper.html">Minesweeper</a> — Find the mines</li>
-  <li><a href="app/stopwatch.html">Stopwatch</a> — Time events</li>
-  <li><a href="app/password_gen.html">Password Generator</a> — Create secure passwords</li>
-  <li><a href="app/alarm_clock.html">Alarm Clock</a> — Set alarms</li>
-  <li><a href="app/notes_app.html">Notes</a> — Save and read notes</li>
-  <li><a href="app/todo_list.html">Todo List</a> — Manage your tasks</li>
-  <li><a href="app/book_reader.html">Book Reader</a> — Read text files with bookmarks</li>
-  <li><a href="app/voice_memo.html">Voice Memos</a> — Record and play back voice notes</li>
-  <li><a href="app/typing_test.html">Typing Test</a> — Measure your typing speed</li>
-  <li><a href="app/calendar.html">Calendar</a> — View dates and add events</li>
-  <li><a href="app/weather.html">Weather</a> — Current weather by city</li>
-  <li><a href="app/unit_converter.html">Unit Converter</a> — Convert measurements</li>
-  <li><a href="app/dice_roller.html">Dice Roller</a> — Roll dice for games</li>
-</ul>
+<div class="section">
+  <h2>Productivity</h2>
+  <ul class="app-list">
+    <li><a href="app/todo_list.html">Todo List</a> <span class="desc">Manage your tasks</span></li>
+    <li><a href="app/habit_tracker.html">Habit Tracker</a> <span class="desc">Track daily habits and streaks</span> <span class="badge new">New</span></li>
+    <li><a href="app/calendar.html">Calendar</a> <span class="desc">View dates and add events</span></li>
+    <li><a href="app/typing_test.html">Typing Test</a> <span class="desc">Measure your typing speed</span></li>
+  </ul>
+</div>
 
-<h2>Links</h2>
-<p><a href="https://github.com/tech-master33/tech-note">Get TechNote</a></p>
+<div class="section">
+  <h2>Utilities</h2>
+  <ul class="app-list">
+    <li><a href="app/password_gen.html">Password Generator</a> <span class="desc">Create secure passwords</span></li>
+    <li><a href="app/unit_converter.html">Unit Converter</a> <span class="desc">Convert measurements</span></li>
+    <li><a href="app/dice_roller.html">Dice Roller</a> <span class="desc">Roll dice for games</span></li>
+    <li><a href="app/alarm_clock.html">Alarm Clock</a> <span class="desc">Set alarms with snooze</span></li>
+    <li><a href="app/weather.html">Weather</a> <span class="desc">Current weather by city</span></li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>Media</h2>
+  <ul class="app-list">
+    <li><a href="app/stopwatch.html">Stopwatch</a> <span class="desc">Precision timing with laps</span></li>
+    <li><a href="app/book_reader.html">Book Reader</a> <span class="desc">Read text files with bookmarks</span> <span class="badge new">New</span></li>
+    <li><a href="app/voice_memo.html">Voice Memos</a> <span class="desc">Record and play back audio</span> <span class="badge new">New</span></li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>AI Clients</h2>
+  <ul class="app-list">
+    <li><a href="app/opencode_client.html">OpenCode AI Client</a> <span class="desc">27 providers, sessions, model selection</span> <span class="badge new">New</span></li>
+    <li><a href="app/chatgpt_client.html">ChatGPT Client</a> <span class="desc">OpenAI + Zen, chat history, voice output</span> <span class="badge new">New</span></li>
+  </ul>
+</div>
+
+<div class="meta">
+  <p>24 apps available &bull; All free &bull; No ads</p>
+  <p><a href="https://github.com/tech-master33/tech-note">Get TechNote</a> &bull; <a href="submit.html">Submit an App</a></p>
+</div>
+
+<div class="footer">
+  <p>TechNote App Store &copy; 2026</p>
+</div>
 
 </body>
 </html>

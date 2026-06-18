@@ -9,7 +9,10 @@
       "version": "1.1",
       "filename": "tictactoe.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/tictactoe.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Smart AI opponent", "Score tracking", "Voice announcements"],
+      "controls": ["Space: Next cell", "Enter: Place mark", "N: New game"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "hangman",
@@ -19,7 +22,10 @@
       "version": "1.1",
       "filename": "hangman.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/hangman.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Word categories", "Hint system", "High scores"],
+      "controls": ["Space: Next letter", "Enter: Guess letter", "H: Hint"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "memory_match",
@@ -29,7 +35,10 @@
       "version": "1.1",
       "filename": "memory_match.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/memory_match.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Multiple difficulty levels", "Move counter", "Timer"],
+      "controls": ["Space: Next card", "Enter: Flip card", "N: New game"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "connect_four",
@@ -39,57 +48,10 @@
       "version": "1.1",
       "filename": "connect_four.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/connect_four.py",
-      "author": "Tech-Note"
-    },
-    {
-      "id": "stopwatch",
-      "name": "Stopwatch",
-      "description": "Precision stopwatch with lap tracking.",
-      "category": "Apps",
-      "version": "1.1",
-      "filename": "stopwatch.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/stopwatch.py",
-      "author": "Tech-Note"
-    },
-    {
-      "id": "password_gen",
-      "name": "Password Generator",
-      "description": "Generate secure random passwords with custom options.",
-      "category": "Apps",
-      "version": "1.1",
-      "filename": "password_gen.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/password_gen.py",
-      "author": "Tech-Note"
-    },
-    {
-      "id": "alarm_clock",
-      "name": "Alarm Clock",
-      "description": "Set alarms with labels, dismiss or snooze when they ring.",
-      "category": "Apps",
-      "version": "1.2",
-      "filename": "alarm_clock.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/alarm_clock.py",
-      "author": "Tech-Note"
-    },
-    {
-      "id": "habit_tracker",
-      "name": "Habit Tracker",
-      "description": "Track daily habits and build streaks.",
-      "category": "Apps",
-      "version": "1.0",
-      "filename": "habit_tracker.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/habit_tracker.py",
-      "author": "Tech-Note"
-    },
-    {
-      "id": "todo_list",
-      "name": "Todo List",
-      "description": "Manage tasks with add, complete, and clear functions.",
-      "category": "Apps",
-      "version": "1.1",
-      "filename": "todo_list.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/todo_list.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["AI opponent", "Win detection", "Score tracking"],
+      "controls": ["Space: Next column", "Enter: Drop piece", "N: New game"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "solitaire",
@@ -99,7 +61,10 @@
       "version": "1.1",
       "filename": "solitaire.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/solitaire.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Full Klondike rules", "Undo moves", "Auto-complete"],
+      "controls": ["Space: Next card", "Enter: Select/Move", "U: Undo"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "sudoku",
@@ -109,7 +74,10 @@
       "version": "1.1",
       "filename": "sudoku.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/sudoku.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Three difficulty levels", "Hint system", "Pencil marks"],
+      "controls": ["Space: Next cell", "Enter: Edit cell", "1-9: Enter digit"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "blackjack",
@@ -119,7 +87,10 @@
       "version": "1.1",
       "filename": "blackjack.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/blackjack.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Hit, Stand, Double Down", "Score tracking", "Voice cards"],
+      "controls": ["H: Hit", "S: Stand", "D: Double down"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "2048",
@@ -129,7 +100,10 @@
       "version": "1.1",
       "filename": "game2048.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/game2048.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Score tracking", "Undo moves", "Auto-save"],
+      "controls": ["Space: Next direction", "Enter: Slide", "Z: Undo"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "snake",
@@ -139,7 +113,10 @@
       "version": "1.1",
       "filename": "snake.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/snake.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Auto-advancing game", "Speed increases", "High scores", "Pause"],
+      "controls": ["Space: Next direction", "Enter: Change direction", "P: Pause", "N: New game"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "minesweeper",
@@ -149,77 +126,192 @@
       "version": "1.1",
       "filename": "minesweeper.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/minesweeper.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Three difficulty levels", "Flag mines", "Timer"],
+      "controls": ["Space: Next cell", "Enter: Reveal", "F: Flag mine"],
+      "added_date": "2026-06-15"
     },
     {
-      "id": "typing_test",
-      "name": "Typing Test",
-      "description": "Measure your typing speed in words per minute with accuracy tracking.",
-      "category": "Apps",
+      "id": "todo_list",
+      "name": "Todo List",
+      "description": "Manage tasks with add, complete, and clear functions.",
+      "category": "Productivity",
       "version": "1.1",
-      "filename": "typing_test.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/typing_test.py",
-      "author": "Tech-Note"
+      "filename": "todo_list.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/todo_list.py",
+      "author": "Tech-Note",
+      "features": ["Add tasks", "Complete tasks", "Clear completed", "Persistent storage"],
+      "controls": ["Space: Next task", "Enter: Toggle complete", "A: Add task", "C: Clear completed"],
+      "added_date": "2026-06-15"
+    },
+    {
+      "id": "habit_tracker",
+      "name": "Habit Tracker",
+      "description": "Track daily habits and build streaks.",
+      "category": "Productivity",
+      "version": "1.0",
+      "filename": "habit_tracker.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/habit_tracker.py",
+      "author": "Tech-Note",
+      "features": ["Daily check-ins", "Streak tracking", "Stats view", "Persistent storage"],
+      "controls": ["Space: Next habit", "Enter: Mark done", "N: New habit"],
+      "added_date": "2026-06-17"
     },
     {
       "id": "calendar",
       "name": "Calendar",
       "description": "View months, navigate days, and add events. Events saved locally.",
-      "category": "Apps",
+      "category": "Productivity",
       "version": "1.1",
       "filename": "calendar_app.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/calendar_app.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Month view", "Day navigation", "Event management", "Persistent storage"],
+      "controls": ["Space: Next day", "Enter: Add event", "M: Next month"],
+      "added_date": "2026-06-15"
     },
     {
-      "id": "weather",
-      "name": "Weather",
-      "description": "Get current weather for any city worldwide.",
-      "category": "Apps",
+      "id": "typing_test",
+      "name": "Typing Test",
+      "description": "Measure your typing speed in words per minute with accuracy tracking.",
+      "category": "Productivity",
       "version": "1.1",
-      "filename": "weather_app.py",
-      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/weather_app.py",
-      "author": "Tech-Note"
+      "filename": "typing_test.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/typing_test.py",
+      "author": "Tech-Note",
+      "features": ["WPM tracking", "Accuracy percentage", "Multiple durations"],
+      "controls": ["Type to test", "Enter: Start/Restart", "Escape: Exit"],
+      "added_date": "2026-06-15"
+    },
+    {
+      "id": "password_gen",
+      "name": "Password Generator",
+      "description": "Generate secure random passwords with custom options.",
+      "category": "Utilities",
+      "version": "1.1",
+      "filename": "password_gen.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/password_gen.py",
+      "author": "Tech-Note",
+      "features": ["Custom length", "Include symbols/numbers", "Copy to clipboard"],
+      "controls": ["Space: Next option", "Enter: Generate", "C: Copy password"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "unit_converter",
       "name": "Unit Converter",
       "description": "Convert between length, weight, temperature, speed, volume, and data units.",
-      "category": "Apps",
+      "category": "Utilities",
       "version": "1.1",
       "filename": "unit_converter.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/unit_converter.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["6 unit categories", "Instant conversion", "Multiple units per category"],
+      "controls": ["Space: Next category", "Enter: Select", "T: Enter value"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "dice_roller",
       "name": "Dice Roller",
       "description": "Roll multiple dice with modifiers. Supports d4, d6, d8, d10, d12, d20, d100.",
-      "category": "Apps",
+      "category": "Utilities",
       "version": "1.1",
       "filename": "dice_roller.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/dice_roller.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Multiple dice types", "Modifiers", "Roll history"],
+      "controls": ["Space: Next die type", "Enter: Roll", "R: Roll again"],
+      "added_date": "2026-06-15"
+    },
+    {
+      "id": "alarm_clock",
+      "name": "Alarm Clock",
+      "description": "Set alarms with labels, dismiss or snooze when they ring.",
+      "category": "Utilities",
+      "version": "1.2",
+      "filename": "alarm_clock.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/alarm_clock.py",
+      "author": "Tech-Note",
+      "features": ["Multiple alarms", "Labels", "Snooze 5 min", "Sound notification"],
+      "controls": ["Space: Next alarm", "Enter: Select", "S: Snooze", "Enter: Dismiss"],
+      "added_date": "2026-06-15"
+    },
+    {
+      "id": "weather",
+      "name": "Weather",
+      "description": "Get current weather for any city worldwide.",
+      "category": "Utilities",
+      "version": "1.1",
+      "filename": "weather_app.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/weather_app.py",
+      "author": "Tech-Note",
+      "features": ["Any city worldwide", "Temperature", "Conditions", "Humidity"],
+      "controls": ["Enter: Enter city name", "Space: Refresh", "Escape: Exit"],
+      "added_date": "2026-06-15"
+    },
+    {
+      "id": "stopwatch",
+      "name": "Stopwatch",
+      "description": "Precision stopwatch with lap tracking.",
+      "category": "Media",
+      "version": "1.1",
+      "filename": "stopwatch.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/stopwatch.py",
+      "author": "Tech-Note",
+      "features": ["Start/Stop/Reset", "Lap tracking", "Millisecond precision"],
+      "controls": ["Space: Start/Stop", "L: Record lap", "R: Reset"],
+      "added_date": "2026-06-15"
     },
     {
       "id": "book_reader",
       "name": "Book Reader",
       "description": "Read text files with page navigation, bookmarks, and auto-read.",
-      "category": "Apps",
+      "category": "Media",
       "version": "1.0",
       "filename": "book_reader.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/book_reader.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Page navigation", "Bookmarks", "Auto-read aloud", "Font size"],
+      "controls": ["Space: Next page", "Backspace: Previous page", "B: Bookmark", "A: Auto-read"],
+      "added_date": "2026-06-17"
     },
     {
       "id": "voice_memo",
       "name": "Voice Memos",
       "description": "Record and play back voice memos. Save recordings as WAV files.",
-      "category": "Apps",
+      "category": "Media",
       "version": "1.0",
       "filename": "voice_memo.py",
       "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/voice_memo.py",
-      "author": "Tech-Note"
+      "author": "Tech-Note",
+      "features": ["Record audio", "Play back", "Delete memos", "WAV format"],
+      "controls": ["R: Record", "Space: Play/Stop", "D: Delete", "Escape: Exit"],
+      "added_date": "2026-06-17"
+    },
+    {
+      "id": "opencode_client",
+      "name": "OpenCode AI Client",
+      "description": "Full-featured AI client with 27 providers, session management, and model selection.",
+      "category": "Productivity",
+      "version": "1.0",
+      "filename": "opencode_client.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/opencode_client.py",
+      "author": "Tech-Note",
+      "features": ["27 providers (OpenAI, Anthropic, Google, DeepSeek, etc.)", "Session management", "Model selection", "Server/Cloud/Direct modes", "Chat history", "Voice output", "Export"],
+      "controls": ["Space: Next item", "Enter: Select", "Escape: Back", "Type to chat"],
+      "added_date": "2026-06-18"
+    },
+    {
+      "id": "chatgpt_client",
+      "name": "ChatGPT Client",
+      "description": "ChatGPT client with OpenAI and Zen API support, chat history, and voice output.",
+      "category": "Productivity",
+      "version": "1.0",
+      "filename": "chatgpt_client.py",
+      "download_url": "https://steady-licorice-d12c5f.netlify.app/apps/chatgpt_client.py",
+      "author": "Tech-Note",
+      "features": ["OpenAI and Zen API support", "Session management", "Model selection", "Chat history", "Voice output", "Export"],
+      "controls": ["Space: Next item", "Enter: Select", "Escape: Back", "Type to chat"],
+      "added_date": "2026-06-18"
     }
   ]
 }

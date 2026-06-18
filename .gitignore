@@ -40,7 +40,8 @@ apps/book_reader.py
 apps/voice_memo.py
 apps/habit_tracker.py
 apps/todo_list.py
-apps/notes_app.py
+apps/opencode_client.py
+apps/chatgpt_client.py
 
 # User data
 .tech-soft/
