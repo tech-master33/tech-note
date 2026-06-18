@@ -1,6 +1,5 @@
 [build]
-  functions = "server/functions"
-  publish = "public"
+  publish = "netlify-site"
 
 [[redirects]]
   from = "/api/*"
