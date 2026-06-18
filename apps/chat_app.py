@@ -8,7 +8,7 @@ from core.menu import MenuNode, MenuSystem
 
 DATA_DIR = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'chat')
 PROFILE_FILE = os.path.join(DATA_DIR, 'profile.json')
-SERVER_URL = 'https://technote-messages-280.netlify.app/api'
+SERVER_URL = 'https://tech-chat.tech-chat.workers.dev'
 
 STATE_LOGIN = 0
 STATE_REGISTER = 1

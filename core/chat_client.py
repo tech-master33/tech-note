@@ -10,7 +10,7 @@ class ChatError(Exception):
 
 class ChatClient:
     def __init__(self, api_base=None):
-        self.api_base = api_base or 'https://chat.example.com/api'
+        self.api_base = api_base or 'https://tech-chat.tech-chat.workers.dev'
         self.token = None
         self.user_id = None
         self.username = None
