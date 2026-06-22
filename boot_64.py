@@ -273,19 +273,24 @@ class BrailleNoteApp:
                         auto_resume = s.get("auto_resume_apps", True)
                 
                 if auto_resume:
-                    import importlib
-                    module = importlib.import_module(resume_data["app_module"])
-                    app_class = getattr(module, resume_data["app_class"])
-                    
-                    self.speak("Resuming last session.")
-                    self.launch_app(app_class)
-                    
-                    if "state" in resume_data and hasattr(self.current_app, "set_state"):
-                        self.current_app.set_state(resume_data["state"])
-                    
-                    # Optional: remove resume file after successful load?
-                    # os.remove(resume_path)
-                    return
+                    app_module = resume_data.get("app_module", "")
+                    # Don't resume system utilities
+                    if app_module in ("apps.power_menu", "apps.lock_screen"):
+                        try:
+                            os.remove(resume_path)
+                        except:
+                            pass
+                    else:
+                        import importlib
+                        module = importlib.import_module(app_module)
+                        app_class = getattr(module, resume_data["app_class"])
+                        
+                        self.speak("Resuming last session.")
+                        self.launch_app(app_class)
+                        
+                        if "state" in resume_data and hasattr(self.current_app, "set_state"):
+                            self.current_app.set_state(resume_data["state"])
+                        return
             except Exception as e:
                 print(f"Resume failed: {e}")
 
@@ -315,6 +320,20 @@ class BrailleNoteApp:
 
     def _open_power_menu(self):
         self._typing_buffer = ""
+        # Save current app for resume before opening power menu
+        if self.current_app and self.current_app.active:
+            app_module = self.current_app.__class__.__module__
+            if app_module not in ("apps.power_menu", "apps.lock_screen"):
+                try:
+                    app_data = {
+                        "app_module": app_module,
+                        "app_class": self.current_app.__class__.__name__
+                    }
+                    if hasattr(self.current_app, "get_state"):
+                        app_data["state"] = self.current_app.get_state()
+                    with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
+                        json.dump(app_data, f)
+                except: pass
         self.current_app = PowerApp(
             self, self.window,
             on_restart=self._reload_app,
@@ -362,19 +381,22 @@ class BrailleNoteApp:
 
         # 1. "Where I Left Off" Bookmark
         if settings.get("auto_resume_apps", True) and self.current_app and self.current_app.active:
-            try:
-                app_data = {
-                    "app_module": self.current_app.__class__.__module__,
-                    "app_class": self.current_app.__class__.__name__
-                }
-                # If app has a get_state method, save it
-                if hasattr(self.current_app, "get_state"):
-                    app_data["state"] = self.current_app.get_state()
-                
-                with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
-                    json.dump(app_data, f)
-            except: pass
-        elif mode != "sleep":
+            app_module = self.current_app.__class__.__module__
+            # Don't save for system apps - _open_power_menu already saved before opening
+            if app_module not in ("apps.power_menu", "apps.lock_screen"):
+                try:
+                    app_data = {
+                        "app_module": app_module,
+                        "app_class": self.current_app.__class__.__name__
+                    }
+                    # If app has a get_state method, save it
+                    if hasattr(self.current_app, "get_state"):
+                        app_data["state"] = self.current_app.get_state()
+                    
+                    with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
+                        json.dump(app_data, f)
+                except: pass
+        elif mode not in ("sleep", "hibernate"):
             # Clear resume if exiting normally without an app
             try:
                 resume_path = os.path.join(self.tech_soft, 'resume.json')
@@ -509,22 +531,36 @@ class BrailleNoteApp:
             return
         print(f"Key pressed: {vk}")
 
-        # Block all global shortcuts when locked
+        # Block all global shortcuts when locked or during setup/login
         from apps.lock_screen import LockScreenApp
         if isinstance(self.current_app, LockScreenApp):
-            if self.current_app and self.current_app.active:
+            lock_app = self.current_app
+            if lock_app and lock_app.active:
                 try:
                     self.current_app.on_key(vk)
                 except Exception as e:
                     print(f"Lock screen on_key error: {e}")
+                if not lock_app.active:
+                    self._last_unlock_time = time.time()
+                    if self.current_app is lock_app:
+                        self.current_app = None
+                    if self.menu:
+                        self.menu.announce_current()
                 return
 
-        # Power menu (layout-aware backtick)
-        is_setup = isinstance(self.current_app, TechNoteSetup)
-        if vk == self._power_vk or (is_setup and vk in (0xC0, 0xDF)) or self._is_key_match(vk, "power_menu"):
-            print("Global Power menu")
-            self._open_power_menu()
+        if isinstance(self.current_app, TechNoteSetup):
+            try:
+                self.current_app.on_key(vk)
+            except Exception as e:
+                print(f"Setup on_key error: {e}")
             return
+
+        # Power menu (layout-aware backtick) — blocked for 1s after unlock
+        if time.time() - getattr(self, '_last_unlock_time', 0) > 1.0:
+            if vk == self._power_vk or self._is_key_match(vk, "power_menu"):
+                print("Global Power menu")
+                self._open_power_menu()
+                return
 
         # Global Options (Space + O)
         if self.window.space_down and vk == 0x4F:

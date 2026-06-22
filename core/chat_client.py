@@ -23,6 +23,7 @@ class ChatClient:
         self.role = 'user'
         self.is_connected = False
         self.event_queue = []
+        self._event_lock = threading.Lock()
         self._polling = False
         self._poll_thread = None
 
@@ -220,6 +221,9 @@ class ChatClient:
 
     # --- Polling ---
     def _start_polling(self):
+        if self._poll_thread and self._poll_thread.is_alive():
+            self._polling = False
+            self._poll_thread.join(timeout=2)
         self._polling = True
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._poll_thread.start()
@@ -234,7 +238,8 @@ class ChatClient:
                     if unread > 0:
                         result = self.get_messages(rid, limit=unread)
                         for m in result.get('messages', []):
-                            self.event_queue.append(('room_message', m))
+                            with self._event_lock:
+                                self.event_queue.append(('room_message', m))
 
                 dms_resp = self._get('dm')
                 for convo in dms_resp.get('conversations', []):
@@ -242,12 +247,14 @@ class ChatClient:
                     if unread > 0:
                         last = convo.get('last_message')
                         if last:
-                            self.event_queue.append(('dm_message', last))
+                            with self._event_lock:
+                                self.event_queue.append(('dm_message', last))
             except Exception:
                 pass
             time.sleep(3)
 
     def poll_event(self):
-        if self.event_queue:
-            return self.event_queue.pop(0)
+        with self._event_lock:
+            if self.event_queue:
+                return self.event_queue.pop(0)
         return None

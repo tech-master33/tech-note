@@ -45,14 +45,18 @@ function corsResp() {
   });
 }
 
-async function kvGet(env, key) { return await env.CHAT_DATA.get(key, { type: 'json' }); }
+async function kvGet(env, key) {
+  const raw = await env.CHAT_DATA.get(key);
+  return raw ? JSON.parse(raw) : null;
+}
 async function kvPut(env, key, value) { await env.CHAT_DATA.put(key, JSON.stringify(value)); }
 async function kvDelete(env, key) { await env.CHAT_DATA.delete(key); }
 async function kvList(env, prefix) { const l = await env.CHAT_DATA.list({ prefix }); return l.keys.map(k => k.name); }
 
 async function nextId(env, type) {
   const key = `counter:${type}`;
-  const current = await env.CHAT_DATA.get(key, { type: 'number' }) || 0;
+  const raw = await env.CHAT_DATA.get(key);
+  const current = raw ? parseInt(raw, 10) : 0;
   const next = current + 1;
   await env.CHAT_DATA.put(key, next.toString());
   return next;
@@ -370,6 +374,7 @@ export default {
 
     try {
       if (path === '/status') return jsonResp(200, { status: 'ok', version: '3.1.0' });
+
       if (path === '/register' && method === 'POST') return await register(env, body);
       if (path === '/login' && method === 'POST') return await login(env, body);
       if (path === '/password' && method === 'POST') return await changePassword(env, uid, body);

@@ -3,5 +3,7 @@ def get_available_synths():
 
 
 def create_synth(module_name):
-    from synths.sapi_synth import SapiSynthBase
-    return SapiSynthBase()
+    if module_name == 'sapi_synth':
+        from synths.sapi_synth import SapiSynthBase
+        return SapiSynthBase()
+    raise ValueError(f"Unknown synth module: {module_name}")
