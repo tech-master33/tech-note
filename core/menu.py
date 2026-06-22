@@ -157,17 +157,32 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.tutorial_app import TutorialApp
     from apps.game_center import GameCenter
     from apps.app_store import AppStore
-    from apps.book_reader import BookReaderApp
-    from apps.voice_memo import VoiceMemoApp
-    from apps.calendar_app import CalendarApp
     from apps.notes_app import NotesApp
+    
+    # Optional apps
+    try:
+        from apps.book_reader import BookReaderApp
+    except ImportError:
+        BookReaderApp = None
+    try:
+        from apps.voice_memo import VoiceMemoApp
+    except ImportError:
+        VoiceMemoApp = None
+    try:
+        from apps.calendar_app import CalendarApp
+    except ImportError:
+        CalendarApp = None
+
     root = MenuNode("Main Menu")
     
     root.add_child(MenuNode("Word Processor", lambda: app_callback(TechEdit), "w"))
-    root.add_child(MenuNode("Book Reader", lambda: app_callback(BookReaderApp), "b"))
-    root.add_child(MenuNode("Voice Memos", lambda: app_callback(VoiceMemoApp), "v"))
+    if BookReaderApp:
+        root.add_child(MenuNode("Book Reader", lambda: app_callback(BookReaderApp), "b"))
+    if VoiceMemoApp:
+        root.add_child(MenuNode("Voice Memos", lambda: app_callback(VoiceMemoApp), "v"))
     root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
-    root.add_child(MenuNode("Calendar", lambda: app_callback(CalendarApp), "d"))
+    if CalendarApp:
+        root.add_child(MenuNode("Calendar", lambda: app_callback(CalendarApp), "d"))
     root.add_child(MenuNode("Planner", lambda: app_callback(PlannerApp), "p"))
     root.add_child(MenuNode("Address List", lambda: app_callback(AddressListApp), "a"))
     root.add_child(MenuNode("Notes", lambda: app_callback(NotesApp), "n"))

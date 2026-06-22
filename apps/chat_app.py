@@ -1,4 +1,3 @@
-import hashlib
 import os
 import tempfile
 import threading
@@ -7,18 +6,16 @@ import winsound
 import json
 import wave
 import win32con
-import win32api
 from core.app_base import SoftApp
 from core.chat_client import ChatClient, ChatError
 from core.menu import MenuNode, MenuSystem
 
-DATA_DIR = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'chat')
-PROFILE_FILE = os.path.join(DATA_DIR, 'profile.json')
+DATA_DIR = os.path.join(os.environ['USERPROFILE'], '.tech-soft')
+PROFILE_FILE = os.path.join(DATA_DIR, 'chat.json')
 SERVER_URL = 'https://tech-chat.tech-chat.workers.dev'
 
 # States
 STATE_LOGIN = 0
-STATE_REGISTER = 1
 STATE_MENU = 2
 STATE_ROOM_LIST = 3
 STATE_ROOM_CHAT = 4
@@ -32,6 +29,8 @@ STATE_DM_CHAT = 11
 STATE_RECORDING = 12
 STATE_PLAYING = 13
 STATE_OPTIONS = 14
+STATE_LOGIN_FORM = 15
+STATE_REGISTER_FORM = 16
 
 
 class ChatApp(SoftApp):
@@ -57,7 +56,9 @@ class ChatApp(SoftApp):
         self.confirm_action = None
         self.confirm_arg = None
         self.is_admin = False
-        self.is_mod = False
+        self.login_step = 0
+        self._editing_field = None
+        self._editing_prefix = ''
         self._load_profile()
         # DM state
         self.dm_conversations = []
@@ -72,9 +73,6 @@ class ChatApp(SoftApp):
         # Auto-refresh
         self._last_poll_time = 0
         self._poll_interval = 3
-
-    def _hash_password(self, pw):
-        return hashlib.sha256(pw.encode('utf-8')).hexdigest()
 
     def _load_profile(self):
         self.profile = {}
@@ -108,7 +106,8 @@ class ChatApp(SoftApp):
         if now - self._last_poll_time < self._poll_interval:
             return
         self._last_poll_time = now
-        while self.active:
+        # Process at most 5 events per poll to avoid blocking the key handler
+        for _ in range(5):
             evt = self.client.poll_event()
             if evt is None:
                 break
@@ -122,12 +121,13 @@ class ChatApp(SoftApp):
         room_id = data.get('room_id')
         sender = data.get('sender_username', '?')
         content = data.get('content', '')
+        msg_id = data.get('id', 0)
         if sender == self.username:
             return
         display = self._display_content(content)
         self._notify_sound()
         if self.current_room_id == room_id and self.state in (STATE_ROOM_CHAT, STATE_COMPOSING):
-            self.messages.append({'sender': sender, 'text': display, 'content': content})
+            self.messages.append({'sender': sender, 'text': display, 'content': content, 'msg_id': msg_id})
             self.msg_index = len(self.messages) - 1
             self.speak(f"{sender}: {display}")
             self._update_chat_window()
@@ -137,12 +137,13 @@ class ChatApp(SoftApp):
     def _on_dm_message(self, data):
         sender = data.get('sender_username', '?')
         content = data.get('content', '')
+        msg_id = data.get('id', 0)
         if sender == self.username:
             return
         display = self._display_content(content)
         self._notify_sound()
         if self.state == STATE_DM_CHAT and self.dm_target_name == sender:
-            self.messages.append({'sender': sender, 'text': display, 'content': content})
+            self.messages.append({'sender': sender, 'text': display, 'content': content, 'msg_id': msg_id})
             self.msg_index = len(self.messages) - 1
             self.speak(f"{sender}: {display}")
             self._update_chat_window()
@@ -169,6 +170,8 @@ class ChatApp(SoftApp):
                 return
             except ChatError as e:
                 self.speak(f"Login failed: {e}")
+            except Exception as e:
+                self.speak(f"Auto-login error: {type(e).__name__}: {e}")
         self._show_login_menu()
 
     def _show_main_menu(self):
@@ -211,10 +214,9 @@ class ChatApp(SoftApp):
             name = r.get('name', '?')
             mcount = r.get('member_count', 0)
             unread = r.get('unread_count', 0)
-            label = f"{name} ({mcount} members"
+            label = f"{name} ({mcount} members)"
             if unread > 0:
                 label += f", {unread} new"
-            label += ")"
             root.add_child(MenuNode(label, lambda rid=r['id'], rn=name: self._open_room(rid, rn)))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
@@ -235,7 +237,8 @@ class ChatApp(SoftApp):
             for m in result.get('messages', []):
                 sender = m.get('sender_username', '?')
                 content = m.get('content', '')
-                self.messages.append({'sender': sender, 'text': self._display_content(content), 'content': content})
+                msg_id = m.get('id', 0)
+                self.messages.append({'sender': sender, 'text': self._display_content(content), 'content': content, 'msg_id': msg_id})
             self.msg_index = max(0, len(self.messages) - 1)
         except ChatError:
             pass
@@ -295,7 +298,8 @@ class ChatApp(SoftApp):
             for m in result.get('messages', []):
                 sender = m.get('sender_username', '?')
                 content = m.get('content', '')
-                self.messages.append({'sender': sender, 'text': self._display_content(content), 'content': content})
+                msg_id = m.get('id', 0)
+                self.messages.append({'sender': sender, 'text': self._display_content(content), 'content': content, 'msg_id': msg_id})
             self.msg_index = max(0, len(self.messages) - 1)
         except ChatError:
             pass
@@ -431,7 +435,10 @@ class ChatApp(SoftApp):
                 frames.append(indata.tobytes())
 
             with sd.InputStream(samplerate=sr, channels=channels, dtype='int16', callback=callback):
-                time.sleep(duration)
+                for _ in range(duration * 10):
+                    if not self._recording:
+                        break
+                    time.sleep(0.1)
 
             audio_data = b''.join(frames)
             tmp = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
@@ -527,6 +534,13 @@ class ChatApp(SoftApp):
 
     def _do_delete_message(self, idx):
         try:
+            m = self.messages[idx]
+            msg_id = m.get('msg_id')
+            if msg_id:
+                if self.current_room_id and self.current_room_id > 0:
+                    self.client.delete_message(self.current_room_id, msg_id)
+                elif self.dm_target_id:
+                    self.client.delete_dm(msg_id)
             del self.messages[idx]
             if self.messages:
                 self.msg_index = min(idx, len(self.messages) - 1)
@@ -545,24 +559,19 @@ class ChatApp(SoftApp):
             return
         if self.state == STATE_PLAYING:
             return
-        if self.state == STATE_LOGIN:
-            self._handle_login(vk)
-        elif self.state == STATE_REGISTER:
-            self._handle_register(vk)
-        elif self.state == STATE_MENU:
-            self._handle_menu(vk)
-        elif self.state in (STATE_ROOM_LIST, STATE_USER_LIST, STATE_ADMIN_PANEL, STATE_DM_LIST, STATE_OPTIONS):
-            self._handle_submenu(vk)
-        elif self.state == STATE_ROOM_CHAT:
-            self._handle_room_chat(vk)
-        elif self.state == STATE_DM_CHAT:
-            self._handle_dm_chat(vk)
-        elif self.state == STATE_COMPOSING:
+        if self.state in (STATE_ROOM_CHAT, STATE_DM_CHAT):
+            self._handle_chat_key(vk)
+            return
+        if self.state == STATE_COMPOSING:
             self._handle_composing(vk)
-        elif self.state == STATE_CHANGE_PASSWORD:
+            return
+        if self.state == STATE_CHANGE_PASSWORD:
             self._handle_change_password(vk)
-        elif self.state == STATE_CONFIRM:
+            return
+        if self.state == STATE_CONFIRM:
             self._handle_confirm(vk)
+            return
+        self._handle_menu_key(vk)
 
     def _handle_recording(self, vk):
         if vk in (win32con.VK_SPACE, win32con.VK_ESCAPE, win32con.VK_RETURN):
@@ -575,59 +584,55 @@ class ChatApp(SoftApp):
             self._stop_recording()
 
     def on_key_up(self, vk):
-        if vk == win32con.VK_SPACE:
-            if getattr(self.manager, 'space_used_in_chord', False):
-                return
-            if self.state in (STATE_MENU, STATE_ROOM_LIST, STATE_USER_LIST, STATE_ADMIN_PANEL, STATE_DM_LIST, STATE_OPTIONS):
+        if vk != win32con.VK_SPACE:
+            return
+        if getattr(self.manager, 'space_used_in_chord', False):
+            return
+        if self.state in (STATE_ROOM_CHAT, STATE_DM_CHAT):
+            if self.messages:
+                self.msg_index = (self.msg_index + 1) % len(self.messages)
+                m = self.messages[self.msg_index]
+                self.speak(f"{m['sender']}: {m['text']}")
+                self.window.update_text(f"{m['sender']}: {m['text']}")
+        elif self.menu:
+            self.menu.next()
+            item = self.menu.get_current_item()
+            if item:
+                self.window.update_text(item.title)
+
+    def _handle_chat_key(self, vk):
+        if self.state == STATE_ROOM_CHAT:
+            self._handle_room_chat(vk)
+        else:
+            self._handle_dm_chat(vk)
+
+    def _handle_menu_key(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            if self.state in (STATE_LOGIN_FORM, STATE_REGISTER_FORM):
+                self._show_login_menu()
+            elif self.state == STATE_LOGIN:
+                self.exit_app()
+            elif self.state in (STATE_ROOM_LIST, STATE_DM_LIST, STATE_USER_LIST):
+                self._show_main_menu()
+            else:
+                # STATE_MENU, STATE_ADMIN_PANEL, STATE_OPTIONS
+                self.state = STATE_MENU
                 if self.menu:
-                    self.menu.next()
-                    item = self.menu.get_current_item()
-                    title = item.title if item else self.menu.current_node.title
-                    self.window.update_text(title)
-            elif self.state == STATE_ROOM_CHAT:
-                if self.messages:
-                    self.msg_index = (self.msg_index + 1) % len(self.messages)
-                    m = self.messages[self.msg_index]
-                    self.speak(f"{m['sender']}: {m['text']}")
-                    self.window.update_text(f"{m['sender']}: {m['text']}")
-            elif self.state == STATE_DM_CHAT:
-                if self.messages:
-                    self.msg_index = (self.msg_index + 1) % len(self.messages)
-                    m = self.messages[self.msg_index]
-                    self.speak(f"{m['sender']}: {m['text']}")
-                    self.window.update_text(f"{m['sender']}: {m['text']}")
-
-    def _handle_menu(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.exit_app()
+                    self.menu.announce_current()
             return
         if vk == win32con.VK_BACK:
-            self.menu.previous()
-        elif vk == win32con.VK_RETURN:
-            self.menu.select()
-        elif 0x41 <= vk <= 0x5A:
-            self.menu.first_letter_nav(chr(vk))
-        if self.menu:
-            item = self.menu.get_current_item()
-            title = item.title if item else self.menu.current_node.title
-            self.window.update_text(title)
-
-    def _handle_submenu(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.state = STATE_MENU
             if self.menu:
-                self.menu.announce_current()
-            return
-        if vk == win32con.VK_BACK:
-            self.menu.previous()
+                self.menu.previous()
         elif vk == win32con.VK_RETURN:
-            self.menu.select()
+            if self.menu:
+                self.menu.select()
         elif 0x41 <= vk <= 0x5A:
-            self.menu.first_letter_nav(chr(vk))
+            if self.menu:
+                self.menu.first_letter_nav(chr(vk))
         if self.menu:
             item = self.menu.get_current_item()
-            title = item.title if item else self.menu.current_node.title
-            self.window.update_text(title)
+            if item:
+                self.window.update_text(item.title)
 
     def _handle_room_chat(self, vk):
         if vk == win32con.VK_ESCAPE:
@@ -719,7 +724,8 @@ class ChatApp(SoftApp):
             for m in result.get('messages', []):
                 sender = m.get('sender_username', '?')
                 content = m.get('content', '')
-                new_msgs.append({'sender': sender, 'text': self._display_content(content), 'content': content})
+                msg_id = m.get('id', 0)
+                new_msgs.append({'sender': sender, 'text': self._display_content(content), 'content': content, 'msg_id': msg_id})
             if len(new_msgs) > len(self.messages):
                 self.speak(f"{len(new_msgs) - len(self.messages)} new message(s)")
             self.messages = new_msgs
@@ -740,7 +746,8 @@ class ChatApp(SoftApp):
             for m in result.get('messages', []):
                 sender = m.get('sender_username', '?')
                 content = m.get('content', '')
-                new_msgs.append({'sender': sender, 'text': self._display_content(content), 'content': content})
+                msg_id = m.get('id', 0)
+                new_msgs.append({'sender': sender, 'text': self._display_content(content), 'content': content, 'msg_id': msg_id})
             if len(new_msgs) > len(self.messages):
                 self.speak(f"{len(new_msgs) - len(self.messages)} new message(s)")
             self.messages = new_msgs
@@ -753,6 +760,26 @@ class ChatApp(SoftApp):
             self.speak("Failed to refresh.")
 
     def _handle_composing(self, vk):
+        if self._editing_field:
+            if vk == win32con.VK_ESCAPE:
+                self.input_buf = ""
+                self._editing_field = None
+                if self._editing_prefix == 'login_':
+                    self._show_login_form()
+                else:
+                    self._show_register_form()
+                return
+            if vk == win32con.VK_RETURN:
+                val = self.input_buf.strip()
+                if val:
+                    setattr(self, self._editing_prefix + self._editing_field, val)
+                self.input_buf = ""
+                self._editing_field = None
+                if self._editing_prefix == 'login_':
+                    self._show_login_form()
+                else:
+                    self._show_register_form()
+                return
         if vk == win32con.VK_ESCAPE:
             self.input_buf = ""
             if self.current_room_id == -99:
@@ -885,7 +912,7 @@ class ChatApp(SoftApp):
                     if result.get('success'):
                         self.speak("Password changed.")
                         if self.profile.get('username'):
-                            self.profile['password'] = self._hash_password(new_pw)
+                            self.profile['password'] = new_pw
                             self._save_profile()
                     else:
                         self.speak(result.get('message', 'Failed'))
@@ -917,30 +944,80 @@ class ChatApp(SoftApp):
 
     def _show_login_menu(self):
         self.state = STATE_LOGIN
-        u = self.login_username if self.login_username else "(empty)"
-        p = "*" * len(self.login_password) if self.login_password else "(empty)"
-        root = MenuNode("Login")
-        root.add_child(MenuNode(f"Username: {u}", lambda: self._edit_login_field("username")))
-        root.add_child(MenuNode(f"Password: {p}", lambda: self._edit_login_field("password")))
-        root.add_child(MenuNode("Login", self._do_login))
-        root.add_child(MenuNode("Register", self._show_register_menu))
-        root.add_child(MenuNode("Exit", self.exit_app))
+        root = MenuNode("Chat Login")
+        root.add_child(MenuNode("Login", self._show_login_form, "l"))
+        root.add_child(MenuNode("Create Account", self._show_register_form, "c"))
+        root.add_child(MenuNode("Exit", self.exit_app, "x"))
         self.menu = MenuSystem(root, self.speak)
-        self.speak("Login Menu")
+        self.speak("Chat Login")
         self.menu.announce_current()
-        self._update_login_window()
+        self.window.update_text("Chat Login")
 
-    def _update_login_window(self):
-        u = self.login_username if self.login_username else "(empty)"
-        p = "*" * len(self.login_password) if self.login_password else "(empty)"
-        self.window.update_text(f"Chat Login\nUsername: {u}\nPassword: {p}")
+    def _show_login_form(self):
+        self.state = STATE_LOGIN_FORM
+        self._editing_field = None
+        self._editing_prefix = 'login_'
+        self._rebuild_login_form()
 
-    def _edit_login_field(self, field):
+    def _rebuild_login_form(self):
+        u = self.login_username if self.login_username else "(not set)"
+        p = "set" if self.login_password else "(not set)"
+        root = MenuNode("Login")
+        root.add_child(MenuNode(f"Username: {u}", self._edit_login_field, "u"))
+        root.add_child(MenuNode(f"Password: {p}", self._edit_password_field, "p"))
+        root.add_child(MenuNode("Login Now", self._do_login, "l"))
+        root.add_child(MenuNode("Back", self._show_login_menu, "b"))
+        self.menu = MenuSystem(root, self.speak)
+        self.speak("Login form")
+        self.menu.announce_current()
+        self.window.update_text(f"Login: {u} / pw {p}")
+
+    def _show_register_form(self):
+        self.state = STATE_REGISTER_FORM
+        self._editing_field = None
+        self._editing_prefix = 'reg_'
+        self._rebuild_register_form()
+
+    def _rebuild_register_form(self):
+        u = self.reg_username if self.reg_username else "(not set)"
+        p = "set" if self.reg_password else "(not set)"
+        root = MenuNode("Create Account")
+        root.add_child(MenuNode(f"Username: {u}", self._edit_reg_username_field, "u"))
+        root.add_child(MenuNode(f"Password: {p}", self._edit_reg_password_field, "p"))
+        root.add_child(MenuNode("Create Account Now", self._do_register, "c"))
+        root.add_child(MenuNode("Back", self._show_login_menu, "b"))
+        self.menu = MenuSystem(root, self.speak)
+        self.speak("Create account form")
+        self.menu.announce_current()
+        self.window.update_text(f"Register: {u} / pw {p}")
+
+    def _edit_login_field(self):
         self.state = STATE_COMPOSING
-        self.input_buf = getattr(self, f"login_{field}", "")
-        self._editing_field = field
-        self.speak(f"Enter {field}.")
-        self.window.update_text(f"{field.capitalize()}:")
+        self._editing_field = 'username'
+        self.input_buf = self.login_username
+        self.speak("Enter username.")
+        self.window.update_text("Username:")
+
+    def _edit_password_field(self):
+        self.state = STATE_COMPOSING
+        self._editing_field = 'password'
+        self.input_buf = self.login_password
+        self.speak("Enter password.")
+        self.window.update_text("Password:")
+
+    def _edit_reg_username_field(self):
+        self.state = STATE_COMPOSING
+        self._editing_field = 'username'
+        self.input_buf = self.reg_username
+        self.speak("Enter username.")
+        self.window.update_text("Username:")
+
+    def _edit_reg_password_field(self):
+        self.state = STATE_COMPOSING
+        self._editing_field = 'password'
+        self.input_buf = self.reg_password
+        self.speak("Enter password.")
+        self.window.update_text("Password:")
 
     def _do_login(self):
         if not self.login_username.strip() or not self.login_password.strip():
@@ -954,36 +1031,20 @@ class ChatApp(SoftApp):
             result = self.client.login(self.username, self.password)
             self.is_admin = result.get('role') == 'admin'
             self.profile['username'] = self.username
-            self.profile['password'] = self._hash_password(self.password)
+            self.profile['password'] = self.password
             self._save_profile()
             self._load_data()
             self._show_main_menu()
         except ChatError as e:
             self.speak(f"Login failed: {e}")
-
-    def _show_register_menu(self):
-        self.state = STATE_REGISTER
-        u = self.reg_username if self.reg_username else "(empty)"
-        root = MenuNode("Register")
-        root.add_child(MenuNode(f"Username: {u}", lambda: self._edit_reg_field("username")))
-        root.add_child(MenuNode("Password: (hidden)", lambda: self._edit_reg_field("password")))
-        root.add_child(MenuNode("Register", self._do_register))
-        root.add_child(MenuNode("Back to Login", self._show_login_menu))
-        self.menu = MenuSystem(root, self.speak)
-        self.speak("Register Menu")
-        self.menu.announce_current()
-        self._update_reg_window()
-
-    def _update_reg_window(self):
-        u = self.reg_username if self.reg_username else "(empty)"
-        self.window.update_text(f"Chat Register\nUsername: {u}")
-
-    def _edit_reg_field(self, field):
-        self.state = STATE_COMPOSING
-        self.input_buf = getattr(self, f"reg_{field}", "")
-        self._editing_field = field
-        self.speak(f"Enter {field}.")
-        self.window.update_text(f"{field.capitalize()}:")
+        except Exception as e:
+            import traceback, sys
+            tb = traceback.format_exc()
+            print(f"CHAT_DEBUG: _do_login exception type={type(e).__name__} msg={e}", file=sys.stderr)
+            print(f"CHAT_DEBUG: traceback:\n{tb}", file=sys.stderr)
+            with open(os.path.join(DATA_DIR, 'chat_error.log'), 'w') as f:
+                f.write(tb)
+            self.speak(f"Login error: {type(e).__name__}")
 
     def _do_register(self):
         if not self.reg_username.strip() or not self.reg_password.strip():
@@ -999,32 +1060,6 @@ class ChatApp(SoftApp):
             self._show_login_menu()
         except ChatError as e:
             self.speak(f"Registration failed: {e}")
-
-    def _handle_login(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.exit_app()
-            return
-        if vk in (win32con.VK_BACK):
-            self.menu.previous()
-        elif vk == win32con.VK_RETURN:
-            self.menu.select()
-        if self.menu:
-            item = self.menu.get_current_item()
-            title = item.title if item else self.menu.current_node.title
-            self.window.update_text(title)
-
-    def _handle_register(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self._show_login_menu()
-            return
-        if vk in (win32con.VK_BACK):
-            self.menu.previous()
-        elif vk == win32con.VK_RETURN:
-            self.menu.select()
-        if self.menu:
-            item = self.menu.get_current_item()
-            title = item.title if item else self.menu.current_node.title
-            self.window.update_text(title)
 
     def exit_app(self):
         try:

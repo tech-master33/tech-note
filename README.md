@@ -1,47 +1,41 @@
-# MystMenu (Tech-Note)
+# Tech-Note
 
-A self-voicing, keyboard-driven interface for Windows, inspired by the BrailleNote mPower/Apex (KeySoft) series. MystMenu provides a streamlined, accessible environment for users who prefer keyboard navigation and speech feedback.
+A self-voicing, keyboard-driven interface for Windows, modeled after the BrailleNote mPower/Apex (KeySoft) series. No screen reader required.
 
 ## Features
-- **Self-voicing**: Built-in SAPI5 and SAPI4 speech support, no screen reader required.
-- **Stealth UI**: Invisible to traditional screen readers to avoid "blank" or "pane" sounds, providing a clean audio experience.
-- **Audio Ducking**: Automatically lowers system volume (background music, etc.) when the interface is speaking.
-- **Sound Schemes**: Choose from multiple sound schemes including Classic, Minimal, and Default.
-- **Keyboard-driven**: Full control via keyboard shortcuts and first-letter navigation.
-- **Extensible**: Includes an integrated **App Store** to download and install new applications.
+- **Self-voicing**: Built-in SAPI5 speech, no screen reader needed
+- **Stealth UI**: Invisible to screen readers to avoid noise
+- **Keyboard-driven**: Full control via keyboard, no mouse
+- **Sound schemes**: Classic, Minimal, Default
+- **App Store**: Download and install community apps
+- **Chat**: Internet messaging with rooms, DMs, and voice messages
 
-## Major Components
-- **Main Menu**: Central hub for accessing core applications.
-- **Game Center**: A collection of accessible games.
-- **App Store**: Online catalog for discovering and installing additional modules.
-- **Recovery System**: Built-in recovery tools for system maintenance.
-
-## Applications
-- **Productivity**: Word Processor, Calculator, File Manager, Planner, Address List, Email, Todo List, Notes.
-- **Communication**: Chat App (Internet-based messaging), Internet Browser.
-- **Utilities**: Unit Converter, Weather, Stopwatch, Alarm Clock, Password Generator, Typing Test.
-- **Entertainment**: Media Player, FM Radio, and a wide variety of games.
-- **Games**: Blackjack, Connect Four, Dice Roller, Game 2048, Hangman, Memory Match, Minesweeper, Puzzle Game, Snake, Solitaire, Sudoku, Tic Tac Toe.
+## Built-in Apps
+- **Productivity**: Word Processor, Calculator, File Manager, Planner, Address List, Email, Notes
+- **Communication**: Chat (messaging), Internet Browser, OpenCode AI Client, ChatGPT Client
+- **Utilities**: Settings, Tutorial, Habit Tracker
+- **Media**: Media Player, FM Radio
+- **Games**: Game Center (with multiple games)
+- **System**: App Store, Power Menu, Lock Screen, Options Menu
 
 ## Navigation
-- **Space / Down Arrow**: Next item in menu.
-- **Backspace / Up Arrow**: Previous item in menu.
-- **Enter**: Select / Open application.
-- **Escape**: Go back / Exit application.
-- **Space + O**: Options menu (Adjust speech rate, volume, voice, and sound schemes).
-- **F1**: Contextual Help / Shortcuts list.
-- **F5**: Status Info (Announces current time, date, and battery percentage).
-- **Shift + F1**: Open Tutorial.
-- **Backtick (`)**: Power Menu (Restart, Shutdown, Exit to Windows).
-- **Alt + F4**: Immediate Exit.
-- **A-Z**: First-letter navigation (Press the first letter of any menu item to jump to it).
+- **Space**: Next item
+- **Backspace**: Previous item
+- **Enter**: Select / Open
+- **Escape**: Go back / Exit
+- **First letter (A-Z)**: Jump to item
+- **Space + O**: Options menu
+- **Backtick (`)**: Power Menu
+- **F1**: Help
+- **F5**: Status info
+- **Shift + F1**: Tutorial
+- **Alt+F4**: Blocked (use Power Menu to exit)
 
 ## Requirements
 - **64-bit Python 3.10+**
-- **Dependencies**: Install via `pip install -r requirements.txt`
+- `pip install -r requirements.txt`
 
 ## Running
-Execute the following command in the project root:
 ```bash
 python boot_64.py
 ```
