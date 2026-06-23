@@ -3,6 +3,9 @@ comtypes
 pycryptodome
 requests
 beautifulsoup4
+readability-lxml
+langdetect
+pyspellchecker
 sounddevice
 soundfile
 psutil

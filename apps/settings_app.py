@@ -3,6 +3,7 @@ import json
 import subprocess
 import sys
 import shutil
+import datetime
 import win32con
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
@@ -34,6 +35,8 @@ class SettingsApp(SoftApp):
         self.text_input = None
         self.account_menu = None
         self._in_sub_menu = False
+        self._find_setting_mode = False
+        self._find_setting_buf = ""
         self._build_main_menu()
 
     def _build_main_menu(self):
@@ -44,6 +47,9 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Account Management", self._enter_account_menu))
         root.add_child(MenuNode("Display Settings", self._enter_display_menu))
         root.add_child(MenuNode("System Settings", self._enter_system_menu))
+        root.add_child(MenuNode("Find Setting", self._enter_find_setting))
+        root.add_child(MenuNode("Backup Settings", self._do_backup))
+        root.add_child(MenuNode("Restore Settings", self._enter_restore))
         root.add_child(MenuNode("Check for Updates", self._check_for_updates))
         root.add_child(MenuNode("About Tech-Note", self._about))
         root.add_child(MenuNode("Reset TechNote", self._reset_technote))
@@ -126,6 +132,10 @@ class SettingsApp(SoftApp):
         self.window.update_text("Settings: " + title)
 
     def on_key(self, vk):
+        if getattr(self, '_find_setting_mode', False):
+            self._handle_find_setting(vk)
+            return
+
         if self.adjust_mode:
             self._handle_adjust(vk)
             return
@@ -648,6 +658,122 @@ class SettingsApp(SoftApp):
         if self.on_reset_account:
             self.on_reset_account()
         self.exit_app()
+
+    # --- Find Setting ---
+    def _build_flat_settings_map(self):
+        """Return {display_name: (submenu, setting_key)} for all known settings."""
+        return {
+            "Theme": ("Display Settings", "theme"),
+            "Background Color": ("Display Settings", "bg_color"),
+            "Font Size": ("Display Settings", "font_size"),
+            "Night Mode Filter": ("Display Settings", "night_mode_filter"),
+            "Time Format": ("System Settings", "time_format"),
+            "Startup Sound": ("System Settings", "startup_sound"),
+            "Keyboard Layout": ("System Settings", "keyboard_layout"),
+            "Update Channel": ("System Settings", "update_channel"),
+            "Auto-Update on Startup": ("System Settings", "auto_update_on_startup"),
+            "Remember Last App": ("System Settings", "auto_resume_apps"),
+            "Fade Audio on Shutdown": ("System Settings", "smooth_shutdown_audio"),
+            "Sleep/Hibernate Options": ("System Settings", "app_sleep_hibernate"),
+            "Block Keys During Shutdown": ("System Settings", "shutdown_key_protection"),
+            "Username": ("Account", "username"),
+            "Custom Goodbye": ("Account", "custom_goodbye"),
+            "Lock Type": ("Account", "lock_type"),
+            "Shutdown PIN": ("Account", "shutdown_pin"),
+        }
+
+    def _enter_find_setting(self):
+        self._find_setting_mode = True
+        self._find_setting_buf = ""
+        self.speak("Type setting name to find.")
+        self.window.update_text("Find Setting: ")
+
+    def _handle_find_setting(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self._find_setting_mode = False
+            self._find_setting_buf = ""
+            self.speak("Cancelled.")
+            self._announce_main()
+            return
+        if vk == win32con.VK_BACK:
+            if self._find_setting_buf:
+                self._find_setting_buf = self._find_setting_buf[:-1]
+                self.window.update_text(f"Find Setting: {self._find_setting_buf}")
+            return
+        if vk == win32con.VK_RETURN:
+            self._find_setting_mode = False
+            self._find_setting_buf = ""
+            self._announce_main()
+            return
+        ch = self._vk_to_char(vk)
+        if ch:
+            self._find_setting_buf += ch
+            self.window.update_text(f"Find Setting: {self._find_setting_buf}")
+            q = self._find_setting_buf.lower()
+            flat = self._build_flat_settings_map()
+            matches = [(name, sub, key) for name, (sub, key) in flat.items() if q in name.lower()]
+            if len(matches) == 1:
+                name, sub, key = matches[0]
+                if key in self.settings:
+                    self.speak(f"Found {name} in {sub}: {self.settings[key]}.")
+                else:
+                    self.speak(f"Found {name} in {sub}.")
+            elif len(matches) > 1:
+                names = [m[0] for m in matches]
+                self.speak(f"{len(matches)} matches: {', '.join(names)}.")
+            else:
+                self.speak(f"No matches for {q}.")
+
+    # --- Backup / Restore ---
+    def _do_backup(self):
+        docs = os.path.join(TECH_SOFT, 'documents')
+        os.makedirs(docs, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"settings_backup_{ts}.json"
+        backup_path = os.path.join(docs, backup_name)
+        try:
+            if os.path.exists(SETTINGS_PATH):
+                shutil.copy2(SETTINGS_PATH, backup_path)
+                self.speak(f"Backup saved as {backup_name}.")
+                self.window.update_text(f"Backup: {backup_name}")
+            else:
+                self.speak("No settings file to back up.")
+        except Exception:
+            self.speak("Backup failed.")
+
+    def _enter_restore(self):
+        docs = os.path.join(TECH_SOFT, 'documents')
+        if not os.path.exists(docs):
+            self.speak("No backups found.")
+            return
+        backups = sorted([f for f in os.listdir(docs) if f.startswith("settings_backup_") and f.endswith(".json")])
+        if not backups:
+            self.speak("No backups found.")
+            return
+        root = MenuNode("Restore Settings")
+        for b in backups:
+            root.add_child(MenuNode(b, lambda name=b: self._do_restore(name)))
+        root.add_child(MenuNode("Back", self._back_to_main_menu))
+        self._switch_to_restore_menu(root)
+
+    def _switch_to_restore_menu(self, root):
+        self._in_sub_menu = True
+        self.menu = MenuSystem(root, self.speak)
+        item = self.menu.get_current_item()
+        self.window.update_text("Restore: " + (item.title if item else ""))
+
+    def _do_restore(self, name):
+        backup_path = os.path.join(TECH_SOFT, 'documents', name)
+        try:
+            with open(backup_path, 'r') as f:
+                loaded = json.load(f)
+            with open(SETTINGS_PATH, 'w') as f:
+                json.dump(loaded, f)
+            self.settings.update(loaded)
+            self.speak(f"Restored from {name}. Some settings may need a restart.")
+            self._back_to_main_menu()
+        except Exception:
+            self.speak("Restore failed.")
 
     def get_help_text(self):
         if self.adjust_mode:

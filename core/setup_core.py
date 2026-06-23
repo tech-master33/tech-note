@@ -4,19 +4,13 @@ import win32con
 import win32api
 from core.app_base import SoftApp
 from core.config import ACCOUNT_PATH
-from synths.registry import get_available_synths, create_synth
 
-TOTAL_STEPS = 9
+TOTAL_STEPS = 8
 
 class TechNoteSetup(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.finish_callback = None
-        self.available_synths = get_available_synths()
-        self.synth_index = 0
-        self.synth_module = "sapi_synth"
-        self.voices = []
-        self.voice_index = 0
         self.current_step = 0
         self.username = ""
         self.password = ""
@@ -25,15 +19,8 @@ class TechNoteSetup(SoftApp):
         self._pw_original = ""
         self.lock_type = "pin"
         self.keyboard_layout = self._detect_windows_layout()
+        self.time_format = "12-hour"
         self.active = True
-
-    def _load_voices_for_synth(self):
-        inst = create_synth(self.synth_module)
-        if inst and hasattr(inst, 'get_voice_names'):
-            self.voices = inst.get_voice_names()
-            self.voice_index = 0
-        else:
-            self.voices = []
 
     def _detect_windows_layout(self):
         try:
@@ -165,7 +152,7 @@ class TechNoteSetup(SoftApp):
                     if len(self.pin) == 4:
                         if self.pin == self._pin_original:
                             self.pin = self._pin_original
-                            self._enter_synth_step()
+                            self._enter_layout_step()
                         else:
                             self.speak("PINs don't match. Try again.")
                             self.pin = ""
@@ -183,7 +170,7 @@ class TechNoteSetup(SoftApp):
                     if self.password:
                         if self.password == self._pw_original:
                             self.password = self._pw_original
-                            self._enter_synth_step()
+                            self._enter_layout_step()
                         else:
                             self.speak("Passwords don't match. Try again.")
                             self.password = ""
@@ -204,105 +191,56 @@ class TechNoteSetup(SoftApp):
                     self.speak(self._step_label("Confirm your password."))
                     self.window.update_text("Confirm Password:")
                 return
-            if not self.available_synths:
-                return
-            if vk in (win32con.VK_SPACE,):
-                self.synth_index = (self.synth_index + 1) % len(self.available_synths)
-                self.window.update_text(self.available_synths[self.synth_index][0])
-                self.speak(self.available_synths[self.synth_index][0])
-            elif vk in (win32con.VK_BACK,):
-                self.synth_index = (self.synth_index - 1) % len(self.available_synths)
-                self.window.update_text(self.available_synths[self.synth_index][0])
-                self.speak(self.available_synths[self.synth_index][0])
-            elif vk == win32con.VK_RETURN:
-                self.synth_module = self.available_synths[self.synth_index][1]
-                self._load_voices_for_synth()
-                self.current_step = 6
-                if self.voices:
-                    self.speak(self._step_label("Voice selection. Use Space or Backspace."))
-                    self.window.update_text(self.voices[self.voice_index])
-                else:
-                    self._enter_layout_step()
-
-        elif self.current_step == 6:
-            if vk == win32con.VK_ESCAPE:
-                self.current_step = 5
-                self.speak(self._step_label("TTS engine. Use Space or Backspace to select."))
-                if self.available_synths:
-                    self.window.update_text(self.available_synths[self.synth_index][0])
-                return
-            if not self.voices:
-                self._enter_layout_step()
-                return
-            if vk in (win32con.VK_SPACE,):
-                self.voice_index = (self.voice_index + 1) % len(self.voices)
-                self.window.update_text(self.voices[self.voice_index])
-                self.speak(self.voices[self.voice_index])
-            elif vk in (win32con.VK_BACK,):
-                if self.voices:
-                    self.voice_index = (self.voice_index - 1) % len(self.voices)
-                    self.window.update_text(self.voices[self.voice_index])
-                    self.speak(self.voices[self.voice_index])
-            elif vk == win32con.VK_RETURN:
-                self._enter_layout_step()
-
-        elif self.current_step == 7:
-            if vk == win32con.VK_ESCAPE:
-                self.current_step = 6
-                if self.voices:
-                    self.speak(self._step_label("Voice selection. Use Space or Backspace."))
-                    self.window.update_text(self.voices[self.voice_index])
-                else:
-                    self.current_step = 5
-                    self.speak(self._step_label("TTS engine."))
-                    if self.available_synths:
-                        self.window.update_text(self.available_synths[self.synth_index][0])
-                return
-            if vk in (win32con.VK_SPACE,):
+            if vk == win32con.VK_SPACE:
                 self._layout_index = (self._layout_index + 1) % len(self._layout_options)
                 self.keyboard_layout = self._layout_options[self._layout_index]
                 self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
                 self.speak(self.keyboard_layout)
-            elif vk in (win32con.VK_BACK,):
+            elif vk == win32con.VK_BACK:
                 self._layout_index = (self._layout_index - 1) % len(self._layout_options)
                 self.keyboard_layout = self._layout_options[self._layout_index]
                 self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
                 self.speak(self.keyboard_layout)
             elif vk == win32con.VK_RETURN:
+                self._enter_time_format_step()
+
+        elif self.current_step == 6:
+            if vk == win32con.VK_ESCAPE:
+                self.current_step = 5
+                self.speak(self._step_label("Keyboard layout. Use Space or Backspace."))
+                self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
+                return
+            if vk == win32con.VK_SPACE:
+                self.time_format = "24-hour" if self.time_format == "12-hour" else "12-hour"
+                self.window.update_text("Time Format: " + self.time_format)
+                self.speak(self.time_format)
+            elif vk == win32con.VK_BACK:
+                self.time_format = "24-hour" if self.time_format == "12-hour" else "12-hour"
+                self.window.update_text("Time Format: " + self.time_format)
+                self.speak(self.time_format)
+            elif vk == win32con.VK_RETURN:
                 self._complete_setup()
 
-        elif self.current_step == 8:
+        elif self.current_step == 7:
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:
                     self.finish_callback()
 
-    def _enter_synth_step(self):
-        self.current_step = 5
-        if len(self.available_synths) <= 1:
-            if self.available_synths:
-                self.synth_module = self.available_synths[0][1]
-            self._load_voices_for_synth()
-            self.current_step = 6
-            if self.voices:
-                self.speak(self._step_label("Voice selection. Use Space or Backspace."))
-                self.window.update_text(self.voices[self.voice_index])
-            else:
-                self._enter_layout_step()
-        else:
-            self.speak(self._step_label("TTS engine. Use Space or Backspace to select."))
-            if self.available_synths:
-                self.window.update_text(self.available_synths[self.synth_index][0])
-
     def _enter_layout_step(self):
         self._layout_options = ["US", "UK", "Arabic"]
         self._layout_index = self._layout_options.index(self.keyboard_layout) if self.keyboard_layout in self._layout_options else 0
-        self.current_step = 7
+        self.current_step = 5
         self.speak(self._step_label(f"Keyboard layout detected: {self.keyboard_layout}. Use Space or Backspace to change."))
         self.window.update_text("Keyboard Layout: " + self.keyboard_layout)
 
+    def _enter_time_format_step(self):
+        self.current_step = 6
+        self.speak(self._step_label(f"Time format. Current: {self.time_format}. Use Space or Backspace to change."))
+        self.window.update_text("Time Format: " + self.time_format)
+
     def _complete_setup(self):
-        self._save_keyboard_layout()
+        self._save_settings()
         self.save_account()
         self.current_step = 8
         lines = [
@@ -311,14 +249,12 @@ class TechNoteSetup(SoftApp):
             f"Username: {self.username}",
             f"Lock: {self.lock_type.upper()}",
             f"Layout: {self.keyboard_layout}",
-            f"TTS: {self.available_synths[self.synth_index][0] if self.available_synths else 'Default'}",
+            f"Time: {self.time_format}",
             "",
             "Press Enter to start TechNote."
         ]
         self.window.update_text("\n".join(lines))
-        summary_parts = [f"Username {self.username}", f"lock type {self.lock_type}", f"keyboard {self.keyboard_layout}"]
-        if self.available_synths:
-            summary_parts.append(f"synth {self.available_synths[self.synth_index][0]}")
+        summary_parts = [f"Username {self.username}", f"lock type {self.lock_type}", f"keyboard {self.keyboard_layout}", f"time {self.time_format}"]
         self.speak(f"Setup complete. {', '.join(summary_parts)}. Press Enter to start.")
 
     def _handle_input(self, vk, attr, hidden=False):
@@ -346,15 +282,13 @@ class TechNoteSetup(SoftApp):
             "password": self.password,
             "pin": self.pin,
             "lock_type": self.lock_type,
-            "synth_module": self.synth_module,
-            "default_synth": self.voices[self.voice_index] if self.voices else "Default"
         }
         os.makedirs(os.path.dirname(ACCOUNT_PATH), exist_ok=True)
         with open(ACCOUNT_PATH, 'w') as f:
             json.dump(config, f)
         self.speak("Account saved.")
 
-    def _save_keyboard_layout(self):
+    def _save_settings(self):
         settings_path = os.path.join(os.path.dirname(ACCOUNT_PATH), 'settings.json')
         try:
             s = {}
@@ -362,6 +296,7 @@ class TechNoteSetup(SoftApp):
                 with open(settings_path, 'r') as f:
                     s = json.load(f)
             s["keyboard_layout"] = self.keyboard_layout
+            s["time_format"] = self.time_format
             with open(settings_path, 'w') as f:
                 json.dump(s, f)
         except Exception:

@@ -6,6 +6,7 @@ import threading
 import time
 import wave
 import requests
+import mimetypes
 
 
 class ChatError(Exception):
@@ -14,6 +15,7 @@ class ChatError(Exception):
 
 class ChatClient:
     VOICE_PREFIX = '`'
+    FILE_PREFIX = '!'
 
     def __init__(self, api_base=None):
         self.api_base = api_base or 'https://tech-chat.tech-chat.workers.dev'
@@ -75,6 +77,20 @@ class ChatClient:
             raise ChatError(msg)
         return r.json()
 
+    def _put(self, path, data=None):
+        try:
+            r = requests.put(f'{self.api_base}/{path}', json=data or {}, headers=self._headers(), timeout=15)
+        except requests.exceptions.RequestException as e:
+            raise ChatError(f"Connection failed: {e}")
+        if r.status_code >= 400:
+            try:
+                d = r.json()
+                msg = d.get('error', f'HTTP {r.status_code}')
+            except Exception:
+                msg = f'HTTP {r.status_code}'
+            raise ChatError(msg)
+        return r.json()
+
     # --- Auth ---
     def register(self, username, password):
         return self._post('register', {'username': username, 'password': password})
@@ -84,7 +100,7 @@ class ChatClient:
         self.user_id = result['user_id']
         self.username = result['username']
         self.role = result.get('role', 'user')
-        self.token = str(self.user_id)
+        self.token = result.get('token', str(self.user_id))
         self.is_connected = True
         self._start_polling()
         return result
@@ -95,6 +111,21 @@ class ChatClient:
         self.token = None
         self.user_id = None
         self.username = None
+        self._saved_username = None
+        self._saved_password = None
+
+    def save_credentials(self, username, password):
+        self._saved_username = username
+        self._saved_password = password
+
+    def reconnect(self):
+        if not self._saved_username or not self._saved_password:
+            return False
+        try:
+            result = self.login(self._saved_username, self._saved_password)
+            return result is not None
+        except Exception:
+            return False
 
     def change_password(self, old_password, new_password):
         return self._post('password', {'old_password': old_password, 'new_password': new_password})
@@ -130,6 +161,9 @@ class ChatClient:
     def delete_message(self, room_id, msg_id):
         return self._delete(f'rooms/{room_id}/message/{msg_id}')
 
+    def edit_message(self, room_id, msg_id, content):
+        return self._put(f'rooms/{room_id}/message/{msg_id}', {'content': content})
+
     # --- DMs ---
     def get_dm_list(self):
         return self._get('dm')
@@ -148,12 +182,38 @@ class ChatClient:
     def delete_dm(self, msg_id):
         return self._delete(f'dm/message/{msg_id}')
 
+    def edit_dm(self, msg_id, content):
+        return self._put(f'dm/message/{msg_id}', {'content': content})
+
     # --- Users ---
     def get_users(self):
         return self._get('users')
 
     def search_users(self, query):
         return self._get('users', {'query': query})
+
+    # --- Online Status ---
+    def heartbeat(self):
+        return self._post('heartbeat')
+
+    def get_online(self):
+        return self._get('online')
+
+    def set_typing(self, room_id=None, target_id=None, typing=True):
+        data = {'typing': typing}
+        if room_id:
+            data['room_id'] = room_id
+        if target_id:
+            data['target_id'] = target_id
+        return self._post('typing', data)
+
+    def get_typing(self, room_id=None, target_id=None):
+        params = {}
+        if room_id:
+            params['room_id'] = room_id
+        if target_id:
+            params['target_id'] = target_id
+        return self._get('typing', params)
 
     # --- Admin ---
     def grant_admin(self, username):
@@ -162,10 +222,21 @@ class ChatClient:
     def revoke_admin(self, username):
         return self._post('admin/revoke', {'username': username})
 
+    # --- File Sharing ---
+    def upload_file(self, filepath):
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        import base64
+        b64 = base64.b64encode(data).decode('ascii')
+        name = os.path.basename(filepath)
+        return self._post('files/upload', {'name': name, 'data': b64})
+
+    def get_file(self, file_id):
+        return self._get(f'files/{file_id}')
+
     # --- Voice Helpers ---
     @staticmethod
     def wav_to_voice_text(wav_path):
-        """Convert WAV to text with ` prefix."""
         with open(wav_path, 'rb') as f:
             data = f.read()
         b64 = base64.b64encode(data).decode('ascii')
@@ -173,13 +244,11 @@ class ChatClient:
 
     @staticmethod
     def is_voice_text(content):
-        """Check if content is a voice message."""
         return content.startswith(ChatClient.VOICE_PREFIX)
 
     @staticmethod
     def voice_text_to_wav(content, save_path):
-        """Convert voice text (with ` prefix) to WAV file."""
-        b64 = content[1:]  # Remove ` prefix
+        b64 = content[1:]
         data = base64.b64decode(b64)
         with open(save_path, 'wb') as f:
             f.write(data)
@@ -219,6 +288,28 @@ class ChatClient:
             except Exception:
                 pass
 
+    # --- File Helpers (inline base64 with ! prefix) ---
+    @staticmethod
+    def file_to_text(filepath):
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        mime = mimetypes.guess_type(filepath)[0] or 'application/octet-stream'
+        b64 = base64.b64encode(data).decode('ascii')
+        name = os.path.basename(filepath)
+        return ChatClient.FILE_PREFIX + f"{len(data)}:{name}:{mime}:" + b64
+
+    @staticmethod
+    def is_file_text(content):
+        return content.startswith(ChatClient.FILE_PREFIX)
+
+    @staticmethod
+    def parse_file_text(content):
+        parts = content[1:].split(':', 3)
+        if len(parts) < 4:
+            return None
+        size, name, mime, b64 = parts
+        return {'size': int(size), 'name': name, 'mime': mime, 'data': base64.b64decode(b64)}
+
     # --- Polling ---
     def _start_polling(self):
         if self._poll_thread and self._poll_thread.is_alive():
@@ -227,11 +318,52 @@ class ChatClient:
         self._polling = True
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._poll_thread.start()
+        self._start_websocket()
+
+    def _start_websocket(self):
+        try:
+            import websocket
+            ws_url = self.api_base.replace('https://', 'wss://') + '/ws'
+            self._ws = websocket.WebSocketApp(ws_url,
+                on_message=lambda ws, msg: self._on_ws_message(msg),
+                on_error=lambda ws, err: None,
+                on_close=lambda ws, code, msg: None)
+            self._ws.on_open = lambda ws: self._ws_send({'type': 'subscribe', 'user_id': self.user_id, 'rooms': []})
+            self._ws_thread = threading.Thread(target=self._ws.run_forever, daemon=True)
+            self._ws_thread.start()
+        except ImportError:
+            self._ws = None
+        except Exception:
+            self._ws = None
+
+    def _ws_send(self, data):
+        if self._ws:
+            try:
+                self._ws.send(json.dumps(data))
+            except Exception:
+                pass
+
+    def _on_ws_message(self, msg):
+        try:
+            data = json.loads(msg)
+            evt = data.get('event')
+            payload = data.get('data')
+            if evt and payload:
+                with self._event_lock:
+                    self.event_queue.append((evt, payload))
+        except Exception:
+            pass
 
     def _poll_loop(self):
+        failures = 0
+        heartbeat_count = 0
         while self._polling:
             try:
+                heartbeat_count += 1
+                if heartbeat_count % 5 == 0:
+                    self._post('heartbeat')
                 rooms_resp = self._get('rooms')
+                failures = 0
                 for room in rooms_resp.get('rooms', []):
                     rid = room.get('id')
                     unread = room.get('unread_count', 0)
@@ -249,8 +381,19 @@ class ChatClient:
                         if last:
                             with self._event_lock:
                                 self.event_queue.append(('dm_message', last))
+            except ChatError as e:
+                failures += 1
+                if "401" in str(e) or "Authentication required" in str(e):
+                    if self._saved_username:
+                        self.reconnect()
+                elif failures >= 3:
+                    if self._saved_username:
+                        self.reconnect()
+                        failures = 0
             except Exception:
-                pass
+                failures += 1
+                if failures >= 5:
+                    failures = 3
             time.sleep(3)
 
     def poll_event(self):

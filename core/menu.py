@@ -129,6 +129,26 @@ class MenuSystem:
                 play_move()
                 self.announce_current()
                 return
+        self.speak(f"No apps starting with {char}")
+
+    def search(self, query):
+        if not hasattr(self, '_original_children') or self._original_children is None:
+            self._original_children = self.current_node.children[:]
+        q = query.lower()
+        filtered = [item for item in self._original_children if q in item.title.lower()]
+        self.current_node.children = filtered
+        self.current_index = 0
+        if filtered:
+            self.announce_current()
+            pos = self.current_index + 1
+            self.speak(f"{pos} of {len(filtered)}.")
+        else:
+            self.speak(f"No matches for {query}.")
+
+    def clear_search(self):
+        if hasattr(self, '_original_children') and self._original_children is not None:
+            self.current_node.children = self._original_children
+            self._original_children = None
 
     def announce_current(self):
         item = self.get_current_item()
@@ -142,7 +162,7 @@ class MenuSystem:
         else:
             self.speak(self.current_node.title)
 
-def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
+def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, safe_mode=False):
     from apps.tech_edit import TechEdit
     from apps.tech_calc import TechCalc
     from apps.tech_files import TechFiles
@@ -200,7 +220,8 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     ), "s"))
     root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
     
-    _add_installed_apps(root, app_callback)
+    if not safe_mode:
+        _add_installed_apps(root, app_callback)
     
     return root
 

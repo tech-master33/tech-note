@@ -17,6 +17,10 @@ from apps.tutorial_app import TutorialApp
 from core.setup_core import TechNoteSetup
 from core.audio_player import AudioPlayer
 from core.config import TECH_SOFT
+import core.error_handler
+from core.notification_center import get_center as get_notification_center
+import core.safe_mode
+from core.app_base import AppManager
 
 pythoncom.CoInitialize()
 
@@ -29,6 +33,8 @@ class BrailleNoteApp:
                 os.makedirs(os.path.join(self.tech_soft, folder))
 
         self.synth = SapiSynthBase()
+        core.error_handler.load_level_from_settings()
+        self._notifications = get_notification_center()
         self._apply_settings()
 
         self._power_vk = 0xC0
@@ -36,6 +42,7 @@ class BrailleNoteApp:
         self.window = StealthWindow(on_key_down=self.handle_key, on_key_up=self.handle_key_up)
 
         self.menu = None
+        self.app_manager = AppManager(self)
         self.current_app = None
         self._typing_buffer = ""
         self._char_echo = "Off"
@@ -45,6 +52,8 @@ class BrailleNoteApp:
         self._state_keys = "Off"
         self.space_used_in_chord = False
         self._shutting_down = False
+        self._search_mode = False
+        self._search_buffer = ""
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
@@ -149,7 +158,7 @@ class BrailleNoteApp:
                 bg = colors.get(s.get("bg_color", "Black"), (0,0,0))
                 fs = s.get("font_size", "Medium")
                 self.window.set_display_settings(bg_color=bg, font_size=fs)
-            except: pass
+            except Exception as e: core.error_handler.log(e, "Loading display settings")
 
         account_path = os.path.join(self.tech_soft, 'account.json')
         if not os.path.exists(account_path):
@@ -196,11 +205,30 @@ class BrailleNoteApp:
             self._word_echo = "Off"
             self._key_bindings = {}
 
+    def _get_time_format(self):
+        try:
+            settings_path = os.path.join(self.tech_soft, 'settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+                return s.get("time_format", "12-hour")
+        except Exception:
+            pass
+        return "12-hour"
+
     def _start_setup(self):
         setup = TechNoteSetup(self, self.window)
         setup.finish_callback = self.on_setup_complete
         self.current_app = setup
         setup.run_setup()
+
+    def _reset_settings_to_defaults(self):
+        try:
+            settings_path = os.path.join(self.tech_soft, 'settings.json')
+            if os.path.exists(settings_path):
+                os.remove(settings_path)
+        except Exception:
+            pass
 
     def _reload_app(self):
         self._restart_process()
@@ -243,22 +271,76 @@ class BrailleNoteApp:
         voice_name = self.account.get('default_synth', 'Auto')
         if hasattr(self.synth, 'set_voice'):
             self.synth.set_voice(voice_name)
+        self.synth.save_defaults()
 
         if self.account.get("pin") or self.account.get("password"):
             self.launch_app(lambda m, w: self._create_lock_screen(m, w))
         else:
             self.load_main_menu()
 
+    def _write_clean_flag(self, value):
+        try:
+            with open(os.path.join(self.tech_soft, '.clean_shutdown'), 'w') as f:
+                f.write('1' if value else '0')
+        except:
+            pass
+
+    def _read_clean_flag(self):
+        try:
+            path = os.path.join(self.tech_soft, '.clean_shutdown')
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    return f.read().strip() == '1'
+        except:
+            pass
+        return True
+
+    def _start_auto_save(self):
+        def save_loop():
+            while True:
+                time.sleep(60)
+                try:
+                    if self.current_app and self.current_app.active:
+                        app_module = self.current_app.__class__.__module__
+                        if app_module not in ("apps.power_menu", "apps.lock_screen"):
+                            app_data = {
+                                "app_module": app_module,
+                                "app_class": self.current_app.__class__.__name__
+                            }
+                            if hasattr(self.current_app, "get_state"):
+                                app_data["state"] = self.current_app.get_state()
+                            with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
+                                json.dump(app_data, f)
+                except:
+                    pass
+        threading.Thread(target=save_loop, daemon=True).start()
+
     def load_main_menu(self):
         import core.menu
         core.menu.ANNOUNCE_POSITION = self._announce_position == "On"
+
+        if core.safe_mode.should_enter_safe_mode():
+            core.safe_mode.set_safe_mode(True)
+            self.synth.speak("Safe mode: third-party apps disabled, settings reset.")
+            self._reset_settings_to_defaults()
+
         self.menu_root = build_braillenote_menu(
-            self, self.window, self.launch_app, self._reset_and_restart
+            self, self.window, self.launch_app, self._reset_and_restart,
+            safe_mode=core.safe_mode.is_safe_mode()
         )
         self.menu = MenuSystem(self.menu_root, self.speak)
 
-        # Check for resume
+        # Crash detection
+        clean = self._read_clean_flag()
         resume_path = os.path.join(self.tech_soft, 'resume.json')
+        if not clean and os.path.exists(resume_path):
+            self.synth.speak("Previous session ended unexpectedly. Resuming last session.")
+        self._write_clean_flag(False)
+
+        # Start periodic auto-save
+        self._start_auto_save()
+
+        # Check for resume
         if os.path.exists(resume_path):
             try:
                 with open(resume_path, 'r') as f:
@@ -285,7 +367,8 @@ class BrailleNoteApp:
                         module = importlib.import_module(app_module)
                         app_class = getattr(module, resume_data["app_class"])
                         
-                        self.speak("Resuming last session.")
+                        if clean:
+                            self.speak("Resuming last session.")
                         self.launch_app(app_class)
                         
                         if "state" in resume_data and hasattr(self.current_app, "set_state"):
@@ -310,13 +393,61 @@ class BrailleNoteApp:
 
     def launch_app(self, app_class_or_callable):
         self._typing_buffer = ""
-        self.current_app = app_class_or_callable(self, self.window)
-        self.current_app.on_focus()
+        # Pause current app before launching new one
+        if self.app_manager.is_active():
+            try:
+                self.current_app.on_pause()
+            except Exception:
+                pass
+        try:
+            self.current_app = app_class_or_callable(self, self.window)
+            self.current_app.on_focus()
+        except Exception as e:
+            core.error_handler.log(e, f"launch_app failed for {app_class_or_callable}", level=core.error_handler.LEVEL_ERROR)
+            # Resume previous app on failure
+            if self.app_manager.current_app:
+                self.current_app = self.app_manager.current_app
+                try:
+                    self.current_app.on_resume()
+                except Exception:
+                    pass
+            else:
+                self.current_app = None
+                if self.menu:
+                    self.menu.announce_current()
+            count = core.safe_mode.record_crash()
+            self.synth.speak(f"App failed to launch. Crash {count} of 3.")
+            return
+        self.app_manager.current_app = self.current_app
+        core.safe_mode.record_clean_exit()
+        # Per-app voice override
+        app_name = self.current_app.__class__.__name__
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    settings = json.load(f)
+                pav = settings.get("per_app_voice", {})
+                if app_name in pav:
+                    override = pav[app_name]
+                    self.synth.set_temp_params(
+                        rate=override.get("rate"),
+                        pitch=override.get("pitch"),
+                        voice_index=override.get("voice_index")
+                    )
+            except Exception as e:
+                core.error_handler.log(e, "per-app voice override", level=core.error_handler.LEVEL_WARN)
 
     def _open_options(self):
         self._typing_buffer = ""
+        if self.app_manager.is_active():
+            try:
+                self.current_app.on_pause()
+            except Exception:
+                pass
         self.current_app = OptionsApp(self, self.window)
         self.current_app.on_focus()
+        self.app_manager.current_app = self.current_app
 
     def _open_power_menu(self):
         self._typing_buffer = ""
@@ -333,18 +464,38 @@ class BrailleNoteApp:
                         app_data["state"] = self.current_app.get_state()
                     with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
                         json.dump(app_data, f)
-                except: pass
+                except Exception as e: core.error_handler.log(e, "Saving resume data")
+            try:
+                self.current_app.on_pause()
+            except Exception:
+                pass
         self.current_app = PowerApp(
             self, self.window,
             on_restart=self._reload_app,
             on_exit=self._exit_app
         )
         self.current_app.on_focus()
+        self.app_manager.current_app = self.current_app
+
+    def _read_notifications(self):
+        count = self._notifications.get_unread_count()
+        latest = self._notifications.get_latest()
+        if latest:
+            self.synth.speak(f"{count} notification{'s' if count != 1 else ''}. Latest from {latest['source']}: {latest['text']}")
+            self._notifications.mark_read()
+        else:
+            self.synth.speak("No notifications.")
 
     def _open_tutorial(self):
         self._typing_buffer = ""
+        if self.app_manager.is_active():
+            try:
+                self.current_app.on_pause()
+            except Exception:
+                pass
         self.current_app = TutorialApp(self, self.window)
         self.current_app.on_focus()
+        self.app_manager.current_app = self.current_app
 
     def _check_startup_update(self):
         try:
@@ -366,7 +517,7 @@ class BrailleNoteApp:
             try:
                 with open(settings_path, 'r') as f:
                     settings = json.load(f)
-            except: pass
+            except Exception as e: core.error_handler.log(e, "Loading settings")
 
         # 7. Keyboard Lockout
         if settings.get("shutdown_key_protection", True):
@@ -377,42 +528,40 @@ class BrailleNoteApp:
             try:
                 self.window.update_text(" ")
                 self.window.set_display_settings(bg_color=(0,0,0))
-            except: pass
+            except Exception as e: core.error_handler.log(e, "Applying night mode filter")
 
-        # 1. "Where I Left Off" Bookmark
-        if settings.get("auto_resume_apps", True) and self.current_app and self.current_app.active:
-            app_module = self.current_app.__class__.__module__
-            # Don't save for system apps - _open_power_menu already saved before opening
-            if app_module not in ("apps.power_menu", "apps.lock_screen"):
-                try:
-                    app_data = {
-                        "app_module": app_module,
-                        "app_class": self.current_app.__class__.__name__
-                    }
-                    # If app has a get_state method, save it
-                    if hasattr(self.current_app, "get_state"):
-                        app_data["state"] = self.current_app.get_state()
-                    
-                    with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
-                        json.dump(app_data, f)
-                except: pass
-        elif mode not in ("sleep", "hibernate"):
-            # Clear resume if exiting normally without an app
+        # Delete resume.json unless hibernating (clean slate on shutdown/restart/sleep)
+        resume_path = os.path.join(self.tech_soft, 'resume.json')
+        if mode not in ("hibernate",):
             try:
-                resume_path = os.path.join(self.tech_soft, 'resume.json')
                 if os.path.exists(resume_path):
                     os.remove(resume_path)
-            except: pass
+            except Exception as e: core.error_handler.log(e, "Removing resume.json")
+        else:
+            # Hibernate: save current app if eligible
+            if settings.get("auto_resume_apps", True) and self.current_app and self.current_app.active:
+                app_module = self.current_app.__class__.__module__
+                if app_module not in ("apps.power_menu", "apps.lock_screen"):
+                    try:
+                        app_data = {
+                            "app_module": app_module,
+                            "app_class": self.current_app.__class__.__name__
+                        }
+                        if hasattr(self.current_app, "get_state"):
+                            app_data["state"] = self.current_app.get_state()
+                        with open(resume_path, 'w') as f:
+                            json.dump(app_data, f)
+                    except Exception as e: core.error_handler.log(e, "Saving hibernate resume data")
 
         # 3. Volume Fade-Out
         if settings.get("smooth_shutdown_audio", True):
             try:
                 AudioPlayer().fade_out(1000)
-            except: pass
+            except Exception as e: core.error_handler.log(e, "Fading out audio")
         else:
             try:
                 AudioPlayer().stop()
-            except: pass
+            except Exception as e: core.error_handler.log(e, "Stopping audio")
 
         # 2. Custom Goodbye Message
         goodbye_msg = settings.get("custom_goodbye", "Shutting down Tech-Note.")
@@ -425,7 +574,7 @@ class BrailleNoteApp:
 
         try:
             self.synth.speak(goodbye_msg)
-        except: pass
+        except Exception as e: core.error_handler.log(e, "Speaking goodbye message")
 
         try:
             if hasattr(self.synth, 'wait_until_done'):
@@ -447,7 +596,9 @@ class BrailleNoteApp:
                 path = _get_sound_path('unlock.mp3')
             if os.path.exists(path):
                 AudioPlayer().play_sound_blocking(path)
-        except: pass
+        except Exception as e: core.error_handler.log(e, "Playing shutdown sound")
+
+        self._write_clean_flag(True)
 
         try:
             self.window.close()
@@ -477,7 +628,7 @@ class BrailleNoteApp:
     def _get_status_info(self):
         import datetime
         now = datetime.datetime.now()
-        time_str = now.strftime("%I:%M %p").lstrip("0")
+        time_str = now.strftime("%H:%M" if self._get_time_format() == "24-hour" else "%I:%M %p").lstrip("0")
         date_str = now.strftime("%A, %B %d")
         status = f"{time_str}. {date_str}. "
         try:
@@ -510,6 +661,12 @@ class BrailleNoteApp:
         if vk == win32con.VK_SPACE:
             space_chord = self.space_used_in_chord
             self.space_used_in_chord = False
+
+        # Search mode Space handling
+        if self._search_mode and vk == win32con.VK_SPACE:
+            self._search_buffer += " "
+            self.menu.search(self._search_buffer)
+            return
 
         if self.current_app and self.current_app.active:
             try:
@@ -569,6 +726,20 @@ class BrailleNoteApp:
             self._open_options()
             return
 
+        # Global Notifications (Space + N)
+        if self.window.space_down and vk == 0x4E:
+            print("Global Chord: Space + N")
+            self.space_used_in_chord = True
+            self._read_notifications()
+            return
+
+        # Repeat Last Speech (Space + R)
+        if self.window.space_down and vk == 0x52:
+            print("Global Chord: Space + R")
+            self.space_used_in_chord = True
+            self.synth.repeat_last()
+            return
+
         # Global Tutorial (Shift + F1)
         if vk == win32con.VK_F1 and (win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000):
             self._open_tutorial()
@@ -584,9 +755,9 @@ class BrailleNoteApp:
 
         # --- Active App Delegation (apps get ALL keys first) ---
         if self.current_app and self.current_app.active:
-            # Character echo handled by apps themselves — framework does NOT echo here
-            # Word echo on Space
-            if self._word_echo == "On" and vk == win32con.VK_SPACE and self._typing_buffer:
+            text_active = self.current_app.is_text_input_active() if hasattr(self.current_app, 'is_text_input_active') else False
+            # Word echo on Space (only when in text input)
+            if text_active and self._word_echo == "On" and vk == win32con.VK_SPACE and self._typing_buffer:
                 self.synth.speak(self._typing_buffer)
                 self._typing_buffer = ""
             
@@ -600,6 +771,7 @@ class BrailleNoteApp:
                 print(f"App on_key error: {e}")
             if not self.current_app.active:
                 self.current_app = None
+                self.app_manager.current_app = None
                 if self.menu:
                     self.menu.announce_current()
             return
@@ -616,6 +788,38 @@ class BrailleNoteApp:
         if self._is_key_match(vk, "status"):
             info = self._get_status_info()
             self.synth.speak(info)
+            return
+
+        # Search mode trigger
+        if vk == 0xBF:
+            self._search_mode = True
+            self._search_buffer = ""
+            self.synth.speak("Search apps")
+            self.window.update_text("Search:")
+            return
+
+        # Search mode key handling
+        if self._search_mode:
+            if vk == win32con.VK_RETURN:
+                self._search_mode = False
+                self.menu.select()
+            elif vk == win32con.VK_ESCAPE:
+                self._search_mode = False
+                self._search_buffer = ""
+                self.menu.clear_search()
+                self.menu.announce_current()
+            elif vk == win32con.VK_BACK:
+                if self._search_buffer:
+                    self._search_buffer = self._search_buffer[:-1]
+                    if self._search_buffer:
+                        self.menu.search(self._search_buffer)
+                    else:
+                        self.menu.clear_search()
+            else:
+                ch = self._vk_to_char(vk)
+                if ch:
+                    self._search_buffer += ch
+                    self.menu.search(self._search_buffer)
             return
 
         if self._is_key_match(vk, "next_item") and vk != win32con.VK_SPACE:

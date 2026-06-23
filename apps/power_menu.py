@@ -4,6 +4,7 @@ import json
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT, SETTINGS_PATH, ACCOUNT_PATH
+import core.error_handler
 
 class PowerApp(SoftApp):
     def __init__(self, manager, window, on_restart=None, on_exit=None):
@@ -21,7 +22,7 @@ class PowerApp(SoftApp):
             try:
                 with open(SETTINGS_PATH, 'r') as f:
                     return json.load(f)
-            except: pass
+            except Exception as e: core.error_handler.log(e, "Loading settings")
         return {}
 
     def _build_menu(self):

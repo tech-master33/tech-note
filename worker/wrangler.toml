@@ -6,4 +6,12 @@ compatibility_date = "2026-06-18"
 binding = "CHAT_DATA"
 id = "213af5e001694a3ca1f75291ac87c09d"
 
+[[durable_objects.bindings]]
+name = "CHAT_ROOM"
+class_name = "ChatRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ChatRoom"]
+
 [vars]

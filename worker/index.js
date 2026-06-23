@@ -1,5 +1,5 @@
 // Tech-Chat Worker with KV + DMs
-// Voice messages = text with ` prefix (base64 encoded audio)
+// Voice messages = text with ` prefix, File messages = text with ! prefix (base64 encoded)
 
 async function hash(password, salt) {
   if (!salt) salt = crypto.getRandomValues(new Uint8Array(16));
@@ -105,7 +105,14 @@ async function login(env, body) {
   } else if (!(await check(p, user.password_hash))) {
     return jsonResp(401, { error: 'Invalid credentials' });
   }
-  return jsonResp(200, { user_id: user.id, username: user.username, role: user.role });
+  // Generate session token
+  const tokenBytes = new Uint8Array(32);
+  crypto.getRandomValues(tokenBytes);
+  const token = Array.from(tokenBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const sessions = await kvGet(env, 'sessions') || {};
+  sessions[token] = { user_id: user.id, created_at: Date.now() };
+  await kvPut(env, 'sessions', sessions);
+  return jsonResp(200, { user_id: user.id, username: user.username, role: user.role, token });
 }
 
 async function changePassword(env, uid, body) {
@@ -212,6 +219,12 @@ async function sendMessage(env, uid, rid, body) {
     unread[mid][rid] = (unread[mid][rid] || 0) + 1;
   }
   await kvPut(env, 'unread', unread);
+  // Broadcast via DO
+  try {
+    const doId = env.CHAT_ROOM.idFromName('global');
+    const stub = env.CHAT_ROOM.get(doId);
+    stub.broadcast('room_message', msg, rid, uid);
+  } catch (e) {}
   return jsonResp(201, { message: msg });
 }
 
@@ -225,6 +238,22 @@ async function deleteMessage(env, uid, rid, msgId) {
   if (msg.sender_id !== uid && user.role !== 'admin')
     return jsonResp(403, { error: 'Cannot delete others message' });
   msgs.splice(msgs.indexOf(msg), 1);
+  await kvPut(env, `msgs:${rid}`, msgs);
+  return jsonResp(200, { success: true });
+}
+
+async function editMessage(env, uid, rid, msgId, body) {
+  const c = (body.content || '').trim();
+  if (!c) return jsonResp(400, { error: 'Content required' });
+  const users = await kvGet(env, 'users') || {};
+  const user = Object.values(users).find(u => u.id === uid);
+  if (!user) return jsonResp(404, { error: 'User not found' });
+  const msgs = await kvGet(env, `msgs:${rid}`) || [];
+  const msg = msgs.find(m => m.id === msgId);
+  if (!msg) return jsonResp(404, { error: 'Message not found' });
+  if (msg.sender_id !== uid) return jsonResp(403, { error: 'Can only edit your own messages' });
+  msg.content = c;
+  msg.edited_at = new Date().toISOString();
   await kvPut(env, `msgs:${rid}`, msgs);
   return jsonResp(200, { success: true });
 }
@@ -289,6 +318,12 @@ async function sendDM(env, uid, otherId, body) {
   if (!unread[otherId]) unread[otherId] = {};
   unread[otherId][uid] = (unread[otherId][uid] || 0) + 1;
   await kvPut(env, 'dm_unread', unread);
+  // Broadcast via DO
+  try {
+    const doId = env.CHAT_ROOM.idFromName('global');
+    const stub = env.CHAT_ROOM.get(doId);
+    stub.broadcast('dm_message', msg, null, uid);
+  } catch (e) {}
   return jsonResp(201, { message: msg });
 }
 
@@ -304,6 +339,27 @@ async function deleteDM(env, uid, msgId) {
       if (msg.sender_id !== uid && user.role !== 'admin')
         return jsonResp(403, { error: 'Cannot delete others message' });
       msgs.splice(msgs.indexOf(msg), 1);
+      await kvPut(env, key, msgs);
+      return jsonResp(200, { success: true });
+    }
+  }
+  return jsonResp(404, { error: 'Message not found' });
+}
+
+async function editDM(env, uid, msgId, body) {
+  const c = (body.content || '').trim();
+  if (!c) return jsonResp(400, { error: 'Content required' });
+  const users = await kvGet(env, 'users') || {};
+  const user = Object.values(users).find(u => u.id === uid);
+  if (!user) return jsonResp(404, { error: 'User not found' });
+  const keys = await kvList(env, 'dm:');
+  for (const key of keys) {
+    const msgs = await kvGet(env, key) || [];
+    const msg = msgs.find(m => m.id === msgId);
+    if (msg) {
+      if (msg.sender_id !== uid) return jsonResp(403, { error: 'Can only edit your own messages' });
+      msg.content = c;
+      msg.edited_at = new Date().toISOString();
       await kvPut(env, key, msgs);
       return jsonResp(200, { success: true });
     }
@@ -349,6 +405,93 @@ async function revokeAdmin(env, uid, body) {
   return jsonResp(200, { success: true });
 }
 
+// --- File Sharing ---
+async function uploadFile(env, uid, body) {
+  const name = (body.name || 'file').trim();
+  const data = body.data || '';
+  if (!data) return jsonResp(400, { error: 'File data required' });
+  const maxSize = 1024 * 1024; // 1MB limit
+  if (data.length > maxSize) return jsonResp(413, { error: 'File too large (max 1MB)' });
+  const fileId = await nextId(env, 'files');
+  await kvPut(env, `file:${fileId}`, { id: fileId, name, data, uploaded_by: uid, uploaded_at: new Date().toISOString() });
+  return jsonResp(201, { file_id: fileId, name, url: `/files/${fileId}` });
+}
+
+async function getFile(env, fileId) {
+  const file = await kvGet(env, `file:${fileId}`);
+  if (!file) return jsonResp(404, { error: 'File not found' });
+  return jsonResp(200, file);
+}
+
+// --- Online Status ---
+async function heartbeat(env, uid) {
+  const online = await kvGet(env, 'online') || {};
+  online[uid] = Date.now();
+  await kvPut(env, 'online', online);
+  return jsonResp(200, { success: true });
+}
+
+async function getOnline(env, uid) {
+  const online = await kvGet(env, 'online') || {};
+  const users = await kvGet(env, 'users') || {};
+  const now = Date.now();
+  const timeout = 30_000; // 30s without heartbeat = offline
+  const result = {};
+  for (const [uId, lastSeen] of Object.entries(online)) {
+    if (now - lastSeen < timeout) {
+      const user = Object.values(users).find(u => u.id === parseInt(uId));
+      if (user) result[uId] = 'online';
+    }
+  }
+  return jsonResp(200, { online: result });
+}
+
+async function setTyping(env, uid, body) {
+  const roomId = body.room_id;
+  const targetId = body.target_id;
+  const isTyping = body.typing === true;
+  const key = roomId ? `typing:room:${roomId}` : `typing:dm:${targetId}`;
+  const typing = await kvGet(env, key) || {};
+  if (isTyping) {
+    typing[uid] = Date.now();
+  } else {
+    delete typing[uid];
+  }
+  await kvPut(env, key, typing);
+  return jsonResp(200, { success: true });
+}
+
+async function getTyping(env, uid, url) {
+  const roomId = url.searchParams.get('room_id');
+  const targetId = url.searchParams.get('target_id');
+  const key = roomId ? `typing:room:${roomId}` : `typing:dm:${targetId}`;
+  const typing = await kvGet(env, key) || {};
+  const now = Date.now();
+  const timeout = 5_000;
+  const result = {};
+  for (const [userId, ts] of Object.entries(typing)) {
+    if (now - ts < timeout) result[userId] = true;
+  }
+  return jsonResp(200, { typing: result });
+}
+
+// --- Rate Limiter (in-memory, per-IP) ---
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 60;        // max requests per window
+
+function rateLimit(request) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  let entry = rateLimitMap.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW) {
+    entry = { windowStart: now, count: 0 };
+    rateLimitMap.set(ip, entry);
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT_MAX;
+}
+
 // --- Router ---
 export default {
   async fetch(request, env, ctx) {
@@ -357,6 +500,7 @@ export default {
     let path = url.pathname;
 
     if (method === 'OPTIONS') return corsResp();
+    if (!rateLimit(request)) return jsonResp(429, { error: 'Too many requests. Slow down.' });
     if (path.startsWith('/api/')) path = path.slice(4);
     else if (path === '/api') path = '/';
 
@@ -367,7 +511,12 @@ export default {
 
     const auth = request.headers.get('Authorization') || '';
     const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-    const uid = /^\d+$/.test(token) ? parseInt(token) : null;
+    let uid = null;
+    if (token) {
+      const sessions = await kvGet(env, 'sessions') || {};
+      const session = sessions[token];
+      if (session) uid = session.user_id;
+    }
 
     if (!['/register', '/login', '/status'].includes(path) && !uid)
       return jsonResp(401, { error: 'Authentication required' });
@@ -393,12 +542,20 @@ export default {
         if (action === 'messages' && method === 'GET') return await getMessages(env, rid, url.searchParams.get('since_id'), url.searchParams.get('limit'));
         if (action === 'messages' && method === 'POST') return await sendMessage(env, uid, rid, body);
         if (action === 'message' && parts[3] && method === 'DELETE') return await deleteMessage(env, uid, rid, parseInt(parts[3]));
+        if (action === 'message' && parts[3] && method === 'PUT') return await editMessage(env, uid, rid, parseInt(parts[3]), body);
       }
 
       if (parts[0] === 'dm' && parts.length === 1 && method === 'GET') return await getDMList(env, uid);
       if (parts[0] === 'dm' && parts.length === 2 && method === 'GET') return await getDMessages(env, uid, parseInt(parts[1]), url.searchParams.get('since_id'), url.searchParams.get('limit'));
       if (parts[0] === 'dm' && parts.length === 2 && method === 'POST') return await sendDM(env, uid, parseInt(parts[1]), body);
       if (parts[0] === 'dm' && parts[1] === 'message' && parts[2] && method === 'DELETE') return await deleteDM(env, uid, parseInt(parts[2]));
+      if (parts[0] === 'dm' && parts[1] === 'message' && parts[2] && method === 'PUT') return await editDM(env, uid, parseInt(parts[2]), body);
+
+      // --- Online Status ---
+      if (path === '/heartbeat' && method === 'POST') return await heartbeat(env, uid);
+      if (path === '/online' && method === 'GET') return await getOnline(env, uid);
+      if (path === '/typing' && method === 'POST') return await setTyping(env, uid, body);
+      if (path === '/typing' && method === 'GET') return await getTyping(env, uid, url);
 
       if (path === '/users' && method === 'GET') {
         const query = url.searchParams.get('query');
@@ -407,6 +564,20 @@ export default {
 
       if (path === '/admin/grant' && method === 'POST') return await grantAdmin(env, uid, body);
       if (path === '/admin/revoke' && method === 'POST') return await revokeAdmin(env, uid, body);
+
+      // --- File Sharing ---
+      if (path === '/files/upload' && method === 'POST') return await uploadFile(env, uid, body);
+      if (path.startsWith('/files/') && method === 'GET') {
+        const fileId = path.split('/')[2];
+        return await getFile(env, fileId);
+      }
+
+      // WebSocket upgrade
+      if (path === '/ws') {
+        const doId = env.CHAT_ROOM.idFromName('global');
+        const stub = env.CHAT_ROOM.get(doId);
+        return stub.fetch(request);
+      }
 
       return jsonResp(404, { error: 'Not found' });
     } catch (e) {

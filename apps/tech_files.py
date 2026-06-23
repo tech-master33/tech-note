@@ -93,6 +93,8 @@ class TechFiles(SoftApp):
         self.input_mode = None
         self.input_buf = ""
         self.confirm_delete = False
+        self._overwrite_confirm = False
+        self._pending_paste = None
         self._open_drive(0)
 
     def _open_drive(self, index):
@@ -195,7 +197,30 @@ class TechFiles(SoftApp):
 
     def _open_file(self, path):
         filename = os.path.basename(path)
-        self.speak(f"File: {filename}")
+        ext = os.path.splitext(filename)[1].lower()
+        text_exts = {'.txt', '.py', '.md', '.json', '.xml', '.html', '.css', '.js', '.ini', '.cfg', '.log', '.csv'}
+        audio_exts = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.wma'}
+        if ext in audio_exts:
+            from apps.media_player import MediaPlayerApp
+            self.manager.current_app = MediaPlayerApp(self.manager, self.window)
+            self.manager.current_app.on_focus()
+            if hasattr(self.manager.current_app, 'load_file'):
+                self.manager.current_app.load_file(path)
+        elif ext in text_exts:
+            from apps.tech_edit import TechEdit
+            te = TechEdit(self.manager, self.window)
+            try:
+                with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                    te.text = f.read()
+                te.cursor = len(te.text)
+                te.filename = filename
+            except:
+                pass
+            self.manager.current_app = te
+            te.on_focus()
+            te.speak(f"Opened {filename}.")
+        else:
+            self.speak(f"File: {filename}. Cannot open this file type.")
 
     def _show_file_info(self):
         item = self.menu.get_current_item()
@@ -230,6 +255,17 @@ class TechFiles(SoftApp):
             self._handle_delete_confirm(vk)
             return
 
+        if self._overwrite_confirm:
+            self._overwrite_confirm = False
+            if vk == win32con.VK_RETURN and self._pending_paste:
+                src, dst = self._pending_paste
+                self._pending_paste = None
+                self._do_paste(src, dst)
+            elif vk == win32con.VK_ESCAPE:
+                self._pending_paste = None
+                self.speak("Cancelled.")
+            return
+
         if vk == win32con.VK_ESCAPE:
             if self.state == self.DRIVE_MENU:
                 self.menu = self._saved_menu
@@ -251,6 +287,17 @@ class TechFiles(SoftApp):
 
         if vk == win32con.VK_F3 and self.state == self.FILE_MENU:
             self._new_folder()
+            return
+
+        if vk == win32con.VK_F4 and self.state == self.FILE_MENU:
+            self._new_file()
+            return
+
+        if vk == win32con.VK_F6 and self.state == self.FILE_MENU:
+            if win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000:
+                self._cut_current()
+            else:
+                self._copy_current()
             return
 
         if vk == 0x49 and self.state == self.FILE_MENU:
@@ -348,6 +395,32 @@ class TechFiles(SoftApp):
         self.speak("Enter folder name.")
         self.window.update_text("New Folder: ")
 
+    def _new_file(self):
+        self.input_mode = "new_file"
+        self.input_buf = ""
+        self.speak("Enter filename.")
+        self.window.update_text("New File: ")
+
+    def _copy_current(self):
+        item = self.menu.get_current_item()
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            return
+        clean = item.title.replace("Folder: ", "")
+        full = os.path.join(self.path, clean)
+        if os.path.exists(full):
+            self.clipboard = {"path": full, "mode": "copy"}
+            self.speak(f"Copied {clean}.")
+
+    def _cut_current(self):
+        item = self.menu.get_current_item()
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            return
+        clean = item.title.replace("Folder: ", "")
+        full = os.path.join(self.path, clean)
+        if os.path.exists(full):
+            self.clipboard = {"path": full, "mode": "cut"}
+            self.speak(f"Cut {clean}.")
+
     def _start_search(self):
         self.input_mode = "search"
         self.input_buf = ""
@@ -373,6 +446,8 @@ class TechFiles(SoftApp):
                 self._do_rename(val)
             elif self.input_mode == "new_folder":
                 self._do_new_folder(val)
+            elif self.input_mode == "new_file":
+                self._do_new_file(val)
             elif self.input_mode == "search":
                 self._do_search(val)
             self.input_mode = None
@@ -418,6 +493,19 @@ class TechFiles(SoftApp):
         except Exception:
             self.speak("Failed to create folder.")
 
+    def _do_new_file(self, name):
+        path = os.path.join(self.path, name)
+        try:
+            if os.path.exists(path):
+                self.speak("Name already exists.")
+                return
+            with open(path, 'w') as f:
+                f.write("")
+            self.speak(f"Created file {name}.")
+            self.refresh()
+        except Exception:
+            self.speak("Failed to create file.")
+
     def _do_search(self, query):
         matches = []
         query_lower = query.lower()
@@ -455,8 +543,18 @@ class TechFiles(SoftApp):
         dst = os.path.join(self.path, name)
         try:
             if os.path.exists(dst):
-                self.speak("Name already exists in this folder.")
+                self._pending_paste = (src, dst)
+                self._overwrite_confirm = True
+                self.speak(f"{name} exists. Overwrite? Press Enter to confirm, Escape to cancel.")
+                self.window.update_text(f"Overwrite {name}?")
                 return
+            self._do_paste(src, dst)
+        except Exception:
+            self.speak("Paste failed.")
+
+    def _do_paste(self, src, dst):
+        name = os.path.basename(src)
+        try:
             if self.clipboard["mode"] == "cut":
                 shutil.move(src, dst)
                 self.speak(f"Moved {name}.")
@@ -472,4 +570,4 @@ class TechFiles(SoftApp):
             self.speak("Paste failed.")
 
     def get_help_text(self):
-        return "File Manager. Space next, Backspace previous. Enter open. F1 delete, F2 rename, F3 new folder. F5 sort, F7 search. F8 paste, F9 clear clipboard. I info. Space+D drives. Escape exit."
+        return "File Manager. Space next, Backspace previous. Enter open. F1 delete, F2 rename, F3 new folder, F4 new file. F5 sort, F6 copy, Shift+F6 cut, F7 search. F8 paste, F9 clear clipboard. I info. Space+D drives. Escape exit."

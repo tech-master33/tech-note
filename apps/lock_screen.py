@@ -9,7 +9,7 @@ import psutil
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem, _get_sound_path, SOUNDS_DIR
 from core.audio_player import AudioPlayer
-from core.config import ACCOUNT_PATH, SETTINGS_PATH
+from core.config import ACCOUNT_PATH, SETTINGS_PATH, TECH_SOFT
 
 class LockScreenApp(SoftApp):
     def __init__(self, manager, window, success_callback):
@@ -70,8 +70,19 @@ class LockScreenApp(SoftApp):
         bat = self._battery_text()
         if bat:
             root.add_child(MenuNode(bat))
-        root.add_child(MenuNode("Unlock", self._start_entry))
+        if time.time() < self._locked_until:
+            remaining = int(self._locked_until - time.time())
+            root.add_child(MenuNode(f"Unlock (locked {remaining}s)", lambda: self._locked_warn()))
+        else:
+            root.add_child(MenuNode("Unlock", self._start_entry))
         self.menu = MenuSystem(root, self.speak)
+
+    def _locked_warn(self):
+        remaining = int(self._locked_until - time.time())
+        if remaining > 0:
+            self.speak(f"Locked for {remaining} more seconds.")
+        else:
+            self._start_entry()
 
     def _schedule_clock_update(self):
         if self._clock_timer:
@@ -132,6 +143,11 @@ class LockScreenApp(SoftApp):
             return
         self.pin_mode = True
         self.input_buf = ""
+
+        # Caps Lock warning
+        if win32api.GetKeyState(win32con.VK_CAPITAL) & 1:
+            self.speak("Warning: Caps Lock is on.")
+
         if self.lock_type == "pin":
             self.speak("Enter PIN.")
             self.window.update_text("PIN:")
@@ -161,7 +177,7 @@ class LockScreenApp(SoftApp):
                 text = "*" * len(self.input_buf) if self.input_buf else "PIN:"
                 self.window.update_text(text)
             else:
-                self._cancel_entry()
+                self._cancel_entry(empty=True)
         elif vk == win32con.VK_SPACE:
             self.speak("Space")
         elif vk == win32con.VK_ESCAPE:
@@ -210,7 +226,7 @@ class LockScreenApp(SoftApp):
                 self.speak("Deleted")
                 self.window.update_text("*" * len(self.input_buf) if self.input_buf else "Password:")
             else:
-                self._cancel_entry()
+                self._cancel_entry(empty=True)
             return
         if vk == win32con.VK_ESCAPE:
             self._cancel_entry()
@@ -226,9 +242,12 @@ class LockScreenApp(SoftApp):
             self.speak("star")
             self.window.update_text("*" * len(self.input_buf))
 
-    def _cancel_entry(self):
+    def _cancel_entry(self, empty=False):
         self.pin_mode = False
-        self.speak("Cancelled.")
+        if empty:
+            self.speak("Cancelled. Field was empty.")
+        else:
+            self.speak("Cancelled.")
         self._build_menu()
         self.menu.current_index = 0
         self.window.update_text(self._display_text())
@@ -236,6 +255,12 @@ class LockScreenApp(SoftApp):
     def _unlock(self):
         if self._clock_timer:
             self._clock_timer.cancel()
+        resume_path = os.path.join(TECH_SOFT, 'resume.json')
+        try:
+            if os.path.exists(resume_path):
+                os.remove(resume_path)
+        except Exception:
+            pass
         self._play_unlock()
         self.success_callback()
         self.exit_app()

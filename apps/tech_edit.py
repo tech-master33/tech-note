@@ -3,10 +3,18 @@ import json
 import win32con
 from core.app_base import SoftApp
 from core.config import TECH_SOFT
+from core.file_dialog import FileDialog
+from core.save_dialog import SaveDialog
+import core.auto_save
+
+try:
+    from spellchecker import SpellChecker
+    HAS_SPELLCHECK = True
+except ImportError:
+    HAS_SPELLCHECK = False
 
 STATE_EDIT = 0
-STATE_OPEN = 1
-STATE_SAVE_AS = 2
+STATE_SPELL = 3
 
 class TechEdit(SoftApp):
     def __init__(self, manager, window):
@@ -18,18 +26,46 @@ class TechEdit(SoftApp):
         self.doc_dir = os.path.join(TECH_SOFT, 'documents')
         os.makedirs(self.doc_dir, exist_ok=True)
         
-        self.file_list = []
-        self.file_index = 0
-        self.input_buf = ""
+        self._file_dialog = None
+        self._save_dialog = None
+        self._spell_misspelled = []
+        self._spell_index = 0
+        self._spell_suggestions = []
+        self._spell_sug_index = 0
+        self._dirty = False
+        self._autosave_registered = False
+
+    def _mark_dirty(self):
+        self._dirty = True
+
+    def _get_autosave_name(self):
+        if self.filename:
+            return f"_autosave_{self.filename}"
+        return "_autosave_untitled.json"
+
+    def _do_autosave(self):
+        try:
+            path = core.auto_save.get_recovery_path(self._get_autosave_name())
+            with open(path, 'w') as f:
+                json.dump({"text": self.text, "filename": self.filename}, f)
+        except Exception:
+            pass
+
+    def _clear_autosave(self):
+        core.auto_save.clear_recovery(self._get_autosave_name())
 
     def on_focus(self):
+        if not self._autosave_registered:
+            self._autosave_registered = True
+            core.auto_save.register(
+                "tech_edit",
+                lambda: self._dirty,
+                self._do_autosave,
+                interval=30
+            )
         if self.state == STATE_EDIT:
             self._update_display()
             self.speak("Word Processor. F1 Save, F2 Save As, F3 Open.")
-        elif self.state == STATE_OPEN:
-            self._enter_open_state()
-        elif self.state == STATE_SAVE_AS:
-            self._enter_save_as_state()
 
     def _update_display(self):
         if not self.text:
@@ -44,21 +80,16 @@ class TechEdit(SoftApp):
         self.window.update_text(f"{pos} - {display}")
 
     def _enter_open_state(self):
-        self.state = STATE_OPEN
-        self.file_list = sorted([f for f in os.listdir(self.doc_dir) if f.endswith('.json')])
-        self.file_index = 0
-        if not self.file_list:
-            self.speak("No files found. Press Escape to return.")
-            self.window.update_text("Open: No files")
-        else:
-            self.speak(f"Open file. {self.file_list[0]}")
-            self.window.update_text(f"Open: {self.file_list[0]}")
+        self._file_dialog = FileDialog(self.manager, self.window, self._on_open_file)
+        self._file_dialog.start()
 
     def _enter_save_as_state(self):
-        self.state = STATE_SAVE_AS
-        self.input_buf = ""
-        self.speak("Save as. Enter filename.")
-        self.window.update_text("Save As:")
+        default_name = self.filename or ""
+        self._save_dialog = SaveDialog(
+            self.manager, self.window, self._on_save_file,
+            default_name=default_name, vk_to_char=self._vk_to_char
+        )
+        self._save_dialog.start()
 
     def save_file(self):
         if not self.filename:
@@ -67,20 +98,50 @@ class TechEdit(SoftApp):
             try:
                 with open(os.path.join(self.doc_dir, self.filename), 'w') as f:
                     json.dump({"text": self.text}, f)
+                self._clear_autosave()
+                self._dirty = False
                 self.speak("File saved.")
             except Exception:
                 self.speak("Failed to save file.")
 
+    def _on_save_file(self, path):
+        self._save_dialog = None
+        if not path:
+            self.state = STATE_EDIT
+            self.on_focus()
+            return
+        try:
+            with open(path, 'w') as f:
+                json.dump({"text": self.text}, f)
+            self.filename = os.path.basename(path)
+            self._clear_autosave()
+            self._dirty = False
+            self.speak(f"Saved to {path}.")
+            self.state = STATE_EDIT
+            self._update_display()
+        except Exception:
+            self.speak("Failed to save file.")
+            self.state = STATE_EDIT
+
     def on_key(self, vk):
+        if self._file_dialog and self._file_dialog.active:
+            self._file_dialog.on_key(vk)
+            return
+        if self._save_dialog and self._save_dialog.active:
+            self._save_dialog.on_key(vk)
+            return
         if self.state == STATE_EDIT:
             self._handle_edit_key(vk)
-        elif self.state == STATE_OPEN:
-            self._handle_open_key(vk)
-        elif self.state == STATE_SAVE_AS:
-            self._handle_save_as_key(vk)
+        elif self.state == STATE_SPELL:
+            self._handle_spell_key(vk)
 
     def _handle_edit_key(self, vk):
         if vk == win32con.VK_ESCAPE:
+            if self.state == STATE_SPELL:
+                self.state = STATE_EDIT
+                self.speak("Spell check cancelled.")
+                self._update_display()
+                return
             self.exit_app()
             return
         
@@ -93,11 +154,15 @@ class TechEdit(SoftApp):
         elif vk == win32con.VK_F3:
             self._enter_open_state()
             return
+        elif vk == win32con.VK_F7:
+            self._do_spell_check()
+            return
 
         if vk == win32con.VK_BACK:
             if self.cursor > 0:
                 self.text = self.text[:self.cursor - 1] + self.text[self.cursor:]
                 self.cursor -= 1
+                self._mark_dirty()
                 self._update_display()
             return
 
@@ -126,6 +191,7 @@ class TechEdit(SoftApp):
         if vk == win32con.VK_RETURN:
             self.text = self.text[:self.cursor] + '\n' + self.text[self.cursor:]
             self.cursor += 1
+            self._mark_dirty()
             self._update_display()
             return
 
@@ -133,25 +199,119 @@ class TechEdit(SoftApp):
         if ch:
             self.text = self.text[:self.cursor] + ch + self.text[self.cursor:]
             self.cursor += 1
+            self._mark_dirty()
             self._update_display()
 
-    def _handle_open_key(self, vk):
-        if vk == win32con.VK_ESCAPE:
+    def _on_open_file(self, path):
+        self._file_dialog = None
+        if path:
+            self._load_file(path)
+        else:
             self.state = STATE_EDIT
             self.on_focus()
-            return
 
-        if not self.file_list:
-            return
+    def _load_file(self, path):
+        try:
+            with open(path, 'r') as f:
+                data = json.load(f)
+                self.text = data.get("text", "")
+            self.filename = os.path.basename(path)
+            self.cursor = len(self.text)
+            self.state = STATE_EDIT
+            self._check_recovery()
+            self.speak(f"Opened {self.filename}. {len(self.text)} characters.")
+            self._update_display()
+        except Exception:
+            self.speak("Failed to open file.")
 
+    def _check_recovery(self):
+        rname = self._get_autosave_name()
+        files = core.auto_save.get_recovery_files()
+        if rname in files:
+            try:
+                path = core.auto_save.get_recovery_path(rname)
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                recovered_text = data.get("text", "")
+                if recovered_text and recovered_text != self.text:
+                    self.text = recovered_text
+                    self._dirty = True
+                    self.speak("Unsaved changes recovered.")
+            except Exception:
+                pass
+
+    # --- Spell Check ---
+    def _do_spell_check(self):
+        if not HAS_SPELLCHECK:
+            self.speak("Spell check requires pyspellchecker.")
+            return
+        if not self.text.strip():
+            self.speak("No text to check.")
+            return
+        self.speak("Checking spelling.")
+        try:
+            spell = SpellChecker()
+            words = self.text.split()
+            if not words:
+                self.speak("No words to check.")
+                return
+            misspelled = spell.unknown(words)
+            self._spell_misspelled = []
+            for w in misspelled:
+                idx = self.text.find(w)
+                if idx != -1:
+                    self._spell_misspelled.append((w, idx))
+            if not self._spell_misspelled:
+                self.speak("No misspelled words found.")
+                return
+            self._spell_index = 0
+            self.state = STATE_SPELL
+            count = len(self._spell_misspelled)
+            self.speak(f"{count} misspelled word{'s' if count != 1 else ''} found.")
+            self._announce_spell_word()
+        except Exception:
+            self.speak("Spell check failed.")
+
+    def _announce_spell_word(self):
+        if not self._spell_misspelled:
+            return
+        word, pos = self._spell_misspelled[self._spell_index]
+        total = len(self._spell_misspelled)
+        self.cursor = pos
+        self._update_display()
+        self.speak(f"Misspelled: {word}. Word {self._spell_index + 1} of {total}.")
+
+    def _handle_spell_key(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self.state = STATE_EDIT
+            self.speak("Spell check cancelled.")
+            self._update_display()
+            return
         if vk == win32con.VK_BACK:
-            self.file_index = (self.file_index - 1) % len(self.file_list)
-            self._announce_file()
-        elif vk == win32con.VK_RETURN:
-            filename = self.file_list[self.file_index]
-            self._load_file(filename)
+            self._spell_index = (self._spell_index - 1) % len(self._spell_misspelled)
+            self._announce_spell_word()
+            return
+        if vk == win32con.VK_F7:
+            self.state = STATE_EDIT
+            self.speak("Spell check done.")
+            self._update_display()
+            return
 
     def on_key_up(self, vk):
+        if self._file_dialog and self._file_dialog.active:
+            self._file_dialog.on_key_up(vk)
+            return
+        if self._save_dialog and self._save_dialog.active:
+            self._save_dialog.on_key_up(vk)
+            return
+        if self.state == STATE_SPELL:
+            if vk == win32con.VK_SPACE:
+                if getattr(self.manager, 'space_used_in_chord', False):
+                    return
+                self._spell_index = (self._spell_index + 1) % len(self._spell_misspelled)
+                self._announce_spell_word()
+            return
+
         if vk == win32con.VK_SPACE:
             if self.manager.space_used_in_chord:
                 return
@@ -159,59 +319,13 @@ class TechEdit(SoftApp):
             if self.state == STATE_EDIT:
                 self.text = self.text[:self.cursor] + ' ' + self.text[self.cursor:]
                 self.cursor += 1
+                self._mark_dirty()
                 self._update_display()
-            elif self.state == STATE_OPEN:
-                if self.file_list:
-                    self.file_index = (self.file_index + 1) % len(self.file_list)
-                    self._announce_file()
 
-    def _announce_file(self):
-        f = self.file_list[self.file_index]
-        self.speak(f)
-        self.window.update_text(f"Open: {f}")
-
-    def _load_file(self, filename):
-        try:
-            with open(os.path.join(self.doc_dir, filename), 'r') as f:
-                data = json.load(f)
-                self.text = data.get("text", "")
-            self.filename = filename
-            self.cursor = len(self.text)
-            self.state = STATE_EDIT
-            self.speak(f"Opened {filename}. {len(self.text)} characters.")
-            self._update_display()
-        except Exception:
-            self.speak("Failed to open file.")
-
-    def _handle_save_as_key(self, vk):
-        if vk == win32con.VK_ESCAPE:
-            self.state = STATE_EDIT
-            self.on_focus()
-            return
-
-        if vk == win32con.VK_RETURN:
-            if not self.input_buf.strip():
-                self.speak("Filename cannot be empty.")
-                return
-            filename = self.input_buf.strip()
-            if not filename.endswith('.json'):
-                filename += '.json'
-            self.filename = filename
-            self.state = STATE_EDIT
-            self.save_file()
-            return
-
-        if vk == win32con.VK_BACK:
-            if self.input_buf:
-                self.input_buf = self.input_buf[:-1]
-                self.window.update_text(f"Save As: {self.input_buf}")
-            return
-
-        ch = self._vk_to_char(vk)
-        if ch:
-            self.input_buf += ch
-            self.window.update_text(f"Save As: {self.input_buf}")
-            self.speak(ch)
+    def is_text_input_active(self):
+        return self.state == STATE_EDIT
 
     def get_help_text(self):
-        return "Word Processor. Type to enter text. Home/End for start/end of line. Left/Right to move cursor. F1 Save, F2 Save As, F3 Open. Escape to exit."
+        if self.state == STATE_SPELL:
+            return "Spell Check. Space for next misspelled word, Backspace for previous. F7 to exit. Escape to cancel."
+        return "Word Processor. Type to enter text. Home/End for start/end of line. Left/Right to move cursor. F1 Save, F2 Save As, F3 Open. F7 Spell Check. Escape to exit."

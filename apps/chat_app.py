@@ -8,6 +8,8 @@ import wave
 import win32con
 from core.app_base import SoftApp
 from core.chat_client import ChatClient, ChatError
+from core.file_dialog import FileDialog
+from core.crypto_util import encrypt, decrypt
 from core.menu import MenuNode, MenuSystem
 
 DATA_DIR = os.path.join(os.environ['USERPROFILE'], '.tech-soft')
@@ -70,6 +72,7 @@ class ChatApp(SoftApp):
         self._record_duration = 10
         self._record_thread = None
         self._recording_file = None
+        self._file_dialog = None
         # Auto-refresh
         self._last_poll_time = 0
         self._poll_interval = 3
@@ -99,6 +102,11 @@ class ChatApp(SoftApp):
     def _display_content(self, content):
         if ChatClient.is_voice_text(content):
             return 'voice message'
+        if ChatClient.is_file_text(content):
+            parsed = ChatClient.parse_file_text(content)
+            if parsed:
+                return f"file: {parsed['name']} ({parsed['size']} bytes)"
+            return 'file message'
         return content
 
     def _poll_events(self):
@@ -159,11 +167,20 @@ class ChatApp(SoftApp):
         self.client = ChatClient(SERVER_URL)
         self._load_profile()
         stored = self.profile.get('username')
-        if stored and self.profile.get('password'):
+        stored_pw = self.profile.get('password')
+        if stored and stored_pw:
             self.username = stored
-            self.password = self.profile['password']
+            try:
+                self.password = decrypt(stored_pw)
+            except Exception:
+                self.speak("Saved password corrupted. Please log in again.")
+                self.profile.pop('password', None)
+                self._save_profile()
+                self._show_login_menu()
+                return
             try:
                 result = self.client.login(self.username, self.password)
+                self.client.save_credentials(self.username, self.password)
                 self.is_admin = result.get('role') == 'admin'
                 self._load_data()
                 self._show_main_menu()
@@ -552,7 +569,70 @@ class ChatApp(SoftApp):
             self.speak(f"Delete failed: {e}")
         self._return_to_chat()
 
+    def _start_send_file(self):
+        self._file_dialog = FileDialog(self.manager, self.window, self._on_file_selected)
+        self._file_dialog.start()
+
+    def _send_file(self, filepath):
+        if not os.path.isfile(filepath):
+            self.speak("File not found.")
+            self._return_to_chat()
+            return
+        try:
+            file_text = ChatClient.file_to_text(filepath)
+            name = os.path.basename(filepath)
+            if self.current_room_id and self.current_room_id > 0:
+                self.client.send_message(self.current_room_id, file_text)
+                self.messages.append({'sender': self.username, 'text': f"file: {name}", 'content': file_text})
+                self.msg_index = len(self.messages) - 1
+            elif self.dm_target_id:
+                self.client.send_dm(self.dm_target_id, file_text)
+                self.messages.append({'sender': self.username, 'text': f"file: {name}", 'content': file_text})
+                self.msg_index = len(self.messages) - 1
+            else:
+                self.speak("No active chat.")
+                self._return_to_chat()
+                return
+            self.speak(f"{name} sent.")
+            self._update_chat_window()
+        except ChatError as e:
+            self.speak(f"Send failed: {e}")
+        self._return_to_chat()
+
+    def _save_current_file(self):
+        if not self.messages:
+            self.speak("No messages.")
+            return
+        m = self.messages[self.msg_index]
+        content = m.get('content', '')
+        if not ChatClient.is_file_text(content):
+            self.speak("Not a file message.")
+            return
+        parsed = ChatClient.parse_file_text(content)
+        if not parsed:
+            self.speak("Could not parse file.")
+            return
+        downloads = os.path.join(os.path.expanduser('~'), 'Downloads')
+        os.makedirs(downloads, exist_ok=True)
+        save_path = os.path.join(downloads, parsed['name'])
+        try:
+            with open(save_path, 'wb') as f:
+                f.write(parsed['data'])
+            self.speak(f"Saved to {save_path}")
+        except Exception as e:
+            self.speak(f"Save failed: {e}")
+
+    def _on_file_selected(self, path):
+        self._file_dialog = None
+        if path:
+            self._send_file(path)
+        else:
+            self._return_to_chat()
+
     def on_key(self, vk):
+        if self._file_dialog and self._file_dialog.active:
+            self._file_dialog.on_key(vk)
+            return
         self._poll_events()
         if self.state == STATE_RECORDING:
             self._handle_recording(vk)
@@ -584,6 +664,9 @@ class ChatApp(SoftApp):
             self._stop_recording()
 
     def on_key_up(self, vk):
+        if self._file_dialog and self._file_dialog.active:
+            self._file_dialog.on_key_up(vk)
+            return
         if vk != win32con.VK_SPACE:
             return
         if getattr(self.manager, 'space_used_in_chord', False):
@@ -652,6 +735,12 @@ class ChatApp(SoftApp):
         if vk == 0x50:  # P
             self._play_current_voice()
             return
+        if vk == 0x46:  # F
+            self._start_send_file()
+            return
+        if vk == 0x53:  # S
+            self._save_current_file()
+            return
         if vk == 0x4C:  # L
             if self.current_room_id is not None:
                 self.state = STATE_CONFIRM
@@ -689,6 +778,12 @@ class ChatApp(SoftApp):
             return
         if vk == 0x50:  # P
             self._play_current_voice()
+            return
+        if vk == 0x46:  # F
+            self._start_send_file()
+            return
+        if vk == 0x53:  # S
+            self._save_current_file()
             return
         if vk == win32con.VK_BACK:
             if self.messages:
@@ -912,7 +1007,7 @@ class ChatApp(SoftApp):
                     if result.get('success'):
                         self.speak("Password changed.")
                         if self.profile.get('username'):
-                            self.profile['password'] = new_pw
+                            self.profile['password'] = encrypt(new_pw)
                             self._save_profile()
                     else:
                         self.speak(result.get('message', 'Failed'))
@@ -1031,8 +1126,9 @@ class ChatApp(SoftApp):
             result = self.client.login(self.username, self.password)
             self.is_admin = result.get('role') == 'admin'
             self.profile['username'] = self.username
-            self.profile['password'] = self.password
+            self.profile['password'] = encrypt(self.password)
             self._save_profile()
+            self.client.save_credentials(self.username, self.password)
             self._load_data()
             self._show_main_menu()
         except ChatError as e:
@@ -1060,6 +1156,9 @@ class ChatApp(SoftApp):
             self._show_login_menu()
         except ChatError as e:
             self.speak(f"Registration failed: {e}")
+
+    def is_text_input_active(self):
+        return self.state in (STATE_COMPOSING, STATE_CHANGE_PASSWORD, STATE_LOGIN_FORM, STATE_REGISTER_FORM, STATE_CONFIRM)
 
     def exit_app(self):
         try:
