@@ -1,5 +1,4 @@
 import os
-import json
 from core.config import TECH_SOFT
 
 CRASH_COUNT_FILE = os.path.join(TECH_SOFT, '.crash_count')
@@ -43,7 +42,8 @@ def is_safe_mode():
 def set_safe_mode(enabled):
     if enabled:
         try:
-            open(SAFE_MODE_FILE, 'w').close()
+            with open(SAFE_MODE_FILE, 'w'):
+                pass
         except Exception:
             pass
     else:

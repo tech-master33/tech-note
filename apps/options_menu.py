@@ -258,6 +258,12 @@ class OptionsApp(SoftApp):
 
     def _enter_tts_engine_menu(self):
         self._current_parent_back = self._back_to_tts_menu
+        try:
+            from core.plugin_manager import PluginManager
+            pm = PluginManager()
+            pm.scan()
+        except Exception:
+            pm = None
         synth_list = get_available_synths()
         current_module = "sapi_synth"
         try:
@@ -420,8 +426,10 @@ class OptionsApp(SoftApp):
 
     def _enter_braille_display_menu(self):
         self._current_parent_back = self._back_to_braille_menu
-        self._build_list_menu("Braille Display", "braille_display",
-                             ["Off", "Humanware", "Monarch"])
+        from braille.manager import BrailleManager
+        plugin_names = list(BrailleManager.get_plugin_displays().keys())
+        options = ["Off", "Humanware", "Monarch"] + plugin_names
+        self._build_list_menu("Braille Display", "braille_display", options)
 
     def _enter_braille_grade_menu(self):
         self._current_parent_back = self._back_to_braille_menu

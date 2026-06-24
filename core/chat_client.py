@@ -26,7 +26,8 @@ class ChatClient:
         self.is_connected = False
         self.event_queue = []
         self._event_lock = threading.Lock()
-        self._polling = False
+        self._stop_polling = threading.Event()
+        self._stop_polling.set()
         self._poll_thread = None
 
     def _headers(self):
@@ -108,7 +109,7 @@ class ChatClient:
         return result
 
     def logout(self):
-        self._polling = False
+        self._stop_polling.set()
         self.is_connected = False
         self.token = None
         self.user_id = None
@@ -224,6 +225,21 @@ class ChatClient:
     def revoke_admin(self, username):
         return self._post('admin/revoke', {'username': username})
 
+    def ban_user(self, username):
+        return self._post('admin/ban', {'username': username})
+
+    def unban_user(self, username):
+        return self._post('admin/unban', {'username': username})
+
+    def mute_user(self, username, duration_minutes=5):
+        return self._post('admin/mute', {'username': username, 'duration_minutes': duration_minutes})
+
+    def unmute_user(self, username):
+        return self._post('admin/unmute', {'username': username})
+
+    def broadcast(self, message):
+        return self._post('admin/broadcast', {'message': message})
+
     # --- File Sharing ---
     def upload_file(self, filepath):
         with open(filepath, 'rb') as f:
@@ -314,9 +330,9 @@ class ChatClient:
     # --- Polling ---
     def _start_polling(self):
         if self._poll_thread and self._poll_thread.is_alive():
-            self._polling = False
+            self._stop_polling.set()
             self._poll_thread.join(timeout=2)
-        self._polling = True
+        self._stop_polling.clear()
         self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._poll_thread.start()
         self._start_websocket()
@@ -358,7 +374,7 @@ class ChatClient:
     def _poll_loop(self):
         failures = 0
         heartbeat_count = 0
-        while self._polling:
+        while not self._stop_polling.is_set():
             try:
                 heartbeat_count += 1
                 if heartbeat_count % 5 == 0:
@@ -395,7 +411,8 @@ class ChatClient:
                 failures += 1
                 if failures >= 5:
                     failures = 3
-            time.sleep(3)
+            if self._stop_polling.wait(3):
+                break
 
     def poll_event(self):
         with self._event_lock:

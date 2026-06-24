@@ -48,6 +48,18 @@ apps/todo_list.py
 apps/opencode_client.py
 apps/chatgpt_client.py
 
+# Cloudflare Worker deploy artifacts
+worker/
+.github/
+deno.lock
+
+# Installer (not needed in repo)
+install.bat
+approve_app.py
+
+# Plugin packages
+*.scrugn
+
 # User data
 .tech-soft/
 notes.json

@@ -52,6 +52,7 @@ class BrailleNoteApp:
         self._state_keys = "Off"
         self.space_used_in_chord = False
         self._shutting_down = False
+        self._stop_auto_save = threading.Event()
         self._search_mode = False
         self._search_buffer = ""
         self._last_unlock_time = -float('inf')
@@ -298,8 +299,9 @@ class BrailleNoteApp:
 
     def _start_auto_save(self):
         def save_loop():
-            while True:
-                time.sleep(60)
+            while not self._stop_auto_save.is_set():
+                if self._stop_auto_save.wait(60):
+                    break
                 try:
                     if self.current_app and self.current_app.active:
                         app_module = self.current_app.__class__.__module__
@@ -489,6 +491,42 @@ class BrailleNoteApp:
         else:
             self.synth.speak("No notifications.")
 
+    def _cycle_voice_profile(self):
+        settings_path = os.path.join(self.tech_soft, 'settings.json')
+        profiles = {}
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as f:
+                    profiles = json.load(f).get("voice_profiles", {})
+            except Exception:
+                pass
+        if not profiles:
+            self.synth.speak("No voice profiles saved. Use Options menu to create one.")
+            return
+        names = sorted(profiles.keys())
+        current_voice = self.synth.get_voice_index()
+        current_rate = self.synth.get_rate()
+        current_pitch = self.synth.get_pitch()
+        idx = 0
+        for i, name in enumerate(names):
+            p = profiles[name]
+            if (p.get("voice_index") == current_voice and
+                p.get("rate") == current_rate and
+                p.get("pitch") == current_pitch):
+                idx = (i + 1) % len(names)
+                break
+        profile_name = names[idx]
+        profile = profiles[profile_name]
+        try:
+            self.synth.apply_profile(
+                voice_index=profile.get("voice_index"),
+                rate=profile.get("rate"),
+                pitch=profile.get("pitch")
+            )
+            self.synth.speak(f"Profile: {profile_name}")
+        except Exception:
+            self.synth.speak("Failed to apply profile.")
+
     def _open_tutorial(self):
         self._typing_buffer = ""
         if self.app_manager.is_active():
@@ -521,6 +559,8 @@ class BrailleNoteApp:
                 with open(settings_path, 'r') as f:
                     settings = json.load(f)
             except Exception as e: core.error_handler.log(e, "Loading settings")
+
+        self._stop_auto_save.set()
 
         # 7. Keyboard Lockout
         if settings.get("shutdown_key_protection", True):
@@ -745,6 +785,13 @@ class BrailleNoteApp:
             print("Global Chord: Space + R")
             self.space_used_in_chord = True
             self.synth.repeat_last()
+            return
+
+        # Cycle Voice Profile (Space + V)
+        if self.window.space_down and vk == 0x56:
+            print("Global Chord: Space + V")
+            self.space_used_in_chord = True
+            self._cycle_voice_profile()
             return
 
         # Global Tutorial (Shift + F1)

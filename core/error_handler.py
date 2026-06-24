@@ -1,5 +1,6 @@
 import os
 import json
+import threading
 import traceback
 from core.config import TECH_SOFT
 
@@ -23,6 +24,7 @@ LEVEL_NAMES = {
 }
 
 _current_level = LEVEL_WARN
+_log_lock = threading.Lock()
 
 def set_level(level):
     global _current_level
@@ -44,9 +46,10 @@ def log(exception, context="", level=LEVEL_WARN):
             tb = traceback.format_exc()
             if tb and tb != "NoneType: None\n":
                 msg += f"\n{tb}"
-        with open(LOG_FILE, 'a') as f:
-            f.write(msg + "\n")
-        _rotate_if_needed()
+        with _log_lock:
+            with open(LOG_FILE, 'a') as f:
+                f.write(msg + "\n")
+            _rotate_if_needed()
     except Exception:
         pass
 

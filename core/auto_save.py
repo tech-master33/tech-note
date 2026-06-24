@@ -8,6 +8,7 @@ AUTOSAVE_DIR = os.path.join(TECH_SOFT, 'autosave')
 
 _callbacks = {}
 _thread_started = False
+_thread_lock = threading.Lock()
 
 def register(name, is_dirty_fn, save_fn, interval=30):
     _callbacks[name] = {
@@ -20,9 +21,10 @@ def register(name, is_dirty_fn, save_fn, interval=30):
 
 def _ensure_thread():
     global _thread_started
-    if _thread_started:
-        return
-    _thread_started = True
+    with _thread_lock:
+        if _thread_started:
+            return
+        _thread_started = True
     t = threading.Thread(target=_loop, daemon=True)
     t.start()
 

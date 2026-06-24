@@ -198,6 +198,8 @@ async function sendMessage(env, uid, rid, body) {
   if (!c) return jsonResp(400, { error: 'Content required' });
   const users = await kvGet(env, 'users') || {};
   const user = Object.values(users).find(u => u.id === uid);
+  const block = user ? isBannedOrMuted(user) : null;
+  if (block) return jsonResp(403, { error: block });
   const msgs = await kvGet(env, `msgs:${rid}`) || [];
   const id = await nextId(env, 'messages');
   const msg = {
@@ -297,6 +299,8 @@ async function sendDM(env, uid, otherId, body) {
   if (!c) return jsonResp(400, { error: 'Content required' });
   const users = await kvGet(env, 'users') || {};
   const sender = Object.values(users).find(u => u.id === uid);
+  const block = sender ? isBannedOrMuted(sender) : null;
+  if (block) return jsonResp(403, { error: block });
   const receiver = Object.values(users).find(u => u.id === otherId);
   if (!receiver) return jsonResp(404, { error: 'User not found' });
   const key = uid < otherId ? `${uid}-${otherId}` : `${otherId}-${uid}`;
@@ -403,6 +407,76 @@ async function revokeAdmin(env, uid, body) {
   target.role = 'user';
   await kvPut(env, 'users', users);
   return jsonResp(200, { success: true });
+}
+
+// --- Admin: Ban / Mute / Broadcast ---
+async function banUser(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const me = Object.values(users).find(u => u.id === uid);
+  if (!me || me.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
+  const target = users[body.username];
+  if (!target) return jsonResp(404, { error: 'User not found' });
+  target.banned = true;
+  await kvPut(env, 'users', users);
+  return jsonResp(200, { success: true });
+}
+
+async function unbanUser(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const me = Object.values(users).find(u => u.id === uid);
+  if (!me || me.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
+  const target = users[body.username];
+  if (!target) return jsonResp(404, { error: 'User not found' });
+  target.banned = false;
+  await kvPut(env, 'users', users);
+  return jsonResp(200, { success: true });
+}
+
+async function muteUser(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const me = Object.values(users).find(u => u.id === uid);
+  if (!me || me.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
+  const target = users[body.username];
+  if (!target) return jsonResp(404, { error: 'User not found' });
+  const durationMs = (parseInt(body.duration_minutes) || 5) * 60 * 1000;
+  target.muted_until = Date.now() + durationMs;
+  await kvPut(env, 'users', users);
+  return jsonResp(200, { success: true, duration_minutes: body.duration_minutes || 5 });
+}
+
+async function unmuteUser(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const me = Object.values(users).find(u => u.id === uid);
+  if (!me || me.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
+  const target = users[body.username];
+  if (!target) return jsonResp(404, { error: 'User not found' });
+  delete target.muted_until;
+  await kvPut(env, 'users', users);
+  return jsonResp(200, { success: true });
+}
+
+async function broadcastMsg(env, uid, body) {
+  const users = await kvGet(env, 'users') || {};
+  const me = Object.values(users).find(u => u.id === uid);
+  if (!me || me.role !== 'admin') return jsonResp(403, { error: 'Admin only' });
+  const text = (body.message || '').trim();
+  if (!text) return jsonResp(400, { error: 'Message required' });
+  const rooms = await kvGet(env, 'rooms') || {};
+  const systemMsg = { sender_id: 0, sender_username: 'System', content: `[Broadcast] ${text}`, created_at: new Date().toISOString() };
+  for (const [rid, room] of Object.entries(rooms)) {
+    const msgs = await kvGet(env, `msgs:${rid}`) || [];
+    systemMsg.id = await nextId(env, 'messages');
+    msgs.push({ ...systemMsg, room_id: parseInt(rid) });
+    if (msgs.length > 500) msgs.splice(0, msgs.length - 500);
+    await kvPut(env, `msgs:${rid}`, msgs);
+  }
+  return jsonResp(200, { success: true });
+}
+
+function isBannedOrMuted(user) {
+  if (user.banned) return 'You are banned from the chat';
+  if (user.muted_until && Date.now() < user.muted_until) return 'You are muted';
+  return null;
 }
 
 // --- File Sharing ---
@@ -564,6 +638,11 @@ export default {
 
       if (path === '/admin/grant' && method === 'POST') return await grantAdmin(env, uid, body);
       if (path === '/admin/revoke' && method === 'POST') return await revokeAdmin(env, uid, body);
+      if (path === '/admin/ban' && method === 'POST') return await banUser(env, uid, body);
+      if (path === '/admin/unban' && method === 'POST') return await unbanUser(env, uid, body);
+      if (path === '/admin/mute' && method === 'POST') return await muteUser(env, uid, body);
+      if (path === '/admin/unmute' && method === 'POST') return await unmuteUser(env, uid, body);
+      if (path === '/admin/broadcast' && method === 'POST') return await broadcastMsg(env, uid, body);
 
       // --- File Sharing ---
       if (path === '/files/upload' && method === 'POST') return await uploadFile(env, uid, body);

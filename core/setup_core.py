@@ -5,7 +5,7 @@ import win32api
 from core.app_base import SoftApp
 from core.config import ACCOUNT_PATH
 
-TOTAL_STEPS = 8
+TOTAL_STEPS = 9
 
 class TechNoteSetup(SoftApp):
     def __init__(self, manager, window):
@@ -20,7 +20,18 @@ class TechNoteSetup(SoftApp):
         self.lock_type = "pin"
         self.keyboard_layout = self._detect_windows_layout()
         self.time_format = "12-hour"
+        self.voice_index = 0
+        self.voice_names = []
+        self._load_voices()
         self.active = True
+
+    def _load_voices(self):
+        try:
+            from synths.sapi_synth import SapiSynthBase
+            tmp = SapiSynthBase()
+            self.voice_names = tmp.get_voice_names()
+        except Exception:
+            self.voice_names = ["Default"]
 
     def _detect_windows_layout(self):
         try:
@@ -219,9 +230,24 @@ class TechNoteSetup(SoftApp):
                 self.window.update_text("Time Format: " + self.time_format)
                 self.speak(self.time_format)
             elif vk == win32con.VK_RETURN:
+                self._enter_voice_step()
+
+        elif self.current_step == 7:
+            if vk == win32con.VK_ESCAPE:
+                self.current_step = 6
+                self.speak(self._step_label("Time format. Use Space or Backspace to change."))
+                self.window.update_text("Time Format: " + self.time_format)
+                return
+            if vk == win32con.VK_SPACE:
+                self.voice_index = (self.voice_index + 1) % len(self.voice_names)
+                self._preview_voice()
+            elif vk == win32con.VK_BACK:
+                self.voice_index = (self.voice_index - 1) % len(self.voice_names)
+                self._preview_voice()
+            elif vk == win32con.VK_RETURN:
                 self._complete_setup()
 
-        elif self.current_step in (7, 8):
+        elif self.current_step in (8, 9):
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:
@@ -239,10 +265,39 @@ class TechNoteSetup(SoftApp):
         self.speak(self._step_label(f"Time format. Current: {self.time_format}. Use Space or Backspace to change."))
         self.window.update_text("Time Format: " + self.time_format)
 
+    def _enter_voice_step(self):
+        self.current_step = 7
+        if self.voice_names:
+            name = self.voice_names[self.voice_index] if self.voice_index < len(self.voice_names) else "Default"
+            self.speak(self._step_label(f"Voice: {name}. Use Space or Backspace to change, Enter to preview."))
+            self.window.update_text("Voice: " + name)
+        else:
+            self.speak(self._step_label("No voices found. Press Enter to continue."))
+            self.window.update_text("Voice: none")
+
+    def _preview_voice(self):
+        if not self.voice_names:
+            return
+        idx = min(self.voice_index, len(self.voice_names) - 1)
+        try:
+            if hasattr(self.manager.synth, 'set_voice_by_index'):
+                self.manager.synth.set_voice_by_index(idx)
+        except Exception:
+            pass
+        total = len(self.voice_names)
+        name = self.voice_names[idx]
+        self.speak(f"Voice {idx + 1} of {total}: {name}.")
+        self.window.update_text("Voice: " + name)
+        try:
+            self.manager.synth.speak(f"Preview.")
+        except Exception:
+            pass
+
     def _complete_setup(self):
         self._save_settings()
         self.save_account()
-        self.current_step = 8
+        self.current_step = 9
+        voice_name = self.voice_names[self.voice_index] if self.voice_names else "Default"
         lines = [
             "Setup Complete!",
             "",
@@ -250,11 +305,12 @@ class TechNoteSetup(SoftApp):
             f"Lock: {self.lock_type.upper()}",
             f"Layout: {self.keyboard_layout}",
             f"Time: {self.time_format}",
+            f"Voice: {voice_name}",
             "",
             "Press Enter to start TechNote."
         ]
         self.window.update_text("\n".join(lines))
-        summary_parts = [f"Username {self.username}", f"lock type {self.lock_type}", f"keyboard {self.keyboard_layout}", f"time {self.time_format}"]
+        summary_parts = [f"Username {self.username}", f"lock type {self.lock_type}", f"keyboard {self.keyboard_layout}", f"time {self.time_format}", f"voice {voice_name}"]
         self.speak(f"Setup complete. {', '.join(summary_parts)}. Press Enter to start.")
 
     def _handle_input(self, vk, attr, hidden=False):
@@ -297,6 +353,7 @@ class TechNoteSetup(SoftApp):
                     s = json.load(f)
             s["keyboard_layout"] = self.keyboard_layout
             s["time_format"] = self.time_format
+            s["voice_index"] = self.voice_index
             with open(settings_path, 'w') as f:
                 json.dump(s, f)
         except Exception:

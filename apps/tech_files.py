@@ -95,6 +95,8 @@ class TechFiles(SoftApp):
         self.confirm_delete = False
         self._overwrite_confirm = False
         self._pending_paste = None
+        self._selected = set()
+        self._multi_select = False
         self._open_drive(0)
 
     def _open_drive(self, index):
@@ -165,10 +167,11 @@ class TechFiles(SoftApp):
 
         for item in self.items:
             full = os.path.join(self.path, item)
+            prefix = "+ " if item in self._selected else "  "
             if os.path.isdir(full):
-                root.add_child(MenuNode("Folder: " + item, lambda p=full: self._open_dir(p)))
+                root.add_child(MenuNode(f"{prefix}Folder: {item}", lambda p=full: self._open_dir(p)))
             else:
-                root.add_child(MenuNode(item, lambda p=full: self._open_file(p)))
+                root.add_child(MenuNode(f"{prefix}{item}", lambda p=full: self._open_file(p)))
 
         if not self.items:
             root.add_child(MenuNode("Empty Folder"))
@@ -277,6 +280,10 @@ class TechFiles(SoftApp):
             self.exit_app()
             return
 
+        if vk == win32con.VK_SPACE and (win32api.GetAsyncKeyState(win32con.VK_CONTROL) & 0x8000):
+            self._toggle_multi()
+            return
+
         if vk == win32con.VK_F1 and self.state == self.FILE_MENU:
             self._delete_current()
             return
@@ -326,6 +333,20 @@ class TechFiles(SoftApp):
             self.clipboard = None
             self.speak("Clipboard cleared.")
             return
+
+        if vk == win32con.VK_F10:
+            if win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000:
+                self._unzip_current()
+            else:
+                self._zip_selected()
+            return
+
+        if self._multi_select:
+            if vk == win32con.VK_SPACE and self.window.space_down:
+                pass
+            elif vk == win32con.VK_SPACE or vk == win32con.VK_RETURN:
+                self._select_current()
+                return
 
         if vk == win32con.VK_BACK:
             self.menu.previous()
@@ -569,5 +590,80 @@ class TechFiles(SoftApp):
         except Exception:
             self.speak("Paste failed.")
 
+    def _toggle_multi(self):
+        self._multi_select = not self._multi_select
+        if not self._multi_select:
+            self._selected.clear()
+            self.refresh()
+        self.speak("Multi-select on." if self._multi_select else "Multi-select off.")
+        if self._multi_select:
+            self._select_current()
+
+    def _select_current(self):
+        item = self.menu.get_current_item()
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            return
+        clean = item.title[2:] if item.title.startswith("+ ") or item.title.startswith("  ") else item.title
+        clean = clean.replace("Folder: ", "")
+        if clean in self._selected:
+            self._selected.discard(clean)
+            self.speak(f"Deselected {clean}. {len(self._selected)} selected.")
+        else:
+            self._selected.add(clean)
+            self.speak(f"Selected {clean}. {len(self._selected)} selected.")
+        self.refresh()
+
+    def _zip_selected(self):
+        target = self._selected if self._selected else None
+        if not target:
+            item = self.menu.get_current_item()
+            if not item or item.title in ("Parent Folder", "Empty Folder"):
+                self.speak("Nothing to zip.")
+                return
+            clean = item.title[2:] if item.title.startswith("+ ") or item.title.startswith("  ") else item.title
+            clean = clean.replace("Folder: ", "")
+            target = {clean}
+        zip_name = os.path.basename(self.path) + ".zip"
+        zip_path = os.path.join(self.path, zip_name)
+        try:
+            import zipfile
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for name in target:
+                    full = os.path.join(self.path, name)
+                    if os.path.isdir(full):
+                        for root, dirs, files in os.walk(full):
+                            for fname in files:
+                                fpath = os.path.join(root, fname)
+                                arcname = os.path.relpath(fpath, self.path)
+                                zf.write(fpath, arcname)
+                    else:
+                        zf.write(full, name)
+            self._selected.clear()
+            self.refresh()
+            self.speak(f"Zipped {len(target)} item{'s' if len(target) != 1 else ''} to {zip_name}.")
+        except Exception:
+            self.speak("Zip failed.")
+
+    def _unzip_current(self):
+        item = self.menu.get_current_item()
+        if not item or item.title in ("Parent Folder", "Empty Folder"):
+            self.speak("Nothing to unzip.")
+            return
+        clean = item.title[2:] if item.title.startswith("+ ") or item.title.startswith("  ") else item.title
+        full = os.path.join(self.path, clean)
+        if not full.lower().endswith('.zip'):
+            self.speak("Not a zip file.")
+            return
+        out_dir = os.path.join(self.path, clean[:-4])
+        try:
+            import zipfile
+            os.makedirs(out_dir, exist_ok=True)
+            with zipfile.ZipFile(full, 'r') as zf:
+                zf.extractall(out_dir)
+            self.refresh()
+            self.speak(f"Extracted to {clean[:-4]}.")
+        except Exception:
+            self.speak("Unzip failed.")
+
     def get_help_text(self):
-        return "File Manager. Space next, Backspace previous. Enter open. F1 delete, F2 rename, F3 new folder, F4 new file. F5 sort, F6 copy, Shift+F6 cut, F7 search. F8 paste, F9 clear clipboard. I info. Space+D drives. Escape exit."
+        return "File Manager. Space next, Backspace previous. Enter open. F1 delete, F2 rename, F3 new folder, F4 new file. F5 sort, F6 copy, Shift+F6 cut, F7 search. F8 paste, F9 clear clipboard. F10 zip, Shift+F10 unzip. Ctrl+Space multi-select. I info. Space+D drives. Escape exit."

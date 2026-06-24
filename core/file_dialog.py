@@ -59,10 +59,10 @@ class FileDialog:
                             label = f"{vol[0]} ({letter}:)"
                         else:
                             label = f"Drive {letter} ({label})" if label else f"Drive {letter}"
-                    except:
+                    except Exception:
                         label = f"Drive {letter} ({label})" if label else f"Drive {letter}"
                     drives.append({'path': path, 'label': label})
-                except:
+                except Exception:
                     drives.append({'path': path, 'label': f"Drive {letter}"})
         return drives
 

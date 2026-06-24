@@ -56,9 +56,12 @@ class NotificationCenter:
             pass
 
 _notification_center = None
+_center_lock = threading.Lock()
 
 def get_center():
     global _notification_center
     if _notification_center is None:
-        _notification_center = NotificationCenter()
+        with _center_lock:
+            if _notification_center is None:
+                _notification_center = NotificationCenter()
     return _notification_center

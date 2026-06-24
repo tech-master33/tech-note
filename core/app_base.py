@@ -117,7 +117,6 @@ class AppManager:
                 self.current_app.on_resume()
             except Exception as e:
                 core.error_handler.log(e, f"on_resume failed for {type(self.current_app).__name__}")
-                self.current_app = None
 
     def is_active(self):
         return self.current_app is not None and self.current_app.active

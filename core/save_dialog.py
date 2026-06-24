@@ -12,6 +12,8 @@ class SaveDialog(FileDialog):
         self.default_name = default_name
         self._input_buf = ""
         self._in_input = False
+        self._awaiting_overwrite = False
+        self._pending_path = None
         self._vk_to_char_func = vk_to_char or (lambda v: None)
 
     def _dummy_callback(self, path):
@@ -58,16 +60,37 @@ class SaveDialog(FileDialog):
 
     def _confirm_save(self):
         name = self._input_buf.strip()
-        if name:
-            path = os.path.join(self.current_dir, name)
-            self.active = False
-            self.user_callback(path)
-        else:
+        if not name:
             self.speak("Filename cannot be empty.")
+            return
+        path = os.path.join(self.current_dir, name)
+        if os.path.exists(path):
+            self._pending_path = path
+            self._awaiting_overwrite = True
+            self.window.update_text("File exists. Press enter to overwrite, escape to cancel.")
+            self.speak("File exists. Press enter to overwrite, escape to cancel.")
+            return
+        self.active = False
+        self.user_callback(path)
 
     def on_key(self, vk):
         if not self.active:
             return False
+
+        if self._awaiting_overwrite:
+            if vk == win32con.VK_RETURN:
+                self._awaiting_overwrite = False
+                path = self._pending_path
+                self._pending_path = None
+                self.active = False
+                self.user_callback(path)
+                return True
+            if vk == win32con.VK_ESCAPE:
+                self._awaiting_overwrite = False
+                self._pending_path = None
+                self._start_input()
+                return True
+            return True
 
         if self._in_input:
             if vk == win32con.VK_ESCAPE:

@@ -235,15 +235,18 @@ def _add_installed_apps(root, app_callback):
     APPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
     
     if not os.path.exists(INSTALLED_FILE):
+        _scan_apps_folder(root, app_callback, APPS_DIR)
         return
     
     try:
         with open(INSTALLED_FILE, 'r') as f:
             installed = json.load(f)
     except:
+        _scan_apps_folder(root, app_callback, APPS_DIR)
         return
     
     if not installed:
+        _scan_apps_folder(root, app_callback, APPS_DIR)
         return
     
     for app_id, info in installed.items():
@@ -286,3 +289,62 @@ def _add_installed_apps(root, app_callback):
         
         if category != "games":
             root.add_child(MenuNode(name, make_loader()))
+    
+    _scan_apps_folder(root, app_callback, APPS_DIR)
+
+
+def _scan_apps_folder(root, app_callback, apps_dir):
+    import json
+    import importlib
+    import sys
+    
+    if not os.path.isdir(apps_dir):
+        return
+    
+    for entry in os.listdir(apps_dir):
+        entry_path = os.path.join(apps_dir, entry)
+        
+        if not os.path.isdir(entry_path):
+            continue
+        
+        manifest_path = os.path.join(entry_path, "manifest.json")
+        if not os.path.exists(manifest_path):
+            continue
+        
+        try:
+            with open(manifest_path, 'r') as f:
+                manifest = json.load(f)
+        except Exception:
+            continue
+        
+        name = manifest.get("name", entry)
+        entry_point = manifest.get("entry_point", "")
+        
+        if not entry_point:
+            continue
+        
+        mod_name = entry_point.replace('.py', '')
+        
+        def make_folder_loader(mn=mod_name, ep=entry_point, app_dir=entry_path):
+            def load():
+                try:
+                    if app_dir not in sys.path:
+                        sys.path.insert(0, app_dir)
+                    if mn not in sys.modules:
+                        mod = importlib.import_module(mn)
+                    else:
+                        mod = sys.modules[mn]
+                    
+                    cls = getattr(mod, ep, None) if ep else None
+                    if not cls:
+                        classes = [v for v in vars(mod).values()
+                                   if isinstance(v, type) and hasattr(v, 'on_key') and hasattr(v, 'exit_app')]
+                        cls = classes[0] if classes else None
+                    
+                    if cls:
+                        app_callback(cls)
+                except Exception as e:
+                    print(f"Failed to load folder app {mn}: {e}")
+            return load
+        
+        root.add_child(MenuNode(name, make_folder_loader()))

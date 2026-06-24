@@ -2,13 +2,6 @@ import comtypes.client
 import re
 import time
 from core.audio_ducking import AudioDucker
-import core.pronunciation_dict
-
-try:
-    from langdetect import detect as _lang_detect
-    HAS_LANGDETECT = True
-except ImportError:
-    HAS_LANGDETECT = False
 
 class SapiSynthBase:
     def __init__(self, voice_name=None, allowed_fragments=None):
@@ -29,21 +22,11 @@ class SapiSynthBase:
         self._default_voice_index = None
         self._default_rate = None
         self._default_pitch = None
-        self._auto_language = False
-        self._language_voice_map = {}
-        
+
         if allowed_fragments:
             self._set_voice_by_fragments(allowed_fragments)
         elif voice_name:
             self.set_voice(voice_name)
-        
-        self.save_defaults()
-        self._build_language_voice_map()
-        core.pronunciation_dict.load()
-        self._speech_history = []
-        self._history_max = 50
-        self._last_detected_lang = None
-        self._last_lang_switch = 0
 
     def save_defaults(self):
         try:
@@ -60,53 +43,6 @@ class SapiSynthBase:
             self.set_rate(rate)
         if pitch is not None:
             self.set_pitch(pitch)
-
-    def _build_language_voice_map(self):
-        mapping = {"en": None}
-        try:
-            import locale
-            voices = self.engine.GetVoices()
-            for i in range(voices.Count):
-                desc = voices.Item(i).GetDescription()
-                lang_code = None
-                for known_lang, keywords in {
-                    "en": ["english", "united states", "united kingdom", "australia", "canada"],
-                    "fr": ["french", "francais", "français"],
-                    "de": ["german", "deutsch"],
-                    "es": ["spanish", "espanol", "español"],
-                    "it": ["italian", "italiano"],
-                    "pt": ["portuguese", "portugues", "português"],
-                    "nl": ["dutch", "nederlands"],
-                    "ru": ["russian", "русский"],
-                    "ja": ["japanese", "日本語"],
-                    "zh": ["chinese", "中文"],
-                    "ar": ["arabic", "العربية"],
-                    "ko": ["korean", "한국어"],
-                    "pl": ["polish", "polski"],
-                    "sv": ["swedish", "svenska"],
-                    "da": ["danish", "dansk"],
-                    "fi": ["finnish", "suomi"],
-                    "nb": ["norwegian", "norsk"],
-                    "tr": ["turkish", "türkçe"],
-                    "cs": ["czech", "čeština"],
-                    "hu": ["hungarian", "magyar"],
-                }.items():
-                    if any(kw in desc.lower() for kw in keywords):
-                        lang_code = known_lang
-                        break
-                if lang_code:
-                    mapping[lang_code] = i
-            if mapping.get("en") is None:
-                mapping["en"] = self.get_voice_index()
-        except:
-            pass
-        self._language_voice_map = mapping
-
-    def set_auto_language(self, enabled):
-        self._auto_language = enabled
-
-    def get_auto_language(self):
-        return self._auto_language
 
     def _set_voice_by_fragments(self, fragments):
         for voice in self.engine.GetVoices():
@@ -228,73 +164,17 @@ class SapiSynthBase:
             return text, True
         return text, False
 
-    def get_speech_history(self):
-        return list(self._speech_history)
-
-    def get_history_max(self):
-        return self._history_max
-
-    def set_history_max(self, value):
-        self._history_max = max(10, min(200, int(value)))
-
-    def repeat_last(self):
-        if self._speech_history:
-            self._speak_direct(self._speech_history[-1])
-
     def get_volume_ducking(self):
         return self._ducker.get_enabled()
 
     def set_volume_ducking(self, enabled):
         self._ducker.set_enabled(enabled)
 
-    def _detect_and_switch_language(self, text):
-        if not self._auto_language or not HAS_LANGDETECT or len(text) < 20:
-            return
-        try:
-            from langdetect import detect_langs
-            langs = detect_langs(text)
-            if not langs:
-                return
-            top = langs[0]
-            if top.prob < 0.8:
-                return
-            lang = top.lang
-            now = time.time()
-            if hasattr(self, '_last_lang_switch') and self._last_lang_switch is not None and now - self._last_lang_switch < 10:
-                if lang == self._last_detected_lang:
-                    return
-            if lang in self._language_voice_map:
-                idx = self._language_voice_map[lang]
-                if idx is not None:
-                    self.set_voice_by_index(idx)
-                    self._last_detected_lang = lang
-                    self._last_lang_switch = now
-        except:
-            pass
-
     def speak(self, text, interrupt=True):
         if not self.engine:
             return
 
         text = self._filter_punctuation(text, self.punctuation_level)
-
-        if self._auto_language and HAS_LANGDETECT and len(text) >= 20:
-            self._detect_and_switch_language(text)
-
-        if interrupt:
-            if self.engine:
-                self.engine.Speak("", 1)
-        self._speak_direct(text)
-
-    def _speak_direct(self, text):
-        if not self.engine:
-            return
-
-        text = core.pronunciation_dict.apply(text)
-        self._speech_history.append(text)
-        if len(self._speech_history) > self._history_max:
-            self._speech_history.pop(0)
-
         text, use_xml = self._apply_capital_pitch(text)
 
         if not use_xml and self._pitch != 50:
@@ -305,6 +185,8 @@ class SapiSynthBase:
         self._ducker.duck()
         try:
             flags = 1
+            if interrupt:
+                flags |= 2
             if use_xml:
                 flags |= 8
             self.engine.Speak(text, flags)
@@ -313,13 +195,9 @@ class SapiSynthBase:
             print(f"Speech error: {e}")
             self._ducker.unduck()
 
-    def _engine_stop(self):
-        if self.engine:
-            self.engine.Speak("", 1)
-
     def stop(self):
         if self.engine:
-            self.engine.Speak("", 1)
+            self.engine.Speak("", 1 | 2)
 
     def wait_until_done(self, timeout_ms=5000):
         if self.engine:

@@ -403,6 +403,11 @@ class ChatApp(SoftApp):
         root = MenuNode("Admin Panel")
         root.add_child(MenuNode("Grant Admin", self._admin_grant, "g"))
         root.add_child(MenuNode("Revoke Admin", self._admin_revoke, "r"))
+        root.add_child(MenuNode("Ban User", self._admin_ban, "b"))
+        root.add_child(MenuNode("Unban User", self._admin_unban, "u"))
+        root.add_child(MenuNode("Mute User", self._admin_mute, "m"))
+        root.add_child(MenuNode("Unmute User", self._admin_unmute, "n"))
+        root.add_child(MenuNode("Broadcast", self._admin_broadcast, "d"))
         root.add_child(MenuNode("List Users", self._admin_list_users, "l"))
         root.add_child(MenuNode("Back", self._show_main_menu, "b"))
         self.menu = MenuSystem(root, self.speak)
@@ -423,6 +428,46 @@ class ChatApp(SoftApp):
         self.current_room_id = -2
         self.speak("Enter username to revoke admin from.")
         self.window.update_text("Revoke admin from:")
+
+    def _admin_ban(self):
+        self.state = STATE_COMPOSING
+        self.login_step = -1
+        self.input_buf = ""
+        self.current_room_id = -3
+        self.speak("Enter username to ban.")
+        self.window.update_text("Ban user:")
+
+    def _admin_unban(self):
+        self.state = STATE_COMPOSING
+        self.login_step = -1
+        self.input_buf = ""
+        self.current_room_id = -4
+        self.speak("Enter username to unban.")
+        self.window.update_text("Unban user:")
+
+    def _admin_mute(self):
+        self.state = STATE_COMPOSING
+        self.login_step = -1
+        self.input_buf = ""
+        self.current_room_id = -5
+        self.speak("Enter username to mute.")
+        self.window.update_text("Mute user:")
+
+    def _admin_unmute(self):
+        self.state = STATE_COMPOSING
+        self.login_step = -1
+        self.input_buf = ""
+        self.current_room_id = -6
+        self.speak("Enter username to unmute.")
+        self.window.update_text("Unmute user:")
+
+    def _admin_broadcast(self):
+        self.state = STATE_COMPOSING
+        self.login_step = -2
+        self.input_buf = ""
+        self.current_room_id = -7
+        self.speak("Enter message to broadcast.")
+        self.window.update_text("Broadcast:")
 
     def _admin_list_users(self):
         try:
@@ -906,7 +951,7 @@ class ChatApp(SoftApp):
             elif self.current_room_id == -98:
                 self.state = STATE_DM_LIST
                 self._enter_dm_list()
-            elif self.current_room_id in (-1, -2):
+            elif self.current_room_id in (-1, -2, -3, -4, -5, -6, -7):
                 self.state = STATE_ADMIN_PANEL
                 if self.menu:
                     self.menu.announce_current()
@@ -939,6 +984,57 @@ class ChatApp(SoftApp):
                     try:
                         self.client.revoke_admin(text)
                         self.speak(f"Revoked admin from {text}.")
+                    except ChatError as e:
+                        self.speak(f"Failed: {e}")
+                    self.state = STATE_ADMIN_PANEL
+                    if self.menu:
+                        self.menu.announce_current()
+                    return
+                if self.current_room_id == -3:
+                    try:
+                        self.client.ban_user(text)
+                        self.speak(f"Banned {text}.")
+                    except ChatError as e:
+                        self.speak(f"Failed: {e}")
+                    self.state = STATE_ADMIN_PANEL
+                    if self.menu:
+                        self.menu.announce_current()
+                    return
+                if self.current_room_id == -4:
+                    try:
+                        self.client.unban_user(text)
+                        self.speak(f"Unbanned {text}.")
+                    except ChatError as e:
+                        self.speak(f"Failed: {e}")
+                    self.state = STATE_ADMIN_PANEL
+                    if self.menu:
+                        self.menu.announce_current()
+                    return
+                if self.current_room_id == -5:
+                    try:
+                        self.client.mute_user(text)
+                        self.speak(f"Muted {text}.")
+                    except ChatError as e:
+                        self.speak(f"Failed: {e}")
+                    self.state = STATE_ADMIN_PANEL
+                    if self.menu:
+                        self.menu.announce_current()
+                    return
+                if self.current_room_id == -6:
+                    try:
+                        self.client.unmute_user(text)
+                        self.speak(f"Unmuted {text}.")
+                    except ChatError as e:
+                        self.speak(f"Failed: {e}")
+                    self.state = STATE_ADMIN_PANEL
+                    if self.menu:
+                        self.menu.announce_current()
+                    return
+            if self.login_step == -2:
+                if self.current_room_id == -7:
+                    try:
+                        self.client.broadcast(text)
+                        self.speak("Broadcast sent.")
                     except ChatError as e:
                         self.speak(f"Failed: {e}")
                     self.state = STATE_ADMIN_PANEL

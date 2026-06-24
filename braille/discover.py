@@ -1,5 +1,4 @@
 import serial.tools.list_ports
-import time
 
 def auto_detect():
     results = {"touch_plus": None, "monarch": None}

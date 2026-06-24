@@ -1,6 +1,7 @@
 import os
 import json
 import win32con
+import re
 from core.app_base import SoftApp
 from core.config import TECH_SOFT
 from core.file_dialog import FileDialog
@@ -15,6 +16,8 @@ except ImportError:
 
 STATE_EDIT = 0
 STATE_SPELL = 3
+STATE_FIND = 4
+STATE_REPLACE = 5
 
 class TechEdit(SoftApp):
     def __init__(self, manager, window):
@@ -25,7 +28,7 @@ class TechEdit(SoftApp):
         self.state = STATE_EDIT
         self.doc_dir = os.path.join(TECH_SOFT, 'documents')
         os.makedirs(self.doc_dir, exist_ok=True)
-        
+
         self._file_dialog = None
         self._save_dialog = None
         self._spell_misspelled = []
@@ -34,6 +37,10 @@ class TechEdit(SoftApp):
         self._spell_sug_index = 0
         self._dirty = False
         self._autosave_registered = False
+        self._find_query = ""
+        self._replace_query = ""
+        self._find_results = []
+        self._find_index = 0
 
     def _mark_dirty(self):
         self._dirty = True
@@ -65,7 +72,7 @@ class TechEdit(SoftApp):
             )
         if self.state == STATE_EDIT:
             self._update_display()
-            self.speak("Word Processor. F1 Save, F2 Save As, F3 Open.")
+            self.speak("Word Processor. F1 Save, F2 Save As, F3 Open, F5 Find, F6 Replace, F7 Spell, F8 Count.")
 
     def _update_display(self):
         if not self.text:
@@ -134,17 +141,16 @@ class TechEdit(SoftApp):
             self._handle_edit_key(vk)
         elif self.state == STATE_SPELL:
             self._handle_spell_key(vk)
+        elif self.state == STATE_FIND:
+            self._handle_find_key(vk)
+        elif self.state == STATE_REPLACE:
+            self._handle_replace_key(vk)
 
     def _handle_edit_key(self, vk):
         if vk == win32con.VK_ESCAPE:
-            if self.state == STATE_SPELL:
-                self.state = STATE_EDIT
-                self.speak("Spell check cancelled.")
-                self._update_display()
-                return
             self.exit_app()
             return
-        
+
         if vk == win32con.VK_F1:
             self.save_file()
             return
@@ -154,8 +160,17 @@ class TechEdit(SoftApp):
         elif vk == win32con.VK_F3:
             self._enter_open_state()
             return
+        elif vk == win32con.VK_F5:
+            self._enter_find()
+            return
+        elif vk == win32con.VK_F6:
+            self._enter_replace()
+            return
         elif vk == win32con.VK_F7:
             self._do_spell_check()
+            return
+        elif vk == win32con.VK_F8:
+            self._show_count()
             return
 
         if vk == win32con.VK_BACK:
@@ -240,7 +255,156 @@ class TechEdit(SoftApp):
             except Exception:
                 pass
 
-    # --- Spell Check ---
+    def _show_count(self):
+        chars = len(self.text)
+        words = len(self.text.split()) if self.text.strip() else 0
+        lines = self.text.count('\n') + 1 if self.text else 0
+        self.speak(f"{chars} characters, {words} words, {lines} lines.")
+
+    def _enter_find(self):
+        self.state = STATE_FIND
+        self._find_query = ""
+        self._find_results = []
+        self._find_index = 0
+        self.speak("Find. Type search text.")
+        self.window.update_text("Find: ")
+
+    def _do_find(self):
+        q = self._find_query
+        if not q:
+            self._find_results = []
+            self.speak("No search text.")
+            return
+        self._find_results = [m.start() for m in re.finditer(re.escape(q), self.text)]
+        self._find_index = 0
+        if self._find_results:
+            self.cursor = self._find_results[0]
+            self._update_display()
+            self.speak(f"Found {len(self._find_results)} matches.")
+        else:
+            self.speak("No matches.")
+
+    def _next_find(self):
+        if not self._find_results:
+            return
+        self._find_index = (self._find_index + 1) % len(self._find_results)
+        self.cursor = self._find_results[self._find_index]
+        self._update_display()
+        self.speak(f"Match {self._find_index + 1} of {len(self._find_results)}.")
+
+    def _enter_replace(self):
+        self.state = STATE_REPLACE
+        self._find_query = ""
+        self._replace_query = ""
+        self._find_results = []
+        self._find_index = 0
+        self._replace_step = 0
+        self.speak("Replace. Type text to find.")
+        self.window.update_text("Find: ")
+
+    def _do_replace_find(self):
+        q = self._find_query
+        if not q:
+            self._find_results = []
+            self.speak("No search text.")
+            return
+        self._find_results = [m.start() for m in re.finditer(re.escape(q), self.text)]
+        self._find_index = 0
+        if self._find_results:
+            self.cursor = self._find_results[0]
+            self._update_display()
+            self.speak(f"Found {len(self._find_results)} matches. Enter replacement text.")
+        else:
+            self.speak("No matches.")
+
+    def _do_replace_all(self):
+        q = self._find_query
+        if not q:
+            return
+        count = self.text.count(q)
+        self.text = self.text.replace(q, self._replace_query)
+        self.cursor = min(self.cursor, len(self.text))
+        self._mark_dirty()
+        self._update_display()
+        self.speak(f"Replaced {count} occurrence{'s' if count != 1 else ''}.")
+
+    def _handle_find_key(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self.state = STATE_EDIT
+            self._update_display()
+            self.speak("Find cancelled.")
+            return
+        if vk == win32con.VK_RETURN:
+            self._do_find()
+            self.state = STATE_EDIT
+            self.speak("Press F5 to find again, or F6 to replace.")
+            self._update_display()
+            return
+        if vk == win32con.VK_F5:
+            self._next_find()
+            return
+        if 0x20 <= vk <= 0x5A or 0x30 <= vk <= 0x39:
+            ch = self._vk_to_char(vk)
+            if ch:
+                self._find_query += ch
+                self.window.update_text(f"Find: {self._find_query}")
+            return
+        if vk == win32con.VK_BACK:
+            if self._find_query:
+                self._find_query = self._find_query[:-1]
+                self.window.update_text(f"Find: {self._find_query}")
+
+    def _handle_replace_key(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self.state = STATE_EDIT
+            self._update_display()
+            self.speak("Replace cancelled.")
+            return
+        if self._replace_step == 0:
+            if vk == win32con.VK_RETURN:
+                self._replace_step = 1
+                self._do_replace_find()
+                self.window.update_text("Replace with: ")
+                return
+            if 0x20 <= vk <= 0x5A or 0x30 <= vk <= 0x39:
+                ch = self._vk_to_char(vk)
+                if ch:
+                    self._find_query += ch
+                    self.window.update_text(f"Find: {self._find_query}")
+                return
+            if vk == win32con.VK_BACK:
+                if self._find_query:
+                    self._find_query = self._find_query[:-1]
+                    self.window.update_text(f"Find: {self._find_query}")
+        elif self._replace_step == 1:
+            if vk == win32con.VK_RETURN:
+                self._do_replace_all()
+                self.state = STATE_EDIT
+                self._update_display()
+                return
+            if 0x20 <= vk <= 0x5A or 0x30 <= vk <= 0x39:
+                ch = self._vk_to_char(vk)
+                if ch:
+                    self._replace_query += ch
+                    self.window.update_text(f"Replace with: {self._replace_query}")
+                return
+            if vk == win32con.VK_BACK:
+                if self._replace_query:
+                    self._replace_query = self._replace_query[:-1]
+                    self.window.update_text(f"Replace with: {self._replace_query}")
+
+    def is_text_input_active(self):
+        return self.state == STATE_EDIT
+
+    def get_help_text(self):
+        if self.state == STATE_SPELL:
+            return "Spell Check. Space for next, Backspace for previous. F7 to exit. Escape to cancel."
+        if self.state == STATE_FIND:
+            return "Find. Type text and press Enter. F5 for next match. Escape to exit."
+        if self.state == STATE_REPLACE:
+            return "Replace. Enter text to find, then replacement. Escape to cancel."
+        return "Word Processor. Type to enter text. Home/End for start/end of line. Left/Right to move cursor. F1 Save, F2 Save As, F3 Open. F5 Find, F6 Replace, F7 Spell, F8 Count. Escape to exit."
+
     def _do_spell_check(self):
         if not HAS_SPELLCHECK:
             self.speak("Spell check requires pyspellchecker.")
@@ -313,19 +477,10 @@ class TechEdit(SoftApp):
             return
 
         if vk == win32con.VK_SPACE:
-            if self.manager.space_used_in_chord:
+            if getattr(self.manager, 'space_used_in_chord', False):
                 return
-            
             if self.state == STATE_EDIT:
                 self.text = self.text[:self.cursor] + ' ' + self.text[self.cursor:]
                 self.cursor += 1
                 self._mark_dirty()
                 self._update_display()
-
-    def is_text_input_active(self):
-        return self.state == STATE_EDIT
-
-    def get_help_text(self):
-        if self.state == STATE_SPELL:
-            return "Spell Check. Space for next misspelled word, Backspace for previous. F7 to exit. Escape to cancel."
-        return "Word Processor. Type to enter text. Home/End for start/end of line. Left/Right to move cursor. F1 Save, F2 Save As, F3 Open. F7 Spell Check. Escape to exit."
