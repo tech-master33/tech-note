@@ -118,7 +118,10 @@ class PowerApp(SoftApp):
         return True
 
     def _do_restart(self):
-        if not self._check_security(self._do_restart): return
+        if not self._check_security(self._restart_impl): return
+        self._restart_impl()
+
+    def _restart_impl(self):
         self.speak("Restarting Tech-Note.")
         self.window.update_text("Restarting Tech-Note...")
         self.exit_app()
@@ -126,7 +129,10 @@ class PowerApp(SoftApp):
             self.on_restart()
 
     def _do_shutdown(self):
-        if not self._check_security(self._do_shutdown): return
+        if not self._check_security(self._shutdown_impl): return
+        self._shutdown_impl()
+
+    def _shutdown_impl(self):
         if self.on_exit:
             self.on_exit()
 

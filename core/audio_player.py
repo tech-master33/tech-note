@@ -36,6 +36,7 @@ class AudioPlayer:
                 return True
             except Exception:
                 return False
+        tmp = None
         try:
             fd, tmp = tempfile.mkstemp(suffix='.wav')
             os.close(fd)
@@ -53,10 +54,11 @@ class AudioPlayer:
         except Exception:
             return False
         finally:
-            try:
-                os.unlink(tmp)
-            except Exception:
-                pass
+            if tmp is not None:
+                try:
+                    os.unlink(tmp)
+                except Exception:
+                    pass
 
     def play_file_background(self, path):
         def _play():
@@ -120,6 +122,7 @@ class AudioPlayer:
             except Exception:
                 pass
         else:
+            tmp = None
             try:
                 fd, tmp = tempfile.mkstemp(suffix='.wav')
                 os.close(fd)

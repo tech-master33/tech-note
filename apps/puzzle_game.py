@@ -38,18 +38,19 @@ class PuzzleGame(SoftApp):
             json.dump(self.scores, f)
 
     def _init_board(self):
-        nums = list(range(1, self.size * self.size)) + [0]
-        random.shuffle(nums)
-        self.board = []
-        for r in range(self.size):
-            row = []
-            for c in range(self.size):
-                row.append(nums[r * self.size + c])
-                if nums[r * self.size + c] == 0:
-                    self.empty_pos = (r, c)
-            self.board.append(row)
-        if not self._is_solvable():
-            self._init_board()
+        while True:
+            nums = list(range(1, self.size * self.size)) + [0]
+            random.shuffle(nums)
+            self.board = []
+            for r in range(self.size):
+                row = []
+                for c in range(self.size):
+                    row.append(nums[r * self.size + c])
+                    if nums[r * self.size + c] == 0:
+                        self.empty_pos = (r, c)
+                self.board.append(row)
+            if self._is_solvable():
+                break
         self.game_over = False
 
     def _is_solvable(self):
@@ -188,13 +189,13 @@ class PuzzleGame(SoftApp):
         er, ec = self.empty_pos
         tr, tc = er, ec
         if direction == "up":
-            tr += 1
-        elif direction == "down":
             tr -= 1
+        elif direction == "down":
+            tr += 1
         elif direction == "left":
-            tc += 1
-        elif direction == "right":
             tc -= 1
+        elif direction == "right":
+            tc += 1
         if 0 <= tr < self.size and 0 <= tc < self.size:
             if self._slide(tr, tc):
                 self.window.update_text(self._render())

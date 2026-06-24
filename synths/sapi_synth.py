@@ -12,8 +12,14 @@ except ImportError:
 
 class SapiSynthBase:
     def __init__(self, voice_name=None, allowed_fragments=None):
-        self.engine = comtypes.client.CreateObject("SAPI.SpVoice")
-        self.is_valid = True
+        self.engine = None
+        self.is_valid = False
+        try:
+            self.engine = comtypes.client.CreateObject("SAPI.SpVoice")
+            self.is_valid = True
+        except Exception:
+            self.is_valid = False
+            return
         self.allowed_fragments = allowed_fragments
         self.punctuation_level = "Some"
         self.speak_punctuation = False

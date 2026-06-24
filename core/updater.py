@@ -54,7 +54,9 @@ def _git_fetch():
 
 def _git_pull(branch="main"):
     result = _git_run(["pull", "origin", branch], timeout=60)
-    if result and result.returncode != 0:
+    if result is None:
+        return None
+    if result.returncode != 0:
         _git_run(["branch", "--set-upstream-to", f"origin/{branch}", branch], timeout=30)
         result = _git_run(["pull", "origin", branch], timeout=60)
     return result

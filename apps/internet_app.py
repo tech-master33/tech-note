@@ -64,6 +64,7 @@ class InternetApp(SoftApp):
         self.input_buf = ""
         self._speech_queue = []
         self._queue_lock = threading.Lock()
+        self._content_lock = threading.Lock()
         self._search_mode = False
         self._search_query = ""
         self._search_results = []
@@ -169,6 +170,13 @@ class InternetApp(SoftApp):
                 self._follow_link()
             elif vk == 0xBF:
                 self._enter_search_mode()
+            elif self._search_mode and 0x20 <= vk <= 0x5A:
+                ch = chr(vk).lower() if 0x41 <= vk <= 0x5A else chr(vk)
+                self._search_query += ch
+                self._do_search()
+            elif self._search_mode and 0x30 <= vk <= 0x39:
+                self._search_query += chr(vk)
+                self._do_search()
             return
 
         if vk == win32con.VK_BACK:
@@ -383,19 +391,21 @@ class InternetApp(SoftApp):
                 t = soup.find('title')
                 if t:
                     title = t.get_text()
-            self.content = []
+            new_content = []
             for element in soup.find_all(['h1', 'h2', 'h3', 'p', 'a']):
                 if element.name in ['h1', 'h2', 'h3']:
-                    self.content.append((f"Heading: {element.get_text().strip()}", None))
+                    new_content.append((f"Heading: {element.get_text().strip()}", None))
                 elif element.name == 'a':
                     href = element.get('href')
                     if href:
                         href = urljoin(url, href)
-                    self.content.append((f"Link: {element.get_text().strip()}", href))
+                    new_content.append((f"Link: {element.get_text().strip()}", href))
                 else:
                     txt = element.get_text().strip()
                     if txt:
-                        self.content.append((txt, None))
+                        new_content.append((txt, None))
+            with self._content_lock:
+                self.content = new_content
             self.fetching = False
             if self.content:
                 self.reading_mode = True
@@ -408,6 +418,7 @@ class InternetApp(SoftApp):
                 self.window.update_text(text)
             else:
                 self._queue_speech("No content found on page.")
+            self._process_speech_queue()
         except Exception:
             self.fetching = False
             self._queue_speech("Error fetching page.")

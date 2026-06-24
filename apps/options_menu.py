@@ -6,6 +6,7 @@ from core.menu import MenuNode, MenuSystem
 from core.config import SETTINGS_PATH, ACCOUNT_PATH
 from synths.registry import get_available_synths
 import core.error_handler
+import core.pronunciation_dict
 
 class OptionsApp(SoftApp):
     def __init__(self, manager, window):
@@ -14,6 +15,10 @@ class OptionsApp(SoftApp):
         self._text_input_field = None
         self._text_input_buf = ""
         self.pav_submode = None
+        self._current_parent_back = None
+        self._numeric_key = None
+        self._numeric_min = None
+        self._numeric_max = None
         self.settings_file = SETTINGS_PATH
         self.settings = {
             "rate": 0, "volume": 100, "voice_index": 0,
@@ -29,8 +34,9 @@ class OptionsApp(SoftApp):
             "language_auto_switch": "Off",
             "voice_profiles": {},
             "per_app_voice": {},
-            "log_level": "WARN",
-            "speech_history_size": 50
+            "speech_history_size": 50,
+            "braille_display": "Off",
+            "braille_grade": 2
         }
         self._load_voice_settings()
         self._build_main_menu()
@@ -39,32 +45,33 @@ class OptionsApp(SoftApp):
         root = MenuNode("Options")
 
         tts = root.add_child(MenuNode("TTS Menu"))
-        tts.add_child(MenuNode("TTS Engine", lambda: self._enter_adjust("tts_engine")))
-        tts.add_child(MenuNode("Speech Rate", lambda: self._enter_adjust("speech_rate")))
-        tts.add_child(MenuNode("Volume", lambda: self._enter_adjust("volume")))
-        tts.add_child(MenuNode("Voice Selection", lambda: self._enter_adjust("voice")))
-        tts.add_child(MenuNode("Punctuation Level", lambda: self._enter_adjust("punctuation_level")))
-        tts.add_child(MenuNode("Pitch", lambda: self._enter_adjust("pitch")))
-        tts.add_child(MenuNode("Capital Pitch Change", lambda: self._enter_adjust("capital_pitch_change")))
-        tts.add_child(MenuNode("Language Auto-Switch", lambda: self._enter_adjust("language_auto_switch")))
+        tts.add_child(MenuNode("TTS Engine", self._enter_tts_engine_menu))
+        tts.add_child(MenuNode("Speech Rate", self._enter_rate_menu))
+        tts.add_child(MenuNode("Volume", self._enter_volume_menu))
+        tts.add_child(MenuNode("Voice Selection", self._enter_voice_menu))
+        tts.add_child(MenuNode("Punctuation Level", self._enter_punctuation_menu))
+        tts.add_child(MenuNode("Pitch", self._enter_pitch_menu))
+        tts.add_child(MenuNode("Capital Pitch Change", self._enter_capital_pitch_menu))
+        tts.add_child(MenuNode("Language Auto-Switch", self._enter_language_switch_menu))
         tts.add_child(MenuNode("Voice Profiles", self._enter_voice_profiles))
         tts.add_child(MenuNode("Per-App Voices", self._enter_per_app_voices))
         tts.add_child(MenuNode("Pronunciation Dictionary", self._enter_pronunciation_dict))
-        tts.add_child(MenuNode("Speech History Size", lambda: self._enter_adjust("speech_history_size")))
+        tts.add_child(MenuNode("Speech History Size", self._enter_history_size_menu))
 
         kb = root.add_child(MenuNode("Keyboard Menu"))
-        kb.add_child(MenuNode("Character Echo", lambda: self._enter_adjust("char_echo")))
-        kb.add_child(MenuNode("Word Echo", lambda: self._enter_adjust("word_echo")))
-        kb.add_child(MenuNode("Position Announcement", lambda: self._enter_adjust("announce_position")))
-        kb.add_child(MenuNode("State Keys", lambda: self._enter_adjust("state_keys")))
+        kb.add_child(MenuNode("Character Echo", self._enter_char_echo_menu))
+        kb.add_child(MenuNode("Word Echo", self._enter_word_echo_menu))
+        kb.add_child(MenuNode("Position Announcement", self._enter_announce_position_menu))
+        kb.add_child(MenuNode("State Keys", self._enter_state_keys_menu))
         kb.add_child(MenuNode("Key Bindings", self._enter_key_bindings))
 
         audio = root.add_child(MenuNode("Audio Menu"))
-        audio.add_child(MenuNode("Volume Ducking", lambda: self._enter_adjust("volume_ducking")))
-        audio.add_child(MenuNode("Sound Scheme", lambda: self._enter_adjust("sound_scheme")))
+        audio.add_child(MenuNode("Volume Ducking", self._enter_volume_ducking_menu))
+        audio.add_child(MenuNode("Sound Scheme", self._enter_sound_scheme_menu))
 
-        system = root.add_child(MenuNode("System Menu"))
-        system.add_child(MenuNode("Log Level", lambda: self._enter_adjust("log_level")))
+        braille = root.add_child(MenuNode("Braille Menu"))
+        braille.add_child(MenuNode("Braille Display", self._enter_braille_display_menu))
+        braille.add_child(MenuNode("Braille Grade", self._enter_braille_grade_menu))
 
         self.menu = MenuSystem(root, self.speak)
 
@@ -75,14 +82,17 @@ class OptionsApp(SoftApp):
         self.window.update_text("Options: " + title)
 
     def on_key(self, vk):
-        if self.adjust_mode:
-            if self.adjust_mode == "key_bind":
-                self._handle_key_bind(vk)
-                return
-            if self.adjust_mode == "text_input":
-                self._handle_text_input(vk)
-                return
-            self._handle_adjust(vk)
+        if self.adjust_mode == "key_bind":
+            self._handle_key_bind(vk)
+            return
+        if self.adjust_mode == "text_input":
+            self._handle_text_input(vk)
+            return
+        if self.adjust_mode == "numeric_input":
+            self._handle_numeric_input(vk)
+            return
+        if self.adjust_mode == "pav_numeric":
+            self._handle_pav_numeric(vk)
             return
 
         if vk == win32con.VK_ESCAPE:
@@ -118,8 +128,8 @@ class OptionsApp(SoftApp):
     def get_help_text(self):
         if self.adjust_mode == "key_bind":
             return "Key binding. Press the key you want to assign. Escape to cancel."
-        if self.adjust_mode:
-            return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
+        if self.adjust_mode == "numeric_input":
+            return f"Enter a value between {self._numeric_min} and {self._numeric_max}. Type the number and press Enter. Escape to cancel."
         return "Options. Navigate with Space and Backspace. Enter to select. Escape to go back or exit."
 
     def _load_voice_settings(self):
@@ -169,212 +179,103 @@ class OptionsApp(SoftApp):
         except Exception:
             pass
 
-    def _enter_adjust(self, key):
-        self.adjust_mode = key
+    # --- Shared helpers ---
 
-        if key == "tts_engine":
-            self.synth_list = get_available_synths()
-            current_module = "sapi_synth"
-            try:
-                with open(ACCOUNT_PATH, 'r') as f:
-                    account = json.load(f)
-                current_module = account.get("synth_module", "sapi_synth")
-            except Exception as e: core.error_handler.log(e, "Loading account synth module")
-            self.synth_index = 0
-            for i, (name, mod) in enumerate(self.synth_list):
-                if mod == current_module:
-                    self.synth_index = i
-                    break
-            name = self.synth_list[self.synth_index][0]
-            self.speak(f"TTS Engine. Current: {name}.")
-        elif key == "speech_rate":
-            self.speak(f"Rate. Current: {self.settings['rate']}.")
-        elif key == "volume":
-            self.speak(f"Volume. Current: {self.settings['volume']}.")
-        elif key == "voice":
-            names = self.manager.synth.get_voice_names()
-            idx = self.settings.get("voice_index", 0)
-            self.speak(f"Voice. Current: {names[idx] if names else 'Default'}.")
-        elif key == "punctuation_level":
-            self.speak(f"Punctuation Level. Current: {self.settings['punctuation_level']}.")
-        elif key == "char_echo":
-            self.speak(f"Character Echo. Current: {self.settings['char_echo']}.")
-        elif key == "word_echo":
-            self.speak(f"Word Echo. Current: {self.settings['word_echo']}.")
-        elif key == "announce_position":
-            self.speak(f"Position Announcement. Current: {self.settings['announce_position']}.")
-        elif key == "pitch":
-            self.speak(f"Pitch. Current: {self.settings['pitch']}.")
-        elif key == "capital_pitch_change":
-            self.speak(f"Capital Pitch Change. Current: {self.settings['capital_pitch_change']}.")
-        elif key == "state_keys":
-            self.speak(f"State Keys. Current: {self.settings['state_keys']}.")
-        elif key == "volume_ducking":
-            self.speak(f"Volume Ducking. Current: {self.settings['volume_ducking']}.")
-        elif key == "language_auto_switch":
-            self.speak(f"Language Auto-Switch. Current: {self.settings['language_auto_switch']}.")
-        elif key == "sound_scheme":
-            self.speak(f"Sound Scheme. Current: {self.settings['sound_scheme']}.")
-        elif key == "log_level":
-            core.error_handler.load_level_from_settings()
-            self.settings["log_level"] = core.error_handler.get_level_name()
-            self.speak(f"Log Level. Current: {self.settings['log_level']}.")
-        elif key == "speech_history_size":
-            self.speak(f"Speech History Size. Current: {self.settings.get('speech_history_size', 50)}.")
+    def _switch_to_submenu(self, root, title):
+        self.adjust_mode = None
+        self.menu = MenuSystem(root, self.speak)
+        self.window.update_text(title + ": " + self.menu.get_current_item().title)
 
-        self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
+    def _build_list_menu(self, title, setting_key, options, side_effect=None):
+        root = MenuNode(title)
+        current = self.settings.get(setting_key)
+        for opt in options:
+            label = opt
+            if opt == current:
+                label = f"{label} (current)"
+            root.add_child(MenuNode(label, lambda v=opt: self._set_and_back(setting_key, v, side_effect)))
+        root.add_child(MenuNode("Back", self._current_parent_back or self._back_to_main_menu))
+        self._switch_to_submenu(root, title)
 
-    def _get_current_display(self):
-        key = self.adjust_mode
-        if key == "tts_engine":
-            return self.synth_list[self.synth_index][0] if self.synth_list else "None"
-        if key.startswith("pav_"):
-            app_name = key[4:]
-            pav = self.settings.get("per_app_voice", {})
-            override = pav.get(app_name, {})
-            if self.pav_submode == "voice":
-                names = self.manager.synth.get_voice_names()
-                idx = override.get("voice_index", 0)
-                return names[idx] if idx < len(names) else str(idx)
-            return str(override.get(self.pav_submode, ""))
-        return str(self.settings.get(key, ""))
+    def _build_numeric_menu(self, title, setting_key, default, min_val, max_val, side_effect=None):
+        root = MenuNode(title)
+        root.add_child(MenuNode("Edit Value...", lambda: self._start_numeric_input(setting_key, min_val, max_val, side_effect)))
+        root.add_child(MenuNode(f"Reset to Default ({default})", lambda: self._reset_numeric(setting_key, default, side_effect)))
+        root.add_child(MenuNode("Back", self._current_parent_back or self._back_to_main_menu))
+        self._switch_to_submenu(root, title)
 
-    def _handle_adjust(self, vk):
-        if vk == win32con.VK_BACK or vk == win32con.VK_ESCAPE:
+    def _start_numeric_input(self, setting_key, min_val, max_val, side_effect=None):
+        self.adjust_mode = "numeric_input"
+        self._numeric_key = setting_key
+        self._numeric_min = min_val
+        self._numeric_max = max_val
+        self._numeric_side_effect = side_effect
+        self._text_input_buf = ""
+        self.speak(f"Enter value between {min_val} and {max_val}.")
+        self.window.update_text(f"{setting_key.replace('_', ' ').title()}: ")
+
+    def _handle_numeric_input(self, vk):
+        if vk == win32con.VK_ESCAPE:
             self.adjust_mode = None
-            self.menu.announce_current()
+            if self._current_parent_back:
+                self._current_parent_back()
             return
-        elif vk == 0xBB:
-            self._adjust_value(1)
-        elif vk == 0xBD:
-            self._adjust_value(-1)
-        elif vk == win32con.VK_RETURN:
-            if self.adjust_mode == "tts_engine":
-                self._save_synth_selection()
-                return
-            self.adjust_mode = None
-            self.speak("Set.")
+        if vk == win32con.VK_RETURN:
+            val = self._text_input_buf.strip()
+            try:
+                num = int(val)
+                if self._numeric_min <= num <= self._numeric_max:
+                    self._set_and_back(self._numeric_key, num, side_effect=getattr(self, '_numeric_side_effect', None))
+                else:
+                    self.speak(f"Value must be between {self._numeric_min} and {self._numeric_max}.")
+            except ValueError:
+                self.speak("Invalid number.")
+            return
+        if vk == win32con.VK_BACK:
+            if self._text_input_buf:
+                self._text_input_buf = self._text_input_buf[:-1]
+                self.window.update_text(self._text_input_buf if self._text_input_buf else " ")
+            return
+        ch = self._vk_to_char(vk)
+        if ch and (ch.isdigit() or (ch == '-' and not self._text_input_buf)):
+            self._text_input_buf += ch
+            self.window.update_text(self._text_input_buf)
 
-    def _adjust_value(self, direction):
-        key = self.adjust_mode
-        if not key: return
+    def _reset_numeric(self, setting_key, default, side_effect=None):
+        self._set_and_back(setting_key, default, side_effect=side_effect)
 
-        if key == "tts_engine":
-            if self.synth_list:
-                self.synth_index = (self.synth_index + direction) % len(self.synth_list)
-                self.speak(self.synth_list[self.synth_index][0])
-        elif key == "speech_rate":
-            self.settings["rate"] = max(-10, min(10, self.settings["rate"] + direction))
-            self.manager.synth.set_rate(self.settings["rate"])
-            self.speak(str(self.settings["rate"]))
-        elif key == "volume":
-            self.settings["volume"] = max(0, min(100, self.settings["volume"] + direction * 10))
-            self.manager.synth.set_volume(self.settings["volume"])
-            self.speak(str(self.settings["volume"]))
-        elif key == "voice":
-            names = self.manager.synth.get_voice_names()
-            idx = (self.settings.get("voice_index", 0) + direction) % len(names)
-            self.settings["voice_index"] = idx
-            self.manager.synth.set_voice_by_index(idx)
-            self.speak(names[idx])
-        elif key == "punctuation_level":
-            opts = ["None", "Some", "Most", "All"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % len(opts)]
-            self.manager.synth.set_punctuation_level(self.settings[key])
-            self.speak(self.settings[key])
-        elif key == "char_echo":
-            opts = ["Off", "On"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(f"Character Echo {self.settings[key]}")
-        elif key == "word_echo":
-            opts = ["Off", "On"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(f"Word Echo {self.settings[key]}")
-        elif key == "announce_position":
-            opts = ["Off", "On"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(f"Position Announcement {self.settings[key]}")
-            import core.menu
-            core.menu.ANNOUNCE_POSITION = self.settings[key] == "On"
-        elif key == "pitch":
-            self.settings["pitch"] = max(0, min(100, self.settings["pitch"] + direction * 10))
-            self.manager.synth.set_pitch(self.settings["pitch"])
-            self.speak(str(self.settings["pitch"]))
-        elif key == "capital_pitch_change":
-            opts = ["Off", "Say Cap", "Raise Pitch"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % len(opts)]
-            self.manager.synth.set_capital_pitch_change(self.settings[key])
-            self.speak(self.settings[key])
-        elif key == "state_keys":
-            opts = ["Off", "On"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(f"State Keys {self.settings[key]}")
-        elif key == "volume_ducking":
-            opts = ["Off", "On"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.manager.synth.set_volume_ducking(self.settings[key] == "On")
-            self.speak(f"Volume Ducking {self.settings[key]}")
-        elif key == "sound_scheme":
-            opts = ["Default", "Classic", "Minimal"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % len(opts)]
-            import core.menu
-            core.menu.SOUND_SCHEME = self.settings[key]
-            self.speak(self.settings[key])
-        elif key == "language_auto_switch":
-            opts = ["Off", "On"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.manager.synth.set_auto_language(self.settings[key] == "On")
-            self.speak(f"Language Auto-Switch {self.settings[key]}")
-        elif key == "log_level":
-            opts = ["SILENT", "ERROR", "WARN", "INFO", "DEBUG", "ALL"]
-            curr = opts.index(self.settings[key]) if self.settings[key] in opts else 2
-            self.settings[key] = opts[(curr + direction) % len(opts)]
-            name_map = {"SILENT": 0, "ERROR": 1, "WARN": 2, "INFO": 3, "DEBUG": 4, "ALL": 5}
-            core.error_handler.set_level(name_map[self.settings[key]])
-            core.error_handler.log(None, f"Log level set to {self.settings[key]}", level=core.error_handler.LEVEL_INFO)
-            self.speak(f"Log Level {self.settings[key]}")
-        elif key == "speech_history_size":
-            val = max(10, min(200, self.settings.get("speech_history_size", 50) + direction * 10))
-            self.settings["speech_history_size"] = val
-            self.manager.synth.set_history_max(val)
-            self.speak(str(val))
-        elif key.startswith("pav_"):
-            app_name = key[4:]
-            pav = self.settings.get("per_app_voice", {})
-            if app_name not in pav:
-                pav[app_name] = {"voice_index": self.settings.get("voice_index", 0), "rate": self.settings.get("rate", 0), "pitch": self.settings.get("pitch", 50)}
-            override = pav[app_name]
-            if self.pav_submode == "voice":
-                names = self.manager.synth.get_voice_names()
-                idx = (override.get("voice_index", 0) + direction) % len(names)
-                override["voice_index"] = idx
-                self.manager.synth.set_voice_by_index(idx)
-                self.speak(names[idx])
-            elif self.pav_submode == "rate":
-                override["rate"] = max(-10, min(10, override.get("rate", 0) + direction))
-                self.manager.synth.set_rate(override["rate"])
-                self.speak(str(override["rate"]))
-            elif self.pav_submode == "pitch":
-                override["pitch"] = max(0, min(100, override.get("pitch", 50) + direction * 10))
-                self.manager.synth.set_pitch(override["pitch"])
-                self.speak(str(override["pitch"]))
-            pav[app_name] = override
-            self.settings["per_app_voice"] = pav
-
-        self.window.update_text(key.replace('_', ' ').title() + ": " + str(self._get_current_display()))
+    def _set_and_back(self, setting_key, value, side_effect=None):
+        self.settings[setting_key] = value
         self._save_settings()
+        if side_effect:
+            side_effect(setting_key, value)
+        self.speak(f"{setting_key.replace('_', ' ').title()} set to {value}.")
+        self.window.update_text(str(value))
+        if self._current_parent_back:
+            self._current_parent_back()
 
-    def _save_synth_selection(self):
-        name, module = self.synth_list[self.synth_index]
+    # --- TTS Engine ---
+
+    def _enter_tts_engine_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        synth_list = get_available_synths()
+        current_module = "sapi_synth"
+        try:
+            with open(ACCOUNT_PATH, 'r') as f:
+                account = json.load(f)
+            current_module = account.get("synth_module", "sapi_synth")
+        except Exception as e:
+            core.error_handler.log(e, "Loading account synth module")
+        root = MenuNode("TTS Engine")
+        for name, module in synth_list:
+            label = name
+            if module == current_module:
+                label = f"{name} (current)"
+            root.add_child(MenuNode(label, lambda m=module, n=name: self._select_tts_engine(n, m)))
+        root.add_child(MenuNode("Back", self._current_parent_back))
+        self._switch_to_submenu(root, "TTS Engine")
+
+    def _select_tts_engine(self, name, module):
         try:
             with open(ACCOUNT_PATH, 'r') as f:
                 account = json.load(f)
@@ -384,7 +285,180 @@ class OptionsApp(SoftApp):
             self.speak(f"Synth set to {name}. Restart to apply.")
         except Exception:
             self.speak("Failed to save synth.")
-        self.adjust_mode = None
+        if self._current_parent_back:
+            self._current_parent_back()
+
+    # --- TTS Settings ---
+
+    def _enter_rate_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        self._build_numeric_menu("Speech Rate", "rate", 0, -10, 10, side_effect=self._rate_side_effect)
+
+    def _rate_side_effect(self, key, value):
+        self.manager.synth.set_rate(value)
+
+    def _enter_volume_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        self._build_numeric_menu("Volume", "volume", 100, 0, 100, side_effect=self._volume_side_effect)
+
+    def _volume_side_effect(self, key, value):
+        self.manager.synth.set_volume(value)
+
+    def _enter_voice_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        names = self.manager.synth.get_voice_names()
+        if not names:
+            self.speak("No voices available.")
+            return
+        root = MenuNode("Voice Selection")
+        current_idx = self.settings.get("voice_index", 0)
+        for i, name in enumerate(names):
+            label = name
+            if i == current_idx:
+                label = f"{name} (current)"
+            root.add_child(MenuNode(label, lambda idx=i, n=name: self._select_voice(idx, n)))
+        root.add_child(MenuNode("Back", self._current_parent_back))
+        self._switch_to_submenu(root, "Voice Selection")
+
+    def _select_voice(self, idx, name):
+        self.settings["voice_index"] = idx
+        self.manager.synth.set_voice_by_index(idx)
+        self._save_settings()
+        self.speak(f"Voice set to {name}.")
+        if self._current_parent_back:
+            self._current_parent_back()
+
+    def _enter_punctuation_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        self._build_list_menu("Punctuation Level", "punctuation_level",
+                             ["None", "Some", "Most", "All"],
+                             side_effect=self._punctuation_side_effect)
+
+    def _punctuation_side_effect(self, key, value):
+        self.manager.synth.set_punctuation_level(value)
+
+    def _enter_pitch_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        self._build_numeric_menu("Pitch", "pitch", 50, 0, 100, side_effect=self._pitch_side_effect)
+
+    def _pitch_side_effect(self, key, value):
+        self.manager.synth.set_pitch(value)
+
+    def _enter_capital_pitch_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        self._build_list_menu("Capital Pitch Change", "capital_pitch_change",
+                             ["Off", "Say Cap", "Raise Pitch"],
+                             side_effect=self._capital_pitch_side_effect)
+
+    def _capital_pitch_side_effect(self, key, value):
+        self.manager.synth.set_capital_pitch_change(value)
+
+    def _enter_language_switch_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        self._build_list_menu("Language Auto-Switch", "language_auto_switch",
+                             ["Off", "On"],
+                             side_effect=self._language_switch_side_effect)
+
+    def _language_switch_side_effect(self, key, value):
+        if hasattr(self.manager.synth, 'set_auto_language'):
+            self.manager.synth.set_auto_language(value == "On")
+
+    def _enter_history_size_menu(self):
+        self._current_parent_back = self._back_to_tts_menu
+        self._build_numeric_menu("Speech History Size", "speech_history_size", 50, 10, 200, side_effect=self._history_size_side_effect)
+
+    def _history_size_side_effect(self, key, value):
+        if hasattr(self.manager.synth, 'set_history_max'):
+            self.manager.synth.set_history_max(value)
+
+    # --- Keyboard Settings ---
+
+    def _enter_char_echo_menu(self):
+        self._current_parent_back = self._back_to_kb_menu
+        self._build_list_menu("Character Echo", "char_echo", ["Off", "On"])
+
+    def _enter_word_echo_menu(self):
+        self._current_parent_back = self._back_to_kb_menu
+        self._build_list_menu("Word Echo", "word_echo", ["Off", "On"])
+
+    def _enter_announce_position_menu(self):
+        self._current_parent_back = self._back_to_kb_menu
+        self._build_list_menu("Position Announcement", "announce_position",
+                             ["Off", "On"],
+                             side_effect=self._announce_position_side_effect)
+
+    def _announce_position_side_effect(self, key, value):
+        import core.menu
+        core.menu.ANNOUNCE_POSITION = value == "On"
+
+    def _enter_state_keys_menu(self):
+        self._current_parent_back = self._back_to_kb_menu
+        self._build_list_menu("State Keys", "state_keys", ["Off", "On"])
+
+    # --- Audio Settings ---
+
+    def _enter_volume_ducking_menu(self):
+        self._current_parent_back = self._back_to_audio_menu
+        self._build_list_menu("Volume Ducking", "volume_ducking",
+                             ["Off", "On"],
+                             side_effect=self._volume_ducking_side_effect)
+
+    def _volume_ducking_side_effect(self, key, value):
+        self.manager.synth.set_volume_ducking(value == "On")
+
+    def _enter_sound_scheme_menu(self):
+        self._current_parent_back = self._back_to_audio_menu
+        self._build_list_menu("Sound Scheme", "sound_scheme",
+                             ["Default", "Classic", "Minimal"],
+                             side_effect=self._sound_scheme_side_effect)
+
+    def _sound_scheme_side_effect(self, key, value):
+        import core.menu
+        core.menu.SOUND_SCHEME = value
+
+    # --- Braille Settings ---
+
+    def _enter_braille_display_menu(self):
+        self._current_parent_back = self._back_to_braille_menu
+        self._build_list_menu("Braille Display", "braille_display",
+                             ["Off", "Humanware", "Monarch"])
+
+    def _enter_braille_grade_menu(self):
+        self._current_parent_back = self._back_to_braille_menu
+        self._build_list_menu("Braille Grade", "braille_grade", ["1", "2"])
+
+    # --- Navigation helpers ---
+
+    def _back_to_tts_menu(self):
+        self._build_main_menu()
+        current = self.menu.root.children[0] if self.menu.root.children else None
+        if current:
+            self.menu.current_node = current
+            self.menu.current_index = 0
+        self.menu.announce_current()
+
+    def _back_to_kb_menu(self):
+        self._build_main_menu()
+        current = self.menu.root.children[1] if len(self.menu.root.children) > 1 else None
+        if current:
+            self.menu.current_node = current
+            self.menu.current_index = 0
+        self.menu.announce_current()
+
+    def _back_to_audio_menu(self):
+        self._build_main_menu()
+        current = self.menu.root.children[2] if len(self.menu.root.children) > 2 else None
+        if current:
+            self.menu.current_node = current
+            self.menu.current_index = 0
+        self.menu.announce_current()
+
+    def _back_to_braille_menu(self):
+        self._build_main_menu()
+        current = self.menu.root.children[3] if len(self.menu.root.children) > 3 else None
+        if current:
+            self.menu.current_node = current
+            self.menu.current_index = 0
         self.menu.announce_current()
 
     # --- Voice Profiles ---
@@ -544,33 +618,121 @@ class OptionsApp(SoftApp):
         self._edit_per_app_voice(app_name)
 
     def _edit_per_app_voice(self, app_name):
+        self._current_pav_app = app_name
         root = MenuNode(f"{app_name} Voice")
-        root.add_child(MenuNode("Adjust Voice", lambda: self._enter_pav_adjust(app_name, "voice")))
-        root.add_child(MenuNode("Adjust Rate", lambda: self._enter_pav_adjust(app_name, "rate")))
-        root.add_child(MenuNode("Adjust Pitch", lambda: self._enter_pav_adjust(app_name, "pitch")))
+        root.add_child(MenuNode("Adjust Voice", self._enter_pav_voice_menu))
+        root.add_child(MenuNode("Adjust Rate", self._enter_pav_rate_menu))
+        root.add_child(MenuNode("Adjust Pitch", self._enter_pav_pitch_menu))
         root.add_child(MenuNode("Remove Override", lambda: self._remove_pav(app_name)))
         root.add_child(MenuNode("Back", self._enter_per_app_voices))
         self._switch_to_submenu(root, f"{app_name} Voice")
 
-    def _enter_pav_adjust(self, app_name, submode):
-        self.adjust_mode = f"pav_{app_name}"
-        self.pav_submode = submode
+    def _enter_pav_voice_menu(self):
+        app_name = self._current_pav_app
+        self._current_parent_back = lambda: self._edit_per_app_voice(app_name)
+        names = self.manager.synth.get_voice_names()
+        if not names:
+            self.speak("No voices available.")
+            return
         pav = self.settings.get("per_app_voice", {})
         override = pav.get(app_name, {})
-        if submode == "voice":
-            names = self.manager.synth.get_voice_names()
-            idx = override.get("voice_index", 0)
-            self.manager.synth.set_voice_by_index(idx)
-            self.speak(f"Voice. Current: {names[idx] if names else 'Default'}.")
-        elif submode == "rate":
-            r = override.get("rate", 0)
-            self.manager.synth.set_rate(r)
-            self.speak(f"Rate. Current: {r}.")
-        elif submode == "pitch":
-            p = override.get("pitch", 50)
-            self.manager.synth.set_pitch(p)
-            self.speak(f"Pitch. Current: {p}.")
-        self.window.update_text(f"{app_name} {submode}: {self._get_current_display()}")
+        current_idx = override.get("voice_index", 0)
+        root = MenuNode(f"{app_name} Voice")
+        for i, name in enumerate(names):
+            label = name
+            if i == current_idx:
+                label = f"{name} (current)"
+            root.add_child(MenuNode(label, lambda idx=i: self._select_pav_voice(app_name, idx)))
+        root.add_child(MenuNode("Back", self._current_parent_back))
+        self._switch_to_submenu(root, f"{app_name} Voice")
+
+    def _select_pav_voice(self, app_name, idx):
+        pav = self.settings.get("per_app_voice", {})
+        if app_name not in pav:
+            pav[app_name] = {"voice_index": idx, "rate": 0, "pitch": 50}
+        else:
+            pav[app_name]["voice_index"] = idx
+        self.settings["per_app_voice"] = pav
+        self._save_settings()
+        names = self.manager.synth.get_voice_names()
+        self.speak(f"Voice set to {names[idx] if idx < len(names) else idx}.")
+        self._enter_pav_voice_menu()
+
+    def _enter_pav_rate_menu(self):
+        app_name = self._current_pav_app
+        self._current_parent_back = lambda: self._edit_per_app_voice(app_name)
+        pav = self.settings.get("per_app_voice", {})
+        override = pav.get(app_name, {})
+        current = override.get("rate", 0)
+        root = MenuNode(f"{app_name} Rate")
+        root.add_child(MenuNode("Edit Value...", lambda: self._start_pav_numeric(app_name, "rate", -10, 10)))
+        root.add_child(MenuNode(f"Reset to Default (0)", lambda: self._set_pav_and_back(app_name, "rate", 0)))
+        root.add_child(MenuNode("Back", self._current_parent_back))
+        self._switch_to_submenu(root, f"{app_name} Rate")
+
+    def _enter_pav_pitch_menu(self):
+        app_name = self._current_pav_app
+        self._current_parent_back = lambda: self._edit_per_app_voice(app_name)
+        pav = self.settings.get("per_app_voice", {})
+        override = pav.get(app_name, {})
+        current = override.get("pitch", 50)
+        root = MenuNode(f"{app_name} Pitch")
+        root.add_child(MenuNode("Edit Value...", lambda: self._start_pav_numeric(app_name, "pitch", 0, 100)))
+        root.add_child(MenuNode(f"Reset to Default (50)", lambda: self._set_pav_and_back(app_name, "pitch", 50)))
+        root.add_child(MenuNode("Back", self._current_parent_back))
+        self._switch_to_submenu(root, f"{app_name} Pitch")
+
+    def _start_pav_numeric(self, app_name, key, min_val, max_val):
+        self.adjust_mode = "pav_numeric"
+        self._pav_numeric_app = app_name
+        self._pav_numeric_key = key
+        self._pav_numeric_min = min_val
+        self._pav_numeric_max = max_val
+        self._text_input_buf = ""
+        self.speak(f"Enter value between {min_val} and {max_val}.")
+        self.window.update_text(f"{app_name} {key}: ")
+
+    def _handle_pav_numeric(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self.adjust_mode = None
+            if self._current_parent_back:
+                self._current_parent_back()
+            return
+        if vk == win32con.VK_RETURN:
+            val = self._text_input_buf.strip()
+            try:
+                num = int(val)
+                if self._pav_numeric_min <= num <= self._pav_numeric_max:
+                    self._set_pav_and_back(self._pav_numeric_app, self._pav_numeric_key, num)
+                else:
+                    self.speak(f"Value must be between {self._pav_numeric_min} and {self._pav_numeric_max}.")
+            except ValueError:
+                self.speak("Invalid number.")
+            return
+        if vk == win32con.VK_BACK:
+            if self._text_input_buf:
+                self._text_input_buf = self._text_input_buf[:-1]
+                self.window.update_text(self._text_input_buf if self._text_input_buf else " ")
+            return
+        ch = self._vk_to_char(vk)
+        if ch and (ch.isdigit() or (ch == '-' and not self._text_input_buf)):
+            self._text_input_buf += ch
+            self.window.update_text(self._text_input_buf)
+
+    def _set_pav_and_back(self, app_name, key, value):
+        pav = self.settings.get("per_app_voice", {})
+        if app_name not in pav:
+            pav[app_name] = {"voice_index": 0, "rate": 0, "pitch": 50}
+        pav[app_name][key] = value
+        self.settings["per_app_voice"] = pav
+        self._save_settings()
+        if key == "rate":
+            self.manager.synth.set_rate(value)
+        elif key == "pitch":
+            self.manager.synth.set_pitch(value)
+        self.speak(f"{app_name} {key} set to {value}.")
+        if self._current_parent_back:
+            self._current_parent_back()
 
     def _remove_pav(self, app_name):
         pav = self.settings.get("per_app_voice", {})
@@ -595,7 +757,10 @@ class OptionsApp(SoftApp):
             return
         if vk == win32con.VK_ESCAPE:
             self.adjust_mode = None
-            self._enter_voice_profiles() if self._text_input_field in ("save_profile",) else self._enter_per_app_voices()
+            if self._text_input_field in ("save_profile",):
+                self._enter_voice_profiles()
+            else:
+                self._enter_per_app_voices()
             return
         if vk == win32con.VK_RETURN:
             val = self._text_input_buf.strip()
@@ -619,15 +784,17 @@ class OptionsApp(SoftApp):
             self.window.update_text(f"{self._text_input_field}: {self._text_input_buf}")
             self.speak(ch)
 
-    def _back_to_tts_menu(self):
+    def _back_to_main_menu(self):
         self._build_main_menu()
-        self.menu.current_index = 0
         self.menu.announce_current()
 
-    def _switch_to_submenu(self, root, title):
-        self.adjust_mode = None
-        self.menu = MenuSystem(root, self.speak)
-        self.window.update_text(title + ": " + self.menu.get_current_item().title)
+    def _back_to_tts_menu(self):
+        self._build_main_menu()
+        current = self.menu.root.children[0] if self.menu.root.children else None
+        if current:
+            self.menu.current_node = current
+            self.menu.current_index = 0
+        self.menu.announce_current()
 
     # --- Key Bindings ---
     BIND_NAMES = {
@@ -642,7 +809,6 @@ class OptionsApp(SoftApp):
     VK_NAMES = {
         8: "Backspace", 13: "Enter", 27: "Escape", 32: "Space",
         112: "F1", 116: "F5",
-        0xBB: "Equals", 0xBD: "Minus",
     }
 
     def _get_power_key_vk(self):

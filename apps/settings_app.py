@@ -8,6 +8,7 @@ import win32con
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT, ACCOUNT_PATH, SETTINGS_PATH
+import core.error_handler
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class SettingsApp(SoftApp):
@@ -26,10 +27,10 @@ class SettingsApp(SoftApp):
             "auto_resume_apps": True,
             "smooth_shutdown_audio": True,
             "app_sleep_hibernate": True,
-            "shutdown_key_protection": True
+            "shutdown_key_protection": True,
+            "log_level": "WARN"
         }
         self.load_settings()
-        self.adjust_mode = None
         self.pin_mode = None
         self.confirm_mode = None
         self.text_input = None
@@ -37,11 +38,16 @@ class SettingsApp(SoftApp):
         self._in_sub_menu = False
         self._find_setting_mode = False
         self._find_setting_buf = ""
+        self._current_parent_back = None
+        self._numeric_key = None
+        self._numeric_min = None
+        self._numeric_max = None
+        self.adjust_mode = None
+        self._text_input_buf = ""
         self._build_main_menu()
 
     def _build_main_menu(self):
         self.account_menu = None
-        self.adjust_mode = None
         self._in_sub_menu = False
         root = MenuNode("Settings")
         root.add_child(MenuNode("Account Management", self._enter_account_menu))
@@ -57,30 +63,74 @@ class SettingsApp(SoftApp):
 
     def _enter_display_menu(self):
         self._in_sub_menu = True
+        self._current_parent_back = self._back_to_main_menu
         root = MenuNode("Display Settings")
-        root.add_child(MenuNode("Theme", lambda: self._enter_adjust("theme")))
-        root.add_child(MenuNode("Background Color", lambda: self._enter_adjust("bg_color")))
-        root.add_child(MenuNode("Font Size", lambda: self._enter_adjust("font_size")))
-        root.add_child(MenuNode("Night Mode Filter", lambda: self._enter_adjust("night_mode_filter")))
+        root.add_child(MenuNode("Theme", lambda: self._enter_list_setting("theme", ["Dark", "Light"], side_effect=None)))
+        root.add_child(MenuNode("Background Color", lambda: self._enter_list_setting("bg_color", ["Black", "Blue", "Gray"], side_effect=self._bg_side_effect)))
+        root.add_child(MenuNode("Font Size", lambda: self._enter_list_setting("font_size", ["Small", "Medium", "Large"], side_effect=self._font_side_effect)))
+        root.add_child(MenuNode("Night Mode Filter", lambda: self._enter_list_setting("night_mode_filter", [False, True], display_map={False: "Off", True: "On"})))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
-        self.menu = MenuSystem(root, self.speak)
-        self.menu.announce_current()
+        self._switch_to_submenu(root, "Display Settings")
 
     def _enter_system_menu(self):
         self._in_sub_menu = True
+        self._current_parent_back = self._back_to_main_menu
         root = MenuNode("System Settings")
-        root.add_child(MenuNode("Time Format", lambda: self._enter_adjust("time_format")))
-        root.add_child(MenuNode("Startup Sound", lambda: self._enter_adjust("startup_sound")))
-        root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_adjust("keyboard_layout")))
-        root.add_child(MenuNode("Update Channel", lambda: self._enter_adjust("update_channel")))
-        root.add_child(MenuNode("Auto-Update on Startup", lambda: self._enter_adjust("auto_update_on_startup")))
-        root.add_child(MenuNode("Remember Last App", lambda: self._enter_adjust("auto_resume_apps")))
-        root.add_child(MenuNode("Fade Audio on Shutdown", lambda: self._enter_adjust("smooth_shutdown_audio")))
-        root.add_child(MenuNode("Sleep/Hibernate Options", lambda: self._enter_adjust("app_sleep_hibernate")))
-        root.add_child(MenuNode("Block Keys During Shutdown", lambda: self._enter_adjust("shutdown_key_protection")))
+        root.add_child(MenuNode("Time Format", lambda: self._enter_list_setting("time_format", ["12h", "24h"])))
+        root.add_child(MenuNode("Startup Sound", lambda: self._enter_list_setting("startup_sound", ["On", "Off"])))
+        root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_list_setting("keyboard_layout", ["US", "UK", "Arabic"], side_effect=self._kbd_side_effect)))
+        root.add_child(MenuNode("Update Channel", lambda: self._enter_list_setting("update_channel", ["stable", "unstable"], side_effect=self._update_side_effect)))
+        root.add_child(MenuNode("Auto-Update on Startup", lambda: self._enter_list_setting("auto_update_on_startup", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Remember Last App", lambda: self._enter_list_setting("auto_resume_apps", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Fade Audio on Shutdown", lambda: self._enter_list_setting("smooth_shutdown_audio", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Sleep/Hibernate Options", lambda: self._enter_list_setting("app_sleep_hibernate", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Block Keys During Shutdown", lambda: self._enter_list_setting("shutdown_key_protection", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Log Level", lambda: self._enter_list_setting("log_level", ["SILENT", "ERROR", "WARN", "INFO", "DEBUG", "ALL"], side_effect=self._log_level_side_effect)))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
+        self._switch_to_submenu(root, "System Settings")
+
+    def _enter_list_setting(self, key, options, display_map=None, side_effect=None):
+        root = MenuNode(key.replace('_', ' ').title())
+        current = self.settings.get(key)
+        display = display_map or {}
+        for opt in options:
+            label = display.get(opt, str(opt))
+            if opt == current:
+                label = f"{label} (current)"
+            root.add_child(MenuNode(label, lambda v=opt: self._set_setting_and_back(key, v, side_effect)))
+        root.add_child(MenuNode("Back", self._current_parent_back or self._back_to_main_menu))
+        self._switch_to_submenu(root, key.replace('_', ' ').title())
+
+    def _set_setting_and_back(self, key, value, side_effect=None):
+        self.settings[key] = value
+        self.save_settings()
+        if side_effect:
+            side_effect(key, value)
+        display = {False: "Off", True: "On"}.get(value, str(value))
+        self.speak(f"{key.replace('_', ' ').title()} set to {display}.")
+        if self._current_parent_back:
+            self._current_parent_back()
+
+    def _bg_side_effect(self, key, value):
+        self._apply_display_settings()
+
+    def _font_side_effect(self, key, value):
+        self._apply_display_settings()
+
+    def _kbd_side_effect(self, key, value):
+        self._apply_keyboard_layout()
+
+    def _update_side_effect(self, key, value):
+        self._switch_branch()
+
+    def _log_level_side_effect(self, key, value):
+        name_map = {"SILENT": 0, "ERROR": 1, "WARN": 2, "INFO": 3, "DEBUG": 4, "ALL": 5}
+        core.error_handler.set_level(name_map.get(value, 2))
+        core.error_handler.log(None, f"Log level set to {value}", level=core.error_handler.LEVEL_INFO)
+
+    def _switch_to_submenu(self, root, title):
         self.menu = MenuSystem(root, self.speak)
-        self.menu.announce_current()
+        self.window.update_text(title + ": " + self.menu.get_current_item().title)
 
     def _back_to_main_menu(self):
         self._build_main_menu()
@@ -136,16 +186,15 @@ class SettingsApp(SoftApp):
             self._handle_find_setting(vk)
             return
 
-        if self.adjust_mode:
-            self._handle_adjust(vk)
-            return
-
         if self.pin_mode:
             self._handle_pin_input(vk)
             return
 
         if self.text_input is not None:
-            self._handle_text_input(vk)
+            if self.adjust_mode == "text_input":
+                self._handle_text_input(vk)
+                return
+            self._handle_account_text_input(vk)
             return
 
         if self.confirm_mode:
@@ -197,9 +246,9 @@ class SettingsApp(SoftApp):
         if vk == win32con.VK_SPACE:
             if self.manager.space_used_in_chord:
                 return
-            if self.adjust_mode or self.pin_mode or self.text_input is not None or self.confirm_mode:
+            if self.pin_mode or self.text_input is not None or self.confirm_mode:
                 return
-            
+
             if self.account_menu:
                 self.account_menu.next()
                 item = self.account_menu.get_current_item()
@@ -234,16 +283,16 @@ class SettingsApp(SoftApp):
         lt = "PIN" if self._current_lock_type == "pin" else "Password"
 
         root = MenuNode("Account")
-        root.add_child(MenuNode("Change Username", lambda: self._start_text_input("username", "Enter new username.")))
-        root.add_child(MenuNode("Change Custom Goodbye", lambda: self._start_text_input("custom_goodbye", "Enter new goodbye message.")))
+        root.add_child(MenuNode("Change Username", lambda: self._start_account_text_input("username", "Enter new username.")))
+        root.add_child(MenuNode("Change Custom Goodbye", lambda: self._start_account_text_input("custom_goodbye", "Enter new goodbye message.")))
 
         if self._current_lock_type == "pin":
             root.add_child(MenuNode("Change PIN", self._start_pin_reset))
         else:
-            root.add_child(MenuNode("Change Password", lambda: self._start_text_input("password", "Enter new password.")))
+            root.add_child(MenuNode("Change Password", lambda: self._start_account_text_input("password", "Enter new password.")))
 
         root.add_child(MenuNode(f"Lock Type ({lt})", self._toggle_lock_type))
-        root.add_child(MenuNode("Shutdown PIN (" + ("On" if self.settings.get("shutdown_pin") else "Off") + ")", lambda: self._adjust_value(0)))
+        root.add_child(MenuNode("Shutdown PIN (" + ("On" if self.settings.get("shutdown_pin") else "Off") + ")", lambda: self._toggle_shutdown_pin()))
         root.add_child(MenuNode("Back", self._back_from_account))
         self.account_menu = MenuSystem(root, self.speak)
 
@@ -261,85 +310,13 @@ class SettingsApp(SoftApp):
         if new_type == "pin":
             self._start_pin_reset()
         else:
-            self._start_text_input("password", "Enter new password.")
+            self._start_account_text_input("password", "Enter new password.")
 
-    def _enter_adjust(self, key):
-        self.adjust_mode = key
-        val = self.settings.get(key)
-        self.speak(f"{key.replace('_', ' ').title()}. Current: {val}.")
-        self.window.update_text(key.replace('_', ' ').title() + ": " + str(val))
-
-    def _handle_adjust(self, vk):
-        if vk == win32con.VK_BACK or vk == win32con.VK_ESCAPE:
-            self.adjust_mode = None
-            self._in_sub_menu = True
-            item = self.menu.get_current_item()
-            title = item.title if item else "Display Settings"
-            self.window.update_text("Settings: " + title)
-            self.menu.announce_current()
-            return
-        elif vk == 0xBB:
-            self._adjust_value(1)
-        elif vk == 0xBD:
-            self._adjust_value(-1)
-        elif vk == win32con.VK_RETURN:
-            self.adjust_mode = None
-            item = self.menu.get_current_item()
-            title = item.title if item else "Display Settings"
-            self.window.update_text("Settings: " + title)
-            self.speak("Set.")
-
-    def _adjust_value(self, direction):
-        key = self.adjust_mode
-        if not key: return
-
-        if key == "time_format":
-            opts = ["12h", "24h"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(self.settings[key])
-        elif key == "startup_sound":
-            opts = ["On", "Off"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(self.settings[key])
-        elif key == "keyboard_layout":
-            opts = ["US", "UK", "Arabic"]
-            curr = opts.index(self.settings[key]) if self.settings[key] in opts else 0
-            self.settings[key] = opts[(curr + direction) % len(opts)]
-            self.speak(self.settings[key])
-            self._apply_keyboard_layout()
-        elif key == "update_channel":
-            opts = ["stable", "unstable"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(self.settings[key])
-            self._switch_branch()
-        elif key == "theme":
-            opts = ["Dark", "Light"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 2]
-            self.speak(self.settings[key])
-        elif key == "bg_color":
-            opts = ["Black", "Blue", "Gray"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 3]
-            self.speak(self.settings[key])
-            self._apply_display_settings()
-        elif key == "font_size":
-            opts = ["Small", "Medium", "Large"]
-            curr = opts.index(self.settings[key])
-            self.settings[key] = opts[(curr + direction) % 3]
-            self.speak(self.settings[key])
-            self._apply_display_settings()
-        elif key in ["auto_update_on_startup", "shutdown_pin", "night_mode_filter",
-                      "auto_resume_apps", "smooth_shutdown_audio", "app_sleep_hibernate",
-                      "shutdown_key_protection"]:
-            self.settings[key] = not self.settings[key]
-            self.speak("On" if self.settings[key] else "Off")
-
-        self.window.update_text(key.replace('_', ' ').title() + ": " + str(self.settings[key]))
+    def _toggle_shutdown_pin(self):
+        self.settings["shutdown_pin"] = not self.settings["shutdown_pin"]
         self.save_settings()
+        self.speak(f"Shutdown PIN {'On' if self.settings['shutdown_pin'] else 'Off'}.")
+        self._enter_account_menu()
 
     def _apply_display_settings(self):
         colors = {"Black": (0,0,0), "Blue": (0,0,128), "Gray": (64,64,64)}
@@ -350,19 +327,22 @@ class SettingsApp(SoftApp):
     def _apply_keyboard_layout(self):
         self.speak("Restart to apply keyboard layout.")
 
-    def _start_text_input(self, field, prompt):
+    def _start_account_text_input(self, field, prompt):
+        self.adjust_mode = "text_input"
         self.text_input_field = field
         self.text_input = ""
+        self._text_input_buf = ""
         self.speak(prompt)
         self.window.update_text(f"{field.capitalize()}: ")
 
-    def _handle_text_input(self, vk):
+    def _handle_account_text_input(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.text_input = None
+            self.adjust_mode = None
             self._enter_account_menu()
             return
         if vk == win32con.VK_RETURN:
-            val = self.text_input.strip()
+            val = self._text_input_buf.strip()
             if not val:
                 self.speak("Cannot be empty.")
                 return
@@ -380,75 +360,18 @@ class SettingsApp(SoftApp):
                 self.save_settings()
                 self.speak(f"Goodbye message set to {val}.")
             self.text_input = None
+            self.adjust_mode = None
             self._enter_account_menu()
             return
         if vk == win32con.VK_BACK:
-            if self.text_input:
-                self.text_input = self.text_input[:-1]
-                self.window.update_text(self.text_input if self.text_input else " ")
+            if self._text_input_buf:
+                self._text_input_buf = self._text_input_buf[:-1]
+                self.window.update_text(self._text_input_buf if self._text_input_buf else " ")
             return
         ch = self._vk_to_char(vk)
         if ch is not None:
-            self.text_input += ch
-            self.window.update_text(self.text_input)
-
-    def _vk_to_char(self, vk):
-        import win32api
-        shift = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-        caps = win32api.GetAsyncKeyState(win32con.VK_CAPITAL) & 1
-        if 0x41 <= vk <= 0x5A:
-            upper = shift ^ caps
-            return chr(vk).upper() if upper else chr(vk).lower()
-        if 0x30 <= vk <= 0x39:
-            shift_syms = {0x30: ')', 0x31: '!', 0x32: '@', 0x33: '#',
-                          0x34: '$', 0x35: '%', 0x36: '^', 0x37: '&',
-                          0x38: '*', 0x39: '('}
-            return shift_syms[vk] if shift else chr(vk)
-        if vk == win32con.VK_SPACE:
-            return ' '
-        sym_map = {
-            0xBD: ('-', '_'), 0xBB: ('=', '+'), 0xC0: ('`', '~'),
-            0xDB: ('[', '{'), 0xDD: (']', '}'), 0xDC: ('\\', '|'),
-            0xBA: (';', ':'), 0xDE: ("'", '"'),
-            0xBC: (',', '<'), 0xBE: ('.', '>'), 0xBF: ('/', '?'),
-        }
-        if vk in sym_map:
-            return sym_map[vk][1] if shift else sym_map[vk][0]
-        return None
-
-    def _switch_branch(self):
-        branch = "main" if self.settings.get("update_channel") == "stable" else "testing"
-        try:
-            subprocess.run(
-                ["git", "checkout", branch], cwd=BASE_DIR,
-                capture_output=True, text=True, timeout=30
-            )
-            result = subprocess.run(
-                ["git", "pull"], cwd=BASE_DIR,
-                capture_output=True, text=True, timeout=60
-            )
-            if result.returncode != 0:
-                subprocess.run(
-                    ["git", "branch", "--set-upstream-to", f"origin/{branch}", branch],
-                    cwd=BASE_DIR, capture_output=True, text=True, timeout=30
-                )
-                result = subprocess.run(
-                    ["git", "pull"], cwd=BASE_DIR,
-                    capture_output=True, text=True, timeout=60
-                )
-            if result.returncode == 0 and "Already up to date" not in result.stdout.strip():
-                self._install_requirements()
-            self.speak(f"Switched to {branch}. Restarting.")
-            self._restart_app()
-        except Exception:
-            self.speak("Could not switch branch.")
-
-    def _check_for_updates(self):
-        try:
-            from core.updater import check_now
-            check_now(synth=self.synth, window=self.window)
-        except Exception:
-            self.speak("Update check failed.")
+            self._text_input_buf += ch
+            self.window.update_text(self._text_input_buf)
 
     def _start_pin_reset(self):
         if not os.path.exists(ACCOUNT_PATH):
@@ -588,7 +511,7 @@ class SettingsApp(SoftApp):
             try:
                 with open(ACCOUNT_PATH, 'r') as f:
                     account = json.load(f)
-                if self.new_pin == account.get("password", ""):
+                if self._text_input_buf == account.get("password", ""):
                     self.pin_mode = None
                     self.confirm_mode = "confirm_reset"
                     self.speak("Are you sure you want to reset TechNote? Press Enter to confirm or Escape to cancel.")
@@ -603,9 +526,9 @@ class SettingsApp(SoftApp):
                 self._announce_main()
             return
         if vk == win32con.VK_BACK:
-            if self.new_pin:
-                self.new_pin = self.new_pin[:-1]
-                self.window.update_text("*" * len(self.new_pin) if self.new_pin else "Confirm Password:")
+            if self._text_input_buf:
+                self._text_input_buf = self._text_input_buf[:-1]
+                self.window.update_text("*" * len(self._text_input_buf) if self._text_input_buf else "Confirm Password:")
             else:
                 self.pin_mode = None
                 self.speak("Cancelled.")
@@ -617,13 +540,13 @@ class SettingsApp(SoftApp):
             self._announce_main()
             return
         if vk == win32con.VK_SPACE:
-            self.new_pin += " "
-            self.window.update_text("*" * len(self.new_pin))
+            self._text_input_buf += " "
+            self.window.update_text("*" * len(self._text_input_buf))
             return
         ch = self._vk_to_char(vk)
         if ch is not None:
-            self.new_pin += ch
-            self.window.update_text("*" * len(self.new_pin))
+            self._text_input_buf += ch
+            self.window.update_text("*" * len(self._text_input_buf))
 
     def _restart_app(self):
         subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
@@ -639,7 +562,7 @@ class SettingsApp(SoftApp):
             self.window.update_text("Confirm PIN:")
         elif lock_type == "password" and account.get("password"):
             self.pin_mode = "confirm_reset_password"
-            self.new_pin = ""
+            self._text_input_buf = ""
             self.speak("Enter current password to confirm reset.")
             self.window.update_text("Confirm Password:")
         else:
@@ -661,7 +584,6 @@ class SettingsApp(SoftApp):
 
     # --- Find Setting ---
     def _build_flat_settings_map(self):
-        """Return {display_name: (submenu, setting_key)} for all known settings."""
         return {
             "Theme": ("Display Settings", "theme"),
             "Background Color": ("Display Settings", "bg_color"),
@@ -676,6 +598,7 @@ class SettingsApp(SoftApp):
             "Fade Audio on Shutdown": ("System Settings", "smooth_shutdown_audio"),
             "Sleep/Hibernate Options": ("System Settings", "app_sleep_hibernate"),
             "Block Keys During Shutdown": ("System Settings", "shutdown_key_protection"),
+            "Log Level": ("System Settings", "log_level"),
             "Username": ("Account", "username"),
             "Custom Goodbye": ("Account", "custom_goodbye"),
             "Lock Type": ("Account", "lock_type"),
@@ -715,7 +638,9 @@ class SettingsApp(SoftApp):
             if len(matches) == 1:
                 name, sub, key = matches[0]
                 if key in self.settings:
-                    self.speak(f"Found {name} in {sub}: {self.settings[key]}.")
+                    val = self.settings[key]
+                    display = {False: "Off", True: "On"}.get(val, str(val))
+                    self.speak(f"Found {name} in {sub}: {display}.")
                 else:
                     self.speak(f"Found {name} in {sub}.")
             elif len(matches) > 1:
@@ -754,13 +679,7 @@ class SettingsApp(SoftApp):
         for b in backups:
             root.add_child(MenuNode(b, lambda name=b: self._do_restore(name)))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
-        self._switch_to_restore_menu(root)
-
-    def _switch_to_restore_menu(self, root):
-        self._in_sub_menu = True
-        self.menu = MenuSystem(root, self.speak)
-        item = self.menu.get_current_item()
-        self.window.update_text("Restore: " + (item.title if item else ""))
+        self._switch_to_submenu(root, "Restore Settings")
 
     def _do_restore(self, name):
         backup_path = os.path.join(TECH_SOFT, 'documents', name)
@@ -775,9 +694,41 @@ class SettingsApp(SoftApp):
         except Exception:
             self.speak("Restore failed.")
 
+    def _switch_branch(self):
+        branch = "main" if self.settings.get("update_channel") == "stable" else "testing"
+        try:
+            subprocess.run(
+                ["git", "checkout", branch], cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=30
+            )
+            result = subprocess.run(
+                ["git", "pull"], cwd=BASE_DIR,
+                capture_output=True, text=True, timeout=60
+            )
+            if result.returncode != 0:
+                subprocess.run(
+                    ["git", "branch", "--set-upstream-to", f"origin/{branch}", branch],
+                    cwd=BASE_DIR, capture_output=True, text=True, timeout=30
+                )
+                result = subprocess.run(
+                    ["git", "pull"], cwd=BASE_DIR,
+                    capture_output=True, text=True, timeout=60
+                )
+            if result.returncode == 0 and "Already up to date" not in result.stdout.strip():
+                self._install_requirements()
+            self.speak(f"Switched to {branch}. Restarting.")
+            self._restart_app()
+        except Exception:
+            self.speak("Could not switch branch.")
+
+    def _check_for_updates(self):
+        try:
+            from core.updater import check_now
+            check_now(synth=self.synth, window=self.window)
+        except Exception:
+            self.speak("Update check failed.")
+
     def get_help_text(self):
-        if self.adjust_mode:
-            return f"Adjusting {self.adjust_mode.replace('_', ' ')}. Use Plus and Minus to change value, Enter to save, Escape to cancel."
         if self.account_menu:
             return "Account Management. Use Space and Backspace to navigate. Enter to select. Escape to go back."
         return "Settings App. Use Space and Backspace to navigate. Enter to select. Escape to exit."

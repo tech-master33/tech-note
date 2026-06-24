@@ -108,8 +108,11 @@ class PlannerApp(SoftApp):
         item = self.menu.get_current_item()
         if not item or item.title in ("No tasks", "Add Task"):
             return
-        task = item.title
-        self.tasks.remove(task)
+        idx = self.menu.current_index if hasattr(self.menu, 'current_index') else -1
+        if idx < 0 or idx >= len(self.tasks):
+            return
+        task = self.tasks[idx]
+        del self.tasks[idx]
         self.save_tasks()
         self.speak(f"Deleted: {task}")
         self._build_menu()

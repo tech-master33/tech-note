@@ -39,5 +39,5 @@ def apply(text):
         return text
     result = text
     for word, spoken in _entries.items():
-        result = re.sub(r'\b' + re.escape(word) + r'\b', spoken, result, flags=re.IGNORECASE)
+        result = re.sub(r'\b' + re.escape(word) + r'\b', lambda m: spoken, result, flags=re.IGNORECASE)
     return result

@@ -100,7 +100,9 @@ class ChatClient:
         self.user_id = result['user_id']
         self.username = result['username']
         self.role = result.get('role', 'user')
-        self.token = result.get('token', str(self.user_id))
+        self.token = result.get('token')
+        if not self.token:
+            raise ChatError("Server did not return an auth token")
         self.is_connected = True
         self._start_polling()
         return result
@@ -226,7 +228,6 @@ class ChatClient:
     def upload_file(self, filepath):
         with open(filepath, 'rb') as f:
             data = f.read()
-        import base64
         b64 = base64.b64encode(data).decode('ascii')
         name = os.path.basename(filepath)
         return self._post('files/upload', {'name': name, 'data': b64})
@@ -367,7 +368,7 @@ class ChatClient:
                 for room in rooms_resp.get('rooms', []):
                     rid = room.get('id')
                     unread = room.get('unread_count', 0)
-                    if unread > 0:
+                    if rid and unread > 0:
                         result = self.get_messages(rid, limit=unread)
                         for m in result.get('messages', []):
                             with self._event_lock:

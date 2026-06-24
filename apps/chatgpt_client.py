@@ -244,12 +244,13 @@ class ChatGPTClient(SoftApp):
             return
         self._input_mode = None
 
-        self.messages.append({"role": "user", "content": text})
         self.window.update_text("Thinking...")
 
         try:
-            response = self._call_api(self.messages)
+            temp_msgs = self.messages + [{"role": "user", "content": text}]
+            response = self._call_api(temp_msgs)
             if response:
+                self.messages.append({"role": "user", "content": text})
                 self.messages.append({"role": "assistant", "content": response})
                 self.current_session["messages"] = self.messages
                 self._save_sessions()
@@ -295,7 +296,7 @@ class ChatGPTClient(SoftApp):
         try:
             export_dir = os.path.join(TECH_SOFT, "chatgpt_exports")
             os.makedirs(export_dir, exist_ok=True)
-            filename = f"{self.current_session.get('name', 'chat').replace(' ', '_')}_{int(time.time())}.txt"
+            filename = f"{re.sub(r'[\\\\/:*?\"<>|]', '_', self.current_session.get('name', 'chat'))}_{int(time.time())}.txt"
             filepath = os.path.join(export_dir, filename)
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(f"Chat: {self.current_session.get('name')}\n")

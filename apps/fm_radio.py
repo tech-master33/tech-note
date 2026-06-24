@@ -25,7 +25,7 @@ class FMRadioApp(SoftApp):
 
     def on_focus(self):
         self._build_menu()
-        name = self.menu.get_current_item().title
+        name = self.menu.get_current_item().title if self.menu.get_current_item() else "Unknown"
         self.speak("FM Radio. " + name)
         self.window.update_text("Radio: " + name)
 

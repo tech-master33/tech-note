@@ -111,7 +111,7 @@ class TechCalc(SoftApp):
                 self.expression = self.expression[:-1]
                 self._speak_char(removed)
                 self.window.update_text(f"Calc: {self.expression}")
-            return
+                return
 
         if vk == win32con.VK_RETURN:
             if self.expression:

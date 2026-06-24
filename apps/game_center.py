@@ -69,7 +69,7 @@ class GameCenter(SoftApp):
             entry_point = info.get("entry_point", "")
             name = info.get("name", app_id)
             filepath = os.path.join(APPS_DIR, filename)
-            if not os.path.exists(filepath) or not filename.endswith('.py'):
+            if not os.path.exists(filepath):
                 continue
             mod_name = filename[:-3]
 

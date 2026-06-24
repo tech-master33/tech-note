@@ -73,7 +73,7 @@ class MediaPlayerApp(SoftApp):
 
     def on_key_up(self, vk):
         if vk == win32con.VK_SPACE:
-            if self.manager.space_used_in_chord:
+            if getattr(self.manager, 'space_used_in_chord', False):
                 return
             self.menu.next()
             item = self.menu.get_current_item()
@@ -82,3 +82,13 @@ class MediaPlayerApp(SoftApp):
             
     def get_help_text(self):
         return "Media Player. Space for next, Backspace for previous. Enter to play. F1 to stop. Press Escape to exit."
+
+    def load_file(self, path):
+        filename = os.path.basename(path)
+        self.player.stop()
+        ok = self.player.play_file(path)
+        if ok:
+            self.speak("Playing " + filename)
+            self.window.update_text("Playing: " + filename)
+        else:
+            self.speak("Playback failed.")

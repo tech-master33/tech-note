@@ -48,7 +48,7 @@ def _get_drive_list():
             if label:
                 drives.append((label, root))
             else:
-                name = "Drive" if drive_num == 1 else f"Drive {drive_num}"
+                name = f"Drive {drive_num}"
                 drives.append((name, root))
                 drive_num += 1
     return drives

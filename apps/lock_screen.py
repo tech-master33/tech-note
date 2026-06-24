@@ -249,7 +249,6 @@ class LockScreenApp(SoftApp):
         else:
             self.speak("Cancelled.")
         self._build_menu()
-        self.menu.current_index = 0
         self.window.update_text(self._display_text())
 
     def _unlock(self):

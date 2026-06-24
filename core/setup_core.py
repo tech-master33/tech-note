@@ -221,7 +221,7 @@ class TechNoteSetup(SoftApp):
             elif vk == win32con.VK_RETURN:
                 self._complete_setup()
 
-        elif self.current_step == 7:
+        elif self.current_step in (7, 8):
             if vk == win32con.VK_RETURN:
                 self.active = False
                 if self.finish_callback:

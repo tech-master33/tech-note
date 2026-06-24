@@ -15,8 +15,15 @@ def encrypt(data):
     return cipher.nonce.hex() + ciphertext.hex() + tag.hex()
 
 def decrypt(encrypted_data):
+    if not isinstance(encrypted_data, str) or len(encrypted_data) < 64:
+        raise ValueError("Invalid encrypted data")
+    try:
+        raw = bytes.fromhex(encrypted_data)
+    except ValueError:
+        raise ValueError("Invalid hex in encrypted data")
+    if len(raw) < 32:
+        raise ValueError("Encrypted data too short")
     key = PBKDF2(SECRET_KEY, SALT, dkLen=32)
-    raw = bytes.fromhex(encrypted_data)
     nonce = raw[:16]
     ciphertext = raw[16:-16]
     tag = raw[-16:]

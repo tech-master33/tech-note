@@ -331,13 +331,14 @@ class AppStore(SoftApp):
             if not filename:
                 filename = app_id + ".py"
 
-            filepath = os.path.join(APPS_DIR, filename)
+            safe_name = os.path.basename(filename)
+            filepath = os.path.join(APPS_DIR, safe_name)
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(code)
 
             self.installed[app_id] = {
                 "name": name,
-                "filename": filename,
+                "filename": safe_name,
                 "version": app_info.get("version", "1.0"),
                 "category": app_info.get("category", "Apps"),
                 "entry_point": app_info.get("entry_point", ""),
@@ -383,7 +384,8 @@ class AppStore(SoftApp):
             if not filename:
                 filename = app_id + ".py"
 
-            filepath = os.path.join(APPS_DIR, filename)
+            safe_name = os.path.basename(filename)
+            filepath = os.path.join(APPS_DIR, safe_name)
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(code)
 

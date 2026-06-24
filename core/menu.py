@@ -227,7 +227,6 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, s
 
 
 def _add_installed_apps(root, app_callback):
-    import os
     import json
     import importlib
     import sys

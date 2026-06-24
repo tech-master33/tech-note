@@ -18,9 +18,10 @@ import datetime
 
 TECH_SOFT = os.path.join(os.path.expanduser("~"), ".tech-soft")
 PENDING_FILE = os.path.join(TECH_SOFT, "pending_submissions.json")
-CATALOG_FILE = os.path.join("netlify-site", "catalog.json")
-APPS_DIR = os.path.join("netlify-site", "apps")
-HTML_DIR = os.path.join("netlify-site", "app")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CATALOG_FILE = os.path.join(SCRIPT_DIR, "netlify-site", "catalog.json")
+APPS_DIR = os.path.join(SCRIPT_DIR, "netlify-site", "apps")
+HTML_DIR = os.path.join(SCRIPT_DIR, "netlify-site", "app")
 
 
 def load_pending():
@@ -117,7 +118,7 @@ def approve(submission_id):
 
 def reject(submission_id):
     pending = load_pending()
-    for sub in pending:
+    for sub in pending[:]:
         if sub.get('id') == submission_id:
             pending.remove(sub)
             save_pending(pending)

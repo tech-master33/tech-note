@@ -76,6 +76,8 @@ class ChatApp(SoftApp):
         # Auto-refresh
         self._last_poll_time = 0
         self._poll_interval = 3
+        self._background_polling = False
+        self._poll_thread = None
 
     def _load_profile(self):
         self.profile = {}
@@ -114,7 +116,6 @@ class ChatApp(SoftApp):
         if now - self._last_poll_time < self._poll_interval:
             return
         self._last_poll_time = now
-        # Process at most 5 events per poll to avoid blocking the key handler
         for _ in range(5):
             evt = self.client.poll_event()
             if evt is None:
@@ -124,6 +125,21 @@ class ChatApp(SoftApp):
                 self._on_room_message(data)
             elif evt_type == 'dm_message':
                 self._on_dm_message(data)
+
+    def _start_background_polling(self):
+        if self._background_polling:
+            return
+        self._background_polling = True
+        def _poll_loop():
+            while self._background_polling:
+                self._poll_events()
+                time.sleep(1)
+        self._poll_thread = threading.Thread(target=_poll_loop, daemon=True)
+        self._poll_thread.start()
+
+    def _stop_background_polling(self):
+        self._background_polling = False
+        self._poll_thread = None
 
     def _on_room_message(self, data):
         room_id = data.get('room_id')
@@ -135,8 +151,10 @@ class ChatApp(SoftApp):
         display = self._display_content(content)
         self._notify_sound()
         if self.current_room_id == room_id and self.state in (STATE_ROOM_CHAT, STATE_COMPOSING):
+            was_at_end = self.msg_index == len(self.messages) - 1 if self.messages else True
             self.messages.append({'sender': sender, 'text': display, 'content': content, 'msg_id': msg_id})
-            self.msg_index = len(self.messages) - 1
+            if was_at_end:
+                self.msg_index = len(self.messages) - 1
             self.speak(f"{sender}: {display}")
             self._update_chat_window()
         else:
@@ -151,8 +169,10 @@ class ChatApp(SoftApp):
         display = self._display_content(content)
         self._notify_sound()
         if self.state == STATE_DM_CHAT and self.dm_target_name == sender:
+            was_at_end = self.msg_index == len(self.messages) - 1 if self.messages else True
             self.messages.append({'sender': sender, 'text': display, 'content': content, 'msg_id': msg_id})
-            self.msg_index = len(self.messages) - 1
+            if was_at_end:
+                self.msg_index = len(self.messages) - 1
             self.speak(f"{sender}: {display}")
             self._update_chat_window()
         else:
@@ -192,6 +212,7 @@ class ChatApp(SoftApp):
         self._show_login_menu()
 
     def _show_main_menu(self):
+        self._stop_background_polling()
         self.state = STATE_MENU
         root = MenuNode("Chat")
         root.add_child(MenuNode("Rooms", self._enter_room_list, "r"))
@@ -240,6 +261,7 @@ class ChatApp(SoftApp):
         self.state = STATE_ROOM_LIST
 
     def _open_room(self, room_id, room_name):
+        self._start_background_polling()
         self.current_room_id = room_id
         self.current_room_name = room_name
         try:
@@ -305,6 +327,7 @@ class ChatApp(SoftApp):
         self.window.update_text("To user:")
 
     def _open_dm(self, other_id, other_name):
+        self._start_background_polling()
         self.dm_target_id = other_id
         self.dm_target_name = other_name
         self.messages = []
@@ -416,6 +439,7 @@ class ChatApp(SoftApp):
             self.menu.announce_current()
 
     def _logout(self):
+        self._stop_background_polling()
         self.speak("Logging out.")
         try:
             self.client.logout()
@@ -476,13 +500,13 @@ class ChatApp(SoftApp):
             self._recording = False
 
     def _stop_recording(self):
-        if not self._recording:
+        if not self._recording and not self._recording_file:
             return
         self._recording = False
         elapsed = time.time() - self._record_start
         self.speak(f"Recorded {elapsed:.1f} seconds")
         if self._record_thread:
-            self._record_thread.join(timeout=5)
+            self._record_thread.join(timeout=10)
         if self._recording_file:
             self._send_voice(self._recording_file)
         else:
@@ -697,8 +721,10 @@ class ChatApp(SoftApp):
                 self.exit_app()
             elif self.state in (STATE_ROOM_LIST, STATE_DM_LIST, STATE_USER_LIST):
                 self._show_main_menu()
+            elif self.state in (STATE_ADMIN_PANEL, STATE_OPTIONS):
+                self._show_main_menu()
             else:
-                # STATE_MENU, STATE_ADMIN_PANEL, STATE_OPTIONS
+                # STATE_MENU
                 self.state = STATE_MENU
                 if self.menu:
                     self.menu.announce_current()
@@ -719,9 +745,7 @@ class ChatApp(SoftApp):
 
     def _handle_room_chat(self, vk):
         if vk == win32con.VK_ESCAPE:
-            self.state = STATE_MENU
-            if self.menu:
-                self.menu.announce_current()
+            self._show_main_menu()
             return
         if vk == win32con.VK_F1:
             self._refresh_room_messages()
@@ -805,9 +829,8 @@ class ChatApp(SoftApp):
         except ChatError as e:
             self.speak(f"Failed: {e}")
         self.current_room_id = None
-        self.state = STATE_MENU
-        if self.menu:
-            self.menu.announce_current()
+        self._stop_background_polling()
+        self._show_main_menu()
 
     def _refresh_room_messages(self):
         rid = self.current_room_id
@@ -1161,6 +1184,7 @@ class ChatApp(SoftApp):
         return self.state in (STATE_COMPOSING, STATE_CHANGE_PASSWORD, STATE_LOGIN_FORM, STATE_REGISTER_FORM, STATE_CONFIRM)
 
     def exit_app(self):
+        self._stop_background_polling()
         try:
             self.client.logout()
         except Exception:

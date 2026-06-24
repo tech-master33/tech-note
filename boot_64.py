@@ -54,6 +54,7 @@ class BrailleNoteApp:
         self._shutting_down = False
         self._search_mode = False
         self._search_buffer = ""
+        self._last_unlock_time = -float('inf')
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
@@ -381,9 +382,11 @@ class BrailleNoteApp:
 
     def refresh_main_menu(self):
         import core.menu
+        import core.safe_mode
         core.menu.ANNOUNCE_POSITION = self._announce_position == "On"
         self.menu_root = build_braillenote_menu(
-            self, self.window, self.launch_app, self._reset_and_restart
+            self, self.window, self.launch_app, self._reset_and_restart,
+            safe_mode=core.safe_mode.is_safe_mode()
         )
         self.menu = MenuSystem(self.menu_root, self.speak)
 
@@ -593,6 +596,10 @@ class BrailleNoteApp:
         try:
             path = os.path.join(SOUNDS_DIR, 'shutdown.wav')
             if not os.path.exists(path):
+                path = _get_sound_path('shutdown.wav')
+            if not os.path.exists(path):
+                path = _get_sound_path('shutdown.mp3')
+            if not os.path.exists(path):
                 path = _get_sound_path('unlock.mp3')
             if os.path.exists(path):
                 AudioPlayer().play_sound_blocking(path)
@@ -713,7 +720,7 @@ class BrailleNoteApp:
             return
 
         # Power menu (layout-aware backtick) — blocked for 1s after unlock
-        if time.time() - getattr(self, '_last_unlock_time', 0) > 1.0:
+        if time.time() - self._last_unlock_time > 1.0:
             if vk == self._power_vk or self._is_key_match(vk, "power_menu"):
                 print("Global Power menu")
                 self._open_power_menu()
@@ -858,6 +865,8 @@ if __name__ == "__main__":
         log_file = open(out_log_path, "w", buffering=1)
         sys.stdout = log_file
         sys.stderr = log_file
+        import atexit
+        atexit.register(lambda: log_file.close() if not log_file.closed else None)
     except Exception as e:
         print(f"Failed to redirect output to {out_log_path}: {e}", file=sys.stderr)
 

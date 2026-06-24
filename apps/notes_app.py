@@ -133,14 +133,12 @@ class NotesApp(SoftApp):
                     self._finish_edit()
                 return
 
-            if not self.edit_title:
+            if self.edit_title:
                 if vk == win32con.VK_RETURN:
-                    if self.edit_title:
-                        self._finish_title()
+                    self._finish_title()
                     return
                 if vk == win32con.VK_BACK:
-                    if self.edit_title:
-                        self.edit_title = self.edit_title[:-1]
+                    self.edit_title = self.edit_title[:-1]
                     self.window.update_text(f"Title: {self.edit_title}")
                     return
                 ch = self._vk_to_char(vk)

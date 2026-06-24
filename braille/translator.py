@@ -33,7 +33,7 @@ def back_translate(keys):
         return keys
     try:
         table = TABLE.get(_grade, "en-us-g2.ctb")
-        result = louis.backTranslate([table], keys)
+        result, _ = louis.backTranslate([table], keys)
         return result
     except Exception:
         return keys

@@ -125,7 +125,7 @@ class AddressListApp(SoftApp):
         if vk == win32con.VK_BACK:
             if self.input_buf:
                 self.input_buf = self.input_buf[:-1]
-                if "name" in self.input_mode:
+                if self.input_mode in ("name", "edit_name"):
                     self.window.update_text(f"Name: {self.input_buf}")
                 else:
                     self.window.update_text(f"Phone: {self.input_buf}")
@@ -143,11 +143,9 @@ class AddressListApp(SoftApp):
         item = self.menu.get_current_item()
         if not item or item.title in ("No contacts", "Add Contact"):
             return
-        name = item.title.split(":")[0].strip()
+        name = item.title.rsplit(":", 1)[0].strip()
         if name in self.contacts:
             del self.contacts[name]
-            self.save_contacts()
-            self.speak(f"Deleted {name}.")
             self._build_menu()
             if self.menu.get_current_item():
                 self.window.update_text("Contacts: " + self.menu.get_current_item().title)
