@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "dectalk"
+version = "4.64.0"
+description = "Python bindings for DECtalk text-to-speech engine (64-bit)"
+authors = [{name = "DECtalk Community"}]
+license = {text = "Custom"}
+requires-python = ">=3.8"
+
+[project.urls]
+Homepage = "https://github.com/dectalk/dectalk"

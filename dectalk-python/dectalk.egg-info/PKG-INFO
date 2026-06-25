@@ -1,0 +1,10 @@
+Metadata-Version: 2.1
+Name: dectalk
+Version: 4.64.0
+Summary: Python bindings for DECtalk text-to-speech engine (64-bit)
+Home-page: https://github.com/dectalk/dectalk
+Author: DECtalk Community
+License: Custom
+Project-URL: Homepage, https://github.com/dectalk/dectalk
+Platform: win_amd64
+Requires-Python: >=3.8

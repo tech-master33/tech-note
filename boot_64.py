@@ -648,6 +648,12 @@ class BrailleNoteApp:
         self._write_clean_flag(True)
 
         try:
+            from core.plugin_manager import get_plugin_manager
+            get_plugin_manager().shutdown_all()
+        except Exception as e:
+            core.error_handler.log(e, "Plugin shutdown")
+
+        try:
             self.window.close()
         except:
             pass

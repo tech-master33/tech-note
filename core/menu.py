@@ -176,6 +176,7 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, s
     from apps.game_center import GameCenter
     from apps.app_store import AppStore
     from apps.notes_app import NotesApp
+    from apps.terminal_app import TerminalApp
     
     # Optional apps
     try:
@@ -207,6 +208,7 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, s
     root.add_child(MenuNode("Email", lambda: app_callback(EmailApp), "e"))
     root.add_child(MenuNode("Internet", lambda: app_callback(InternetApp), "i"))
     root.add_child(MenuNode("Chat", lambda: app_callback(ChatApp), "h"))
+    root.add_child(MenuNode("Terminal", lambda: app_callback(TerminalApp), "t"))
     media = root.add_child(MenuNode("Media Center", shortcut="m"))
     media.add_child(MenuNode("Media Player", lambda: app_callback(MediaPlayerApp)))
     media.add_child(MenuNode("FM Radio", lambda: app_callback(FMRadioApp)))

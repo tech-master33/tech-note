@@ -1,0 +1,9 @@
+{
+    "id": "dectalk",
+    "name": "DECtalk Synthesizer",
+    "version": "4.64.0",
+    "plugin_type": "synth",
+    "entry": "__init__.py",
+    "description": "DECtalk text-to-speech engine (Paul, Betty, Harry, etc.)",
+    "author": "DECtalk project / packaged for tech-note"
+}

@@ -1,0 +1,11 @@
+README.md
+pyproject.toml
+setup.py
+dectalk/__init__.py
+dectalk/_dectalk.py
+dectalk.egg-info/PKG-INFO
+dectalk.egg-info/SOURCES.txt
+dectalk.egg-info/dependency_links.txt
+dectalk.egg-info/top_level.txt
+dectalk/bin/DECtalk.dll
+dectalk/bin/dtalk_us.dic

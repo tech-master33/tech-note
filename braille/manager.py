@@ -16,8 +16,8 @@ class BrailleManager:
     def get_plugin_displays(cls):
         if not cls._plugin_braille_displays:
             try:
-                from core.plugin_manager import PluginManager
-                pm = PluginManager()
+                from core.plugin_manager import get_plugin_manager
+                pm = get_plugin_manager()
                 pm.scan()
                 cls._plugin_braille_displays = pm.get_braille_plugins()
             except Exception:
@@ -47,7 +47,9 @@ class BrailleManager:
         if name in plugins:
             try:
                 plugin = plugins[name]
-                plugin.initialize()
+                if not getattr(plugin, '_braille_initialized', False):
+                    plugin.initialize()
+                    plugin._braille_initialized = True
                 self.display = plugin
                 self._active = True
                 return True

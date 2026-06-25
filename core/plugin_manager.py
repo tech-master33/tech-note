@@ -6,6 +6,7 @@ import sys
 import tempfile
 import zipfile
 from core.config import TECH_SOFT
+from core.command_registry import get_command_registry
 
 PLUGIN_DIR = os.path.join(TECH_SOFT, 'plugins')
 
@@ -26,12 +27,16 @@ class PluginManager:
         self._filter_plugins = []
         self._loaded_modules = {}
         self._plugin_infos = {}
+        self._temp_dirs = []
 
     def scan(self):
         self._synth_plugins.clear()
         self._braille_plugins.clear()
         self._filter_plugins.clear()
         self._plugin_infos.clear()
+        for path, (mod, tmp) in list(self._loaded_modules.items()):
+            shutil.rmtree(tmp, ignore_errors=True)
+        self._loaded_modules.clear()
         os.makedirs(PLUGIN_DIR, exist_ok=True)
         for fname in os.listdir(PLUGIN_DIR):
             if fname.endswith('.scrugn'):
@@ -85,6 +90,9 @@ class PluginManager:
                         instance.plugin_name = name
                         instance.plugin_version = version
                         instance.initialize()
+                        commands = instance.get_commands() if hasattr(instance, 'get_commands') else []
+                        for cmd_name, cmd_help, cmd_handler in commands:
+                            get_command_registry().register(f"{instance.plugin_name}:{cmd_name}", cmd_help, cmd_handler)
                         if plugin_type == 'synth':
                             self._synth_plugins[name] = instance
                         elif plugin_type == 'braille':

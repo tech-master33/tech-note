@@ -1,6 +1,3 @@
-_plugin_manager = None
-
-
 def get_available_synths():
     base = [("SAPI5", "sapi_synth")]
     pm = _get_plugin_manager()
@@ -23,9 +20,7 @@ def create_synth(module_name):
 
 
 def _get_plugin_manager():
-    global _plugin_manager
-    if _plugin_manager is None:
-        from core.plugin_manager import PluginManager
-        _plugin_manager = PluginManager()
-        _plugin_manager.scan()
-    return _plugin_manager
+    from core.plugin_manager import get_plugin_manager as _pm
+    pm = _pm()
+    pm.scan()
+    return pm

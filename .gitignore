@@ -59,6 +59,7 @@ approve_app.py
 
 # Plugin packages
 *.scrugn
+DECtalk.scrugn
 
 # User data
 .tech-soft/

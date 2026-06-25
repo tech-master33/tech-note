@@ -1,3 +1,4 @@
+import os
 import win32con
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
@@ -25,8 +26,62 @@ class PluginManagerApp(SoftApp):
                 for p in sorted(plugins, key=lambda x: x['name'].lower()):
                     label = f"{p['name']} ({p['plugin_type']}) v{p['version']}"
                     root.add_child(MenuNode(label, lambda info=p: self._show_detail(info)))
+        root.add_child(MenuNode("Install plugin", self._do_install))
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
+
+    def _do_install(self):
+        path = self._pick_scrugn()
+        if path:
+            try:
+                self._pm.install_plugin(path)
+                self.speak("Plugin installed.")
+            except Exception as e:
+                self.speak(f"Install failed: {e}")
+            self._build_menu()
+            self.menu.announce_current()
+
+    def _pick_scrugn(self):
+        import ctypes
+        from ctypes import wintypes
+        class OPENFILENAME(ctypes.Structure):
+            _fields_ = [
+                ("lStructSize", wintypes.DWORD),
+                ("hwndOwner", wintypes.HWND),
+                ("hInstance", wintypes.HINSTANCE),
+                ("lpstrFilter", wintypes.LPCWSTR),
+                ("lpstrCustomFilter", wintypes.LPWSTR),
+                ("nMaxCustFilter", wintypes.DWORD),
+                ("nFilterIndex", wintypes.DWORD),
+                ("lpstrFile", wintypes.LPWSTR),
+                ("nMaxFile", wintypes.DWORD),
+                ("lpstrFileTitle", wintypes.LPWSTR),
+                ("nMaxFileTitle", wintypes.DWORD),
+                ("lpstrInitialDir", wintypes.LPCWSTR),
+                ("lpstrTitle", wintypes.LPCWSTR),
+                ("Flags", wintypes.DWORD),
+                ("nFileOffset", wintypes.WORD),
+                ("nFileExtension", wintypes.WORD),
+                ("lpstrDefExt", wintypes.LPCWSTR),
+                ("lCustData", wintypes.LPARAM),
+                ("lpfnHook", wintypes.LPVOID),
+                ("lpTemplateName", wintypes.LPCWSTR),
+            ]
+        buf = ctypes.create_unicode_buffer(512)
+        ofn = OPENFILENAME()
+        ofn.lStructSize = ctypes.sizeof(ofn)
+        ofn.hwndOwner = None
+        ofn.lpstrFilter = "Plugin files (*.scrugn)\0*.scrugn\0All files (*.*)\0*.*\0"
+        ofn.lpstrFile = buf
+        ofn.nMaxFile = 512
+        ofn.Flags = 0x00000800 | 0x00000004
+        ofn.lpstrDefExt = "scrugn"
+        try:
+            if ctypes.windll.comdlg32.GetOpenFileNameW(ctypes.byref(ofn)):
+                return buf.value
+        except Exception:
+            pass
+        return None
 
     def _show_detail(self, info):
         self._build_detail_menu(info)
