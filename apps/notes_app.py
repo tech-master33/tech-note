@@ -1,5 +1,4 @@
 import os
-import json
 import datetime
 import win32con
 from core.app_base import SoftApp
@@ -12,30 +11,13 @@ NOTES_FILE = os.path.join(TECH_SOFT, "notes.json")
 class NotesApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
-        self.notes = self._load_notes()
+        self.notes = self._load_json(NOTES_FILE, [])
         self.editing = False
         self.edit_text = ""
         self.edit_title = ""
         self.cursor = 0
         self.current_note = None
         self._build_menu()
-
-    def _load_notes(self):
-        if os.path.exists(NOTES_FILE):
-            try:
-                with open(NOTES_FILE, 'r') as f:
-                    return json.load(f)
-            except:
-                pass
-        return []
-
-    def _save_notes(self):
-        try:
-            os.makedirs(os.path.dirname(NOTES_FILE), exist_ok=True)
-            with open(NOTES_FILE, 'w') as f:
-                json.dump(self.notes, f, indent=2)
-        except:
-            pass
 
     def _build_menu(self):
         root = MenuNode("Notes")
@@ -81,7 +63,7 @@ class NotesApp(SoftApp):
     def _delete_note(self, idx):
         title = self.notes[idx].get("title", "Note")
         self.notes.pop(idx)
-        self._save_notes()
+        self._save_json(NOTES_FILE, self.notes)
         self.speak(f"{title} deleted.")
         self._build_menu()
         self.menu.announce_current()
@@ -106,7 +88,7 @@ class NotesApp(SoftApp):
             self.notes[self.current_note] = note
         else:
             self.notes.append(note)
-        self._save_notes()
+        self._save_json(NOTES_FILE, self.notes)
         self.editing = False
         self.current_note = None
         self.speak("Note saved.")
@@ -117,8 +99,7 @@ class NotesApp(SoftApp):
         if self.editing:
             self.window.update_text(self.edit_title if not self.edit_text else self.edit_text)
         else:
-            self.speak(f"Notes. {len(self.notes)} notes.")
-            self.window.update_text(f"{len(self.notes)} notes")
+            self._announce(f"Notes. {len(self.notes)} notes.")
 
     def on_key(self, vk):
         if self.editing:
@@ -132,7 +113,6 @@ class NotesApp(SoftApp):
                 else:
                     self._finish_edit()
                 return
-
             if self.edit_title:
                 if vk == win32con.VK_RETURN:
                     self._finish_title()
@@ -146,7 +126,6 @@ class NotesApp(SoftApp):
                     self.edit_title += ch
                     self.window.update_text(f"Title: {self.edit_title}")
                 return
-
             if vk == win32con.VK_BACK:
                 if self.edit_text:
                     self.edit_text = self.edit_text[:-1]
@@ -169,9 +148,8 @@ class NotesApp(SoftApp):
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
-        elif 0x41 <= vk <= 0x5A:
-            self.menu.first_letter_nav(chr(vk))
-
+        else:
+            self._handle_first_letter_nav(vk, self.menu)
         item = self.menu.get_current_item()
         if item:
             self.window.update_text(item.title)

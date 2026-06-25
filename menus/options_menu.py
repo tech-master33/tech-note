@@ -31,7 +31,6 @@ class OptionsApp(SoftApp):
             "state_keys": "Off",
             "volume_ducking": "Off",
             "sound_scheme": "Default",
-            "language_auto_switch": "Off",
             "voice_profiles": {},
             "per_app_voice": {},
             "speech_history_size": 50,
@@ -45,18 +44,21 @@ class OptionsApp(SoftApp):
         root = MenuNode("Options")
 
         tts = root.add_child(MenuNode("TTS Menu"))
-        tts.add_child(MenuNode("TTS Engine", self._enter_tts_engine_menu))
-        tts.add_child(MenuNode("Speech Rate", self._enter_rate_menu))
-        tts.add_child(MenuNode("Volume", self._enter_volume_menu))
-        tts.add_child(MenuNode("Voice Selection", self._enter_voice_menu))
-        tts.add_child(MenuNode("Punctuation Level", self._enter_punctuation_menu))
-        tts.add_child(MenuNode("Pitch", self._enter_pitch_menu))
-        tts.add_child(MenuNode("Capital Pitch Change", self._enter_capital_pitch_menu))
-        tts.add_child(MenuNode("Language Auto-Switch", self._enter_language_switch_menu))
-        tts.add_child(MenuNode("Voice Profiles", self._enter_voice_profiles))
-        tts.add_child(MenuNode("Per-App Voices", self._enter_per_app_voices))
-        tts.add_child(MenuNode("Pronunciation Dictionary", self._enter_pronunciation_dict))
-        tts.add_child(MenuNode("Speech History Size", self._enter_history_size_menu))
+        speech = tts.add_child(MenuNode("Speech"))
+        speech.add_child(MenuNode("Speech Rate", self._enter_rate_menu))
+        speech.add_child(MenuNode("Volume", self._enter_volume_menu))
+        speech.add_child(MenuNode("Pitch", self._enter_pitch_menu))
+        speech.add_child(MenuNode("Speech History Size", self._enter_history_size_menu))
+        voice = tts.add_child(MenuNode("Voice"))
+        voice.add_child(MenuNode("TTS Engine", self._enter_tts_engine_menu))
+        voice.add_child(MenuNode("Voice Selection", self._enter_voice_menu))
+        voice.add_child(MenuNode("Voice Profiles", self._enter_voice_profiles))
+        voice.add_child(MenuNode("Per-App Voices", self._enter_per_app_voices))
+        voice.add_child(MenuNode("Pronunciation Dictionary", self._enter_pronunciation_dict))
+        advanced = tts.add_child(MenuNode("Advanced"))
+        advanced.add_child(MenuNode("Punctuation Level", self._enter_punctuation_menu))
+        advanced.add_child(MenuNode("Capital Pitch Change", self._enter_capital_pitch_menu))
+        advanced.add_child(MenuNode("Reset TTS to Defaults", self._reset_tts_defaults))
 
         kb = root.add_child(MenuNode("Keyboard Menu"))
         kb.add_child(MenuNode("Character Echo", self._enter_char_echo_menu))
@@ -72,6 +74,8 @@ class OptionsApp(SoftApp):
         braille = root.add_child(MenuNode("Braille Menu"))
         braille.add_child(MenuNode("Braille Display", self._enter_braille_display_menu))
         braille.add_child(MenuNode("Braille Grade", self._enter_braille_grade_menu))
+
+        plugins = root.add_child(MenuNode("Plugin Manager", self._enter_plugin_manager))
 
         self.menu = MenuSystem(root, self.speak)
 
@@ -158,8 +162,7 @@ class OptionsApp(SoftApp):
                 import core.menu
                 if "sound_scheme" in loaded:
                     core.menu.SOUND_SCHEME = self.settings["sound_scheme"]
-                if hasattr(self.manager.synth, 'set_auto_language') and "language_auto_switch" in loaded:
-                    self.manager.synth.set_auto_language(self.settings["language_auto_switch"] == "On")
+
             except Exception:
                 pass
 
@@ -258,12 +261,6 @@ class OptionsApp(SoftApp):
 
     def _enter_tts_engine_menu(self):
         self._current_parent_back = self._back_to_tts_menu
-        try:
-            from core.plugin_manager import PluginManager
-            pm = PluginManager()
-            pm.scan()
-        except Exception:
-            pm = None
         synth_list = get_available_synths()
         current_module = "sapi_synth"
         try:
@@ -298,7 +295,7 @@ class OptionsApp(SoftApp):
 
     def _enter_rate_menu(self):
         self._current_parent_back = self._back_to_tts_menu
-        self._build_numeric_menu("Speech Rate", "rate", 0, -10, 10, side_effect=self._rate_side_effect)
+        self._build_numeric_menu("Speech Rate", "rate", 0, -10, 30, side_effect=self._rate_side_effect)
 
     def _rate_side_effect(self, key, value):
         self.manager.synth.set_rate(value)
@@ -359,16 +356,6 @@ class OptionsApp(SoftApp):
     def _capital_pitch_side_effect(self, key, value):
         self.manager.synth.set_capital_pitch_change(value)
 
-    def _enter_language_switch_menu(self):
-        self._current_parent_back = self._back_to_tts_menu
-        self._build_list_menu("Language Auto-Switch", "language_auto_switch",
-                             ["Off", "On"],
-                             side_effect=self._language_switch_side_effect)
-
-    def _language_switch_side_effect(self, key, value):
-        if hasattr(self.manager.synth, 'set_auto_language'):
-            self.manager.synth.set_auto_language(value == "On")
-
     def _enter_history_size_menu(self):
         self._current_parent_back = self._back_to_tts_menu
         self._build_numeric_menu("Speech History Size", "speech_history_size", 50, 10, 200, side_effect=self._history_size_side_effect)
@@ -376,6 +363,25 @@ class OptionsApp(SoftApp):
     def _history_size_side_effect(self, key, value):
         if hasattr(self.manager.synth, 'set_history_max'):
             self.manager.synth.set_history_max(value)
+
+    def _reset_tts_defaults(self):
+        self.settings["rate"] = 0
+        self.settings["volume"] = 100
+        self.settings["voice_index"] = 0
+        self.settings["pitch"] = 50
+        self.settings["punctuation_level"] = "Some"
+        self.settings["capital_pitch_change"] = "Off"
+        self.settings["speech_history_size"] = 50
+        self._save_settings()
+        self.manager.synth.set_rate(0)
+        self.manager.synth.set_volume(100)
+        self.manager.synth.set_pitch(50)
+        self.manager.synth.set_punctuation_level("Some")
+        self.manager.synth.set_capital_pitch_change("Off")
+        if hasattr(self.manager.synth, 'set_history_max'):
+            self.manager.synth.set_history_max(50)
+        self.speak("TTS settings reset to defaults.")
+        self._back_to_tts_menu()
 
     # --- Keyboard Settings ---
 
@@ -796,14 +802,6 @@ class OptionsApp(SoftApp):
         self._build_main_menu()
         self.menu.announce_current()
 
-    def _back_to_tts_menu(self):
-        self._build_main_menu()
-        current = self.menu.root.children[0] if self.menu.root.children else None
-        if current:
-            self.menu.current_node = current
-            self.menu.current_index = 0
-        self.menu.announce_current()
-
     # --- Key Bindings ---
     BIND_NAMES = {
         "next_item": "Next Item (Space)",
@@ -916,3 +914,7 @@ class OptionsApp(SoftApp):
         self.adjust_mode = None
         self._build_main_menu()
         self.menu.announce_current()
+
+    def _enter_plugin_manager(self):
+        from apps.plugin_manager_app import PluginManagerApp
+        self.manager.app_manager.launch(PluginManagerApp)

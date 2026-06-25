@@ -1,12 +1,22 @@
 import importlib.util
 import json
 import os
+import shutil
 import sys
 import tempfile
 import zipfile
 from core.config import TECH_SOFT
 
 PLUGIN_DIR = os.path.join(TECH_SOFT, 'plugins')
+
+_plugin_manager_instance = None
+
+
+def get_plugin_manager():
+    global _plugin_manager_instance
+    if _plugin_manager_instance is None:
+        _plugin_manager_instance = PluginManager()
+    return _plugin_manager_instance
 
 
 class PluginManager:
@@ -15,11 +25,13 @@ class PluginManager:
         self._braille_plugins = {}
         self._filter_plugins = []
         self._loaded_modules = {}
+        self._plugin_infos = {}
 
     def scan(self):
         self._synth_plugins.clear()
         self._braille_plugins.clear()
         self._filter_plugins.clear()
+        self._plugin_infos.clear()
         os.makedirs(PLUGIN_DIR, exist_ok=True)
         for fname in os.listdir(PLUGIN_DIR):
             if fname.endswith('.scrugn'):
@@ -37,10 +49,23 @@ class PluginManager:
             manifest = json.loads(z.read('manifest.json'))
             plugin_type = manifest.get('plugin_type')
             entry = manifest.get('entry', '__init__.py')
+            name = manifest.get('name', os.path.basename(path))
+            version = manifest.get('version', '1.0')
+            author = manifest.get('author', 'Unknown')
+            description = manifest.get('description', '')
             if not plugin_type or not entry:
                 return
             if entry not in names:
                 return
+            self._plugin_infos[name] = {
+                'name': name,
+                'version': version,
+                'author': author,
+                'description': description,
+                'plugin_type': plugin_type,
+                'path': path,
+                'filename': os.path.basename(path),
+            }
             tmp = tempfile.mkdtemp()
             try:
                 z.extractall(tmp)
@@ -57,17 +82,16 @@ class PluginManager:
                     attr = getattr(mod, attr_name)
                     if isinstance(attr, type) and issubclass(attr, self._get_plugin_base(plugin_type)) and attr is not self._get_plugin_base(plugin_type):
                         instance = attr()
-                        instance.plugin_name = manifest.get('name', os.path.basename(path))
-                        instance.plugin_version = manifest.get('version', '1.0')
+                        instance.plugin_name = name
+                        instance.plugin_version = version
                         instance.initialize()
                         if plugin_type == 'synth':
-                            self._synth_plugins[instance.plugin_name] = instance
+                            self._synth_plugins[name] = instance
                         elif plugin_type == 'braille':
-                            self._braille_plugins[instance.plugin_name] = instance
+                            self._braille_plugins[name] = instance
                         elif plugin_type == 'filter':
                             self._filter_plugins.append(instance)
             except Exception:
-                import shutil
                 shutil.rmtree(tmp, ignore_errors=True)
                 self._loaded_modules.pop(path, None)
 
@@ -78,6 +102,37 @@ class PluginManager:
             'braille': BrailleDisplayPlugin,
             'filter': FilterPlugin,
         }.get(plugin_type)
+
+    def install_plugin(self, src_path):
+        if not src_path.endswith('.scrugn'):
+            raise ValueError("Not a .scrugn file")
+        os.makedirs(PLUGIN_DIR, exist_ok=True)
+        dest = os.path.join(PLUGIN_DIR, os.path.basename(src_path))
+        shutil.copy2(src_path, dest)
+        self._load_scrugn(dest)
+        return True
+
+    def uninstall_plugin(self, name):
+        info = self._plugin_infos.get(name)
+        if not info:
+            raise KeyError(f"Plugin '{name}' not found")
+        path = info['path']
+        if path in self._loaded_modules:
+            mod, tmp = self._loaded_modules.pop(path)
+            shutil.rmtree(tmp, ignore_errors=True)
+        self._synth_plugins.pop(name, None)
+        self._braille_plugins.pop(name, None)
+        self._filter_plugins[:] = [p for p in self._filter_plugins if p.plugin_name != name]
+        self._plugin_infos.pop(name, None)
+        if os.path.exists(path):
+            os.remove(path)
+        return True
+
+    def get_all_plugin_info(self):
+        return list(self._plugin_infos.values())
+
+    def get_plugin_info(self, name):
+        return self._plugin_infos.get(name)
 
     def get_synth_plugins(self):
         return dict(self._synth_plugins)
@@ -97,7 +152,7 @@ class PluginManager:
         self._synth_plugins.clear()
         self._braille_plugins.clear()
         self._filter_plugins.clear()
-        import shutil
         for path, (mod, tmp) in list(self._loaded_modules.items()):
             shutil.rmtree(tmp, ignore_errors=True)
         self._loaded_modules.clear()
+        self._plugin_infos.clear()

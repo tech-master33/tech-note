@@ -1,4 +1,9 @@
+import json
+import os
+import tempfile
+import win32con
 import core.error_handler
+
 
 class SoftApp:
     def __init__(self, manager, window, app_type='app'):
@@ -8,38 +13,137 @@ class SoftApp:
         self.stop = manager.stop
         self.active = True
         self.app_type = app_type
+        self.input_mode = None
+        self.input_buf = ""
+        self.input_prompt = ""
+        self.input_callback = None
 
     def on_key(self, vk):
-        """Handle keyboard input when the app is active."""
         pass
 
     def on_key_up(self, vk):
-        """Handle keyboard release when the app is active."""
         pass
 
     def on_focus(self):
-        """Called when the app becomes active."""
         pass
 
     def on_pause(self):
-        """Called when another app is about to become active."""
         pass
 
     def on_resume(self):
-        """Called when this app becomes active again after being paused."""
+        pass
+
+    def on_destroy(self):
         pass
 
     def get_help_text(self):
-        """Return a string explaining the app's controls."""
         return "No help available for this application."
 
     def get_state(self):
-        """Return serializable state for save/resume."""
         return None
 
     def set_state(self, state):
-        """Restore state from saved data."""
         pass
+
+    def exit_app(self):
+        self.manager.reset_temp_params()
+        self.active = False
+
+    def _announce(self, text, speak=True):
+        self.window.update_text(text)
+        if speak:
+            self.speak(text)
+
+    def _handle_menu_key(self, vk, menu):
+        if vk == win32con.VK_UP or vk == win32con.VK_LEFT:
+            if menu.previous():
+                item = menu.get_current_item()
+                self._announce(item.title if item else "")
+        elif vk == win32con.VK_DOWN or vk == win32con.VK_RIGHT:
+            if menu.next():
+                item = menu.get_current_item()
+                self._announce(item.title if item else "")
+        elif vk == win32con.VK_ESCAPE:
+            self.exit_app()
+        elif vk == win32con.VK_BACK:
+            if menu.previous():
+                item = menu.get_current_item()
+                self._announce(item.title if item else "")
+
+    def _handle_first_letter_nav(self, vk, menu):
+        if 0x41 <= vk <= 0x5A:
+            menu.first_letter_nav(chr(vk))
+            item = menu.get_current_item()
+            if item:
+                self._announce(item.title)
+
+    def _handle_text_input(self, vk):
+        if not self.input_mode:
+            return False
+        if vk == win32con.VK_ESCAPE:
+            self._cancel_text_input()
+        elif vk == win32con.VK_RETURN:
+            self._submit_text_input()
+        elif vk == win32con.VK_BACK:
+            self.input_buf = self.input_buf[:-1]
+            text = f"{self.input_prompt}{self.input_buf}"
+            self.window.update_text(text)
+        else:
+            ch = self._vk_to_char(vk)
+            if ch and ord(ch) >= 32:
+                self.input_buf += ch
+                text = f"{self.input_prompt}{self.input_buf}"
+                self.window.update_text(text)
+        return True
+
+    def _start_text_input(self, prompt, callback, initial=""):
+        self.input_mode = True
+        self.input_buf = initial
+        self.input_prompt = prompt
+        self.input_callback = callback
+        self._announce(prompt + initial)
+
+    def _cancel_text_input(self):
+        self.input_mode = False
+        self.input_buf = ""
+        self.input_prompt = ""
+        self.input_callback = None
+
+    def _submit_text_input(self):
+        cb = self.input_callback
+        data = self.input_buf
+        self.input_mode = False
+        self.input_buf = ""
+        self.input_prompt = ""
+        self.input_callback = None
+        if cb:
+            cb(data)
+
+    def _load_json(self, path, default=None):
+        if not os.path.exists(path):
+            return default
+        try:
+            with open(path, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return default
+
+    def _save_json(self, path, data):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = tempfile.NamedTemporaryFile(
+            mode='w', encoding='utf-8',
+            dir=os.path.dirname(path), suffix='.tmp', delete=False
+        )
+        try:
+            json.dump(data, tmp, indent=2)
+            tmp.close()
+            os.replace(tmp.name, path)
+        except Exception:
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
+            raise
 
     def _vk_to_char(self, vk):
         import ctypes
@@ -67,12 +171,7 @@ class SoftApp:
         return None
 
     def is_text_input_active(self):
-        return False
-
-    def exit_app(self):
-        """Close the app and return to the main menu."""
-        self.manager.reset_temp_params()
-        self.active = False
+        return bool(self.input_mode)
 
 
 class AppManager:
@@ -107,6 +206,10 @@ class AppManager:
         if not self.current_app:
             return
         try:
+            self.current_app.on_destroy()
+        except Exception as e:
+            core.error_handler.log(e, f"on_destroy failed for {type(self.current_app).__name__}")
+        try:
             self.current_app.exit_app()
         except Exception as e:
             core.error_handler.log(e, f"exit_current failed for {type(self.current_app).__name__}")
@@ -123,6 +226,10 @@ class AppManager:
 
     def reset(self):
         if self.current_app:
+            try:
+                self.current_app.on_destroy()
+            except Exception:
+                pass
             try:
                 self.current_app.exit_app()
             except Exception:

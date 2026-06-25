@@ -39,10 +39,11 @@ class StealthWindow:
         if not self.hwnd:
             print("StealthWindow: ERROR: Window hwnd not created after 5 seconds")
 
-    def set_display_settings(self, bg_color=None, font_size=None):
+    def set_display_settings(self, bg_color=None, font_size=None, fg_color=None):
         if bg_color is not None:
-            # bg_color should be (R, G, B) tuple
             self.bg_color = win32api.RGB(*bg_color)
+        if fg_color is not None:
+            self.fg_color = win32api.RGB(*fg_color)
         if font_size is not None:
             sizes = {"Small": 24, "Medium": 48, "Large": 72}
             self.font_height = sizes.get(font_size, 48)
@@ -140,7 +141,8 @@ class StealthWindow:
             win32gui.FillRect(hdc, rect, brush)
             win32gui.DeleteObject(brush)
             
-            win32gui.SetTextColor(hdc, win32api.RGB(255, 255, 255))
+            fg = getattr(self, 'fg_color', win32api.RGB(255, 255, 255))
+            win32gui.SetTextColor(hdc, fg)
             win32gui.SetBkMode(hdc, win32con.TRANSPARENT)
             
             font_obj = None

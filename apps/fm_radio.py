@@ -3,6 +3,7 @@ from core.app_base import SoftApp
 from core.audio_player import AudioPlayer
 from core.menu import MenuNode, MenuSystem
 
+
 class FMRadioApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
@@ -26,28 +27,24 @@ class FMRadioApp(SoftApp):
     def on_focus(self):
         self._build_menu()
         name = self.menu.get_current_item().title if self.menu.get_current_item() else "Unknown"
-        self.speak("FM Radio. " + name)
-        self.window.update_text("Radio: " + name)
+        self._announce("FM Radio. " + name)
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.player.stop()
             self.exit_app()
             return
-        
         if vk == win32con.VK_F1:
             self.player.stop()
             self.speak("Stopped")
             return
-
         if vk in (win32con.VK_BACK):
             self.player.stop()
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
-        elif 0x41 <= vk <= 0x5A:
-            self.menu.first_letter_nav(chr(vk))
-
+        else:
+            self._handle_first_letter_nav(vk, self.menu)
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Radio: " + item.title)
@@ -65,7 +62,6 @@ class FMRadioApp(SoftApp):
         self.speak("Tuning to " + name)
         ok = self.player.play_url(url)
         if ok:
-            self.speak("Now playing " + name)
-            self.window.update_text("Now Playing: " + name)
+            self._announce("Now playing " + name)
         else:
             self.speak("Playback failed. Check internet connection.")

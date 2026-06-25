@@ -2,6 +2,7 @@ import comtypes.client
 import re
 import time
 from core.audio_ducking import AudioDucker
+import core.pronunciation_dict
 
 class SapiSynthBase:
     def __init__(self, voice_name=None, allowed_fragments=None):
@@ -27,6 +28,11 @@ class SapiSynthBase:
             self._set_voice_by_fragments(allowed_fragments)
         elif voice_name:
             self.set_voice(voice_name)
+
+        self.save_defaults()
+        core.pronunciation_dict.load()
+        self._speech_history = []
+        self._history_max = 50
 
     def save_defaults(self):
         try:
@@ -72,7 +78,7 @@ class SapiSynthBase:
 
     def set_rate(self, value):
         try:
-            self.engine.Rate = max(-10, min(10, int(value)))
+            self.engine.Rate = max(-10, min(30, int(value)))
         except:
             pass
 
@@ -170,11 +176,37 @@ class SapiSynthBase:
     def set_volume_ducking(self, enabled):
         self._ducker.set_enabled(enabled)
 
+    def get_speech_history(self):
+        return list(self._speech_history)
+
+    def get_history_max(self):
+        return self._history_max
+
+    def set_history_max(self, value):
+        self._history_max = max(10, min(200, int(value)))
+
+    def repeat_last(self):
+        if self._speech_history:
+            self._speak_direct(self._speech_history[-1])
+
+    def _engine_stop(self):
+        if self.engine:
+            self.engine.Speak("", 2)
+
     def speak(self, text, interrupt=True):
         if not self.engine:
             return
 
         text = self._filter_punctuation(text, self.punctuation_level)
+
+        if interrupt:
+            self._engine_stop()
+        self._speak_direct(text)
+
+    def _speak_direct(self, text):
+        if not self.engine:
+            return
+
         text, use_xml = self._apply_capital_pitch(text)
 
         if not use_xml and self._pitch != 50:
@@ -185,19 +217,19 @@ class SapiSynthBase:
         self._ducker.duck()
         try:
             flags = 1
-            if interrupt:
-                flags |= 2
             if use_xml:
                 flags |= 8
             self.engine.Speak(text, flags)
             self._ducker.schedule_unduck(text, self.engine.Rate if self.engine else 0)
+            self._speech_history.append(text)
+            if len(self._speech_history) > self._history_max:
+                self._speech_history.pop(0)
         except Exception as e:
             print(f"Speech error: {e}")
             self._ducker.unduck()
 
     def stop(self):
-        if self.engine:
-            self.engine.Speak("", 1 | 2)
+        self._engine_stop()
 
     def wait_until_done(self, timeout_ms=5000):
         if self.engine:

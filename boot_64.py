@@ -11,9 +11,9 @@ from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUND
 from ui.stealth_window import StealthWindow
 from synths.sapi_synth import SapiSynthBase
 from synths.registry import create_synth
-from apps.options_menu import OptionsApp
-from apps.power_menu import PowerApp
-from apps.tutorial_app import TutorialApp
+from menus.options_menu import OptionsApp
+from menus.power_menu import PowerApp
+from menus.tutorial_app import TutorialApp
 from core.setup_core import TechNoteSetup
 from core.audio_player import AudioPlayer
 from core.config import TECH_SOFT
@@ -305,7 +305,7 @@ class BrailleNoteApp:
                 try:
                     if self.current_app and self.current_app.active:
                         app_module = self.current_app.__class__.__module__
-                        if app_module not in ("apps.power_menu", "apps.lock_screen"):
+                        if app_module not in ("menus.power_menu", "menus.lock_screen"):
                             app_data = {
                                 "app_module": app_module,
                                 "app_class": self.current_app.__class__.__name__
@@ -360,7 +360,7 @@ class BrailleNoteApp:
                 if auto_resume:
                     app_module = resume_data.get("app_module", "")
                     # Don't resume system utilities
-                    if app_module in ("apps.power_menu", "apps.lock_screen"):
+                    if app_module in ("menus.power_menu", "menus.lock_screen"):
                         try:
                             os.remove(resume_path)
                         except:
@@ -393,7 +393,7 @@ class BrailleNoteApp:
         self.menu = MenuSystem(self.menu_root, self.speak)
 
     def _create_lock_screen(self, manager, window):
-        from apps.lock_screen import LockScreenApp
+        from menus.lock_screen import LockScreenApp
         return LockScreenApp(manager, window, self.load_main_menu)
 
     def launch_app(self, app_class_or_callable):
@@ -459,7 +459,7 @@ class BrailleNoteApp:
         # Save current app for resume before opening power menu
         if self.current_app and self.current_app.active:
             app_module = self.current_app.__class__.__module__
-            if app_module not in ("apps.power_menu", "apps.lock_screen"):
+            if app_module not in ("menus.power_menu", "menus.lock_screen"):
                 try:
                     app_data = {
                         "app_module": app_module,
@@ -584,7 +584,7 @@ class BrailleNoteApp:
             # Hibernate: save current app if eligible
             if settings.get("auto_resume_apps", True) and self.current_app and self.current_app.active:
                 app_module = self.current_app.__class__.__module__
-                if app_module not in ("apps.power_menu", "apps.lock_screen"):
+                if app_module not in ("menus.power_menu", "menus.lock_screen"):
                     try:
                         app_data = {
                             "app_module": app_module,
@@ -736,7 +736,7 @@ class BrailleNoteApp:
         print(f"Key pressed: {vk}")
 
         # Block all global shortcuts when locked or during setup/login
-        from apps.lock_screen import LockScreenApp
+        from menus.lock_screen import LockScreenApp
         if isinstance(self.current_app, LockScreenApp):
             lock_app = self.current_app
             if lock_app and lock_app.active:

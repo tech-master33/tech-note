@@ -1,6 +1,8 @@
 import os
 import json
 import datetime
+import shutil
+import tempfile
 import win32con
 import urllib.request
 import urllib.error
@@ -52,23 +54,6 @@ class AppStore(SoftApp):
         self._build_menu()
         self._auto_refresh()
 
-    def _load_json(self, path, default):
-        if os.path.exists(path):
-            try:
-                with open(path, 'r') as f:
-                    return json.load(f)
-            except:
-                pass
-        return default
-
-    def _save_json(self, path, data):
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w') as f:
-                json.dump(data, f, indent=2)
-        except:
-            pass
-
     def _save_installed(self):
         self._save_json(INSTALLED_FILE, self.installed)
 
@@ -91,6 +76,69 @@ class AppStore(SoftApp):
     def _auto_refresh(self):
         import threading
         threading.Thread(target=self._fetch_catalog, daemon=True).start()
+        threading.Thread(target=self._check_updates_background, daemon=True).start()
+
+    def _check_updates_background(self):
+        import time
+        time.sleep(5)
+        if not self.catalog:
+            return
+        count = 0
+        for app_id, info in list(self.installed.items()):
+            for a in self.catalog:
+                if a.get("id", a.get("name", "")) == app_id:
+                    catalog_ver = a.get("version")
+                    if catalog_ver and _version_newer(catalog_ver, info.get("version", "0")):
+                        count += 1
+                    break
+        if count:
+            self.speak(f"{count} app update{'s' if count != 1 else ''} available. Open App Store for details.")
+
+    def _start_install_file(self):
+        from core.file_dialog import FileDialog
+        self._file_dialog = FileDialog(self.manager, self.window, self._on_install_file_selected)
+        self._file_dialog.start()
+
+    def _on_install_file_selected(self, path):
+        self._file_dialog = None
+        if path is None:
+            return
+        if not path.lower().endswith(('.py', '.tap')):
+            self.speak("Please select a .py or .tap file.")
+            return
+        try:
+            dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "apps")
+            os.makedirs(dest_dir, exist_ok=True)
+            dest = os.path.join(dest_dir, os.path.basename(path))
+            shutil.copy2(path, dest)
+            app_id = os.path.splitext(os.path.basename(path))[0]
+            self.installed[app_id] = {
+                "name": app_id,
+                "filename": os.path.basename(path),
+                "version": "1.0",
+                "category": "Apps",
+                "entry_point": "",
+            }
+            self._save_installed()
+            self.speak(f"Installed {os.path.basename(path)}.")
+            if hasattr(self.manager, 'refresh_main_menu'):
+                self.manager.refresh_main_menu()
+        except Exception as e:
+            self.speak(f"Install failed: {e}")
+
+    def _download_with_retry(self, url, timeout=30, retries=1):
+        last_error = None
+        for attempt in range(retries + 1):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "TechNote/1.0"})
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    return resp.read().decode('utf-8')
+            except Exception as e:
+                last_error = e
+                if attempt < retries:
+                    import time
+                    time.sleep(2)
+        raise last_error
 
     def _build_menu(self):
         root = MenuNode("App Store")
@@ -99,6 +147,7 @@ class AppStore(SoftApp):
         for cat in CATEGORIES:
             root.add_child(MenuNode(cat, self._show_category))
         root.add_child(MenuNode("My Installed Apps", self._show_installed))
+        root.add_child(MenuNode("Install from File...", self._start_install_file))
         root.add_child(MenuNode("Refresh Catalog", self._fetch_catalog))
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
@@ -334,17 +383,21 @@ class AppStore(SoftApp):
 
         try:
             os.makedirs(APPS_DIR, exist_ok=True)
-            req = urllib.request.Request(download_url, headers={"User-Agent": "TechNote/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                code = resp.read().decode('utf-8')
+            code = self._download_with_retry(download_url, retries=1)
 
             if not filename:
                 filename = app_id + ".py"
 
             safe_name = os.path.basename(filename)
             filepath = os.path.join(APPS_DIR, safe_name)
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(code)
+            tmp = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=APPS_DIR, suffix='.tmp', delete=False)
+            try:
+                tmp.write(code)
+                tmp.close()
+                shutil.move(tmp.name, filepath)
+            except:
+                os.unlink(tmp.name)
+                raise
 
             self.installed[app_id] = {
                 "name": name,
@@ -358,15 +411,18 @@ class AppStore(SoftApp):
             self.downloads[app_id] = self.downloads.get(app_id, 0) + 1
             self._save_downloads()
 
-            self.speak(f"{name} installed.")
+            if not quiet:
+                self.speak(f"{name} installed.")
             self.window.update_text(f"{name} installed.")
             if hasattr(self.manager, 'refresh_main_menu'):
                 self.manager.refresh_main_menu()
         except urllib.error.URLError:
-            self.speak("Download failed. No internet.")
+            if not quiet:
+                self.speak("Download failed. No internet.")
             self.window.update_text("Download failed.")
         except Exception:
-            self.speak("Install failed.")
+            if not quiet:
+                self.speak("Install failed.")
             self.window.update_text("Install error.")
 
     def _update_app(self, app_info, quiet=False):
@@ -386,9 +442,7 @@ class AppStore(SoftApp):
 
         try:
             os.makedirs(APPS_DIR, exist_ok=True)
-            req = urllib.request.Request(download_url, headers={"User-Agent": "TechNote/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                code = resp.read().decode('utf-8')
+            code = self._download_with_retry(download_url, retries=1)
 
             if app_id in self.installed:
                 filename = self.installed[app_id].get("filename", filename)
@@ -398,19 +452,28 @@ class AppStore(SoftApp):
 
             safe_name = os.path.basename(filename)
             filepath = os.path.join(APPS_DIR, safe_name)
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(code)
+            tmp = tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=APPS_DIR, suffix='.tmp', delete=False)
+            try:
+                tmp.write(code)
+                tmp.close()
+                shutil.move(tmp.name, filepath)
+            except:
+                os.unlink(tmp.name)
+                raise
 
             self.installed[app_id]["version"] = app_info.get("version", "1.0")
             self._save_installed()
 
-            self.speak(f"{name} updated to version {app_info.get('version', '1.0')}.")
+            if not quiet:
+                self.speak(f"{name} updated to version {app_info.get('version', '1.0')}.")
             self.window.update_text(f"{name} updated.")
         except urllib.error.URLError:
-            self.speak("Download failed. No internet.")
+            if not quiet:
+                self.speak("Download failed. No internet.")
             self.window.update_text("Download failed.")
         except Exception:
-            self.speak("Update failed.")
+            if not quiet:
+                self.speak("Update failed.")
             self.window.update_text("Update error.")
 
     def _uninstall(self, app_info):
@@ -504,10 +567,15 @@ class AppStore(SoftApp):
         item = self.menu.get_current_item()
         title = item.title if item else "App Store"
         installed_count = len(self.installed)
-        self.speak(f"App Store. {installed_count} apps installed. {title}")
         self.window.update_text(f"App Store: {title}")
+        if not hasattr(self, '_spoke_focus'):
+            self._spoke_focus = True
+            self.speak(f"App Store. {installed_count} apps installed. {title}")
 
     def on_key(self, vk):
+        if hasattr(self, '_file_dialog') and self._file_dialog and self._file_dialog.active:
+            self._file_dialog.on_key(vk)
+            return
         if self._confirm_delete:
             if vk == win32con.VK_RETURN:
                 self._confirm_uninstall()
@@ -550,6 +618,9 @@ class AppStore(SoftApp):
             self.window.update_text("App Store: " + item.title)
 
     def on_key_up(self, vk):
+        if hasattr(self, '_file_dialog') and self._file_dialog and self._file_dialog.active:
+            self._file_dialog.on_key_up(vk)
+            return
         if self._confirm_delete or self._search_mode:
             return
         if vk == win32con.VK_SPACE:

@@ -5,6 +5,7 @@ from core.audio_player import AudioPlayer
 from core.config import TECH_SOFT
 from core.menu import MenuNode, MenuSystem
 
+
 class MediaPlayerApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
@@ -38,35 +39,30 @@ class MediaPlayerApp(SoftApp):
         self.player.stop()
         ok = self.player.play_file(file_path)
         if ok:
-            self.speak("Playing " + filename)
-            self.window.update_text("Playing: " + filename)
+            self._announce("Playing " + filename)
         else:
             self.speak("Playback failed.")
 
     def on_focus(self):
         self._build_menu()
         item = self.menu.get_current_item()
-        self.speak("Media Player. " + item.title)
-        self.window.update_text("Media: " + item.title)
+        self._announce("Media Player. " + item.title)
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
             self.player.stop()
             self.exit_app()
             return
-
         if vk == win32con.VK_F1:
             self.player.stop()
             self.speak("Stopped")
             return
-
-        if vk in (win32con.VK_BACK):
+        if vk == win32con.VK_BACK:
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
-        elif 0x41 <= vk <= 0x5A:
-            self.menu.first_letter_nav(chr(vk))
-
+        else:
+            self._handle_first_letter_nav(vk, self.menu)
         item = self.menu.get_current_item()
         if item:
             self.window.update_text("Media: " + item.title)
@@ -88,7 +84,6 @@ class MediaPlayerApp(SoftApp):
         self.player.stop()
         ok = self.player.play_file(path)
         if ok:
-            self.speak("Playing " + filename)
-            self.window.update_text("Playing: " + filename)
+            self._announce("Playing " + filename)
         else:
             self.speak("Playback failed.")

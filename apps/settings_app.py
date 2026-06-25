@@ -66,7 +66,7 @@ class SettingsApp(SoftApp):
         self._current_parent_back = self._back_to_main_menu
         root = MenuNode("Display Settings")
         root.add_child(MenuNode("Theme", lambda: self._enter_list_setting("theme", ["Dark", "Light"], side_effect=None)))
-        root.add_child(MenuNode("Background Color", lambda: self._enter_list_setting("bg_color", ["Black", "Blue", "Gray"], side_effect=self._bg_side_effect)))
+        root.add_child(MenuNode("Background Color", lambda: self._enter_list_setting("bg_color", ["Black", "Blue", "Gray", "Green", "Purple", "Red", "Teal", "White"], side_effect=self._bg_side_effect)))
         root.add_child(MenuNode("Font Size", lambda: self._enter_list_setting("font_size", ["Small", "Medium", "Large"], side_effect=self._font_side_effect)))
         root.add_child(MenuNode("Night Mode Filter", lambda: self._enter_list_setting("night_mode_filter", [False, True], display_map={False: "Off", True: "On"})))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
@@ -86,6 +86,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Sleep/Hibernate Options", lambda: self._enter_list_setting("app_sleep_hibernate", [False, True], display_map={False: "Off", True: "On"})))
         root.add_child(MenuNode("Block Keys During Shutdown", lambda: self._enter_list_setting("shutdown_key_protection", [False, True], display_map={False: "Off", True: "On"})))
         root.add_child(MenuNode("Log Level", lambda: self._enter_list_setting("log_level", ["SILENT", "ERROR", "WARN", "INFO", "DEBUG", "ALL"], side_effect=self._log_level_side_effect)))
+        root.add_child(MenuNode("Do Not Disturb", lambda: self._enter_list_setting("dnd_enabled", [False, True], display_map={False: "Off", True: "On"}, side_effect=self._dnd_side_effect)))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self._switch_to_submenu(root, "System Settings")
 
@@ -116,6 +117,10 @@ class SettingsApp(SoftApp):
 
     def _font_side_effect(self, key, value):
         self._apply_display_settings()
+
+    def _dnd_side_effect(self, key, value):
+        from core.notification_center import get_center
+        get_center().set_dnd(value)
 
     def _kbd_side_effect(self, key, value):
         self._apply_keyboard_layout()
@@ -319,10 +324,12 @@ class SettingsApp(SoftApp):
         self._enter_account_menu()
 
     def _apply_display_settings(self):
-        colors = {"Black": (0,0,0), "Blue": (0,0,128), "Gray": (64,64,64)}
+        colors = {"Black": (0,0,0), "Blue": (0,0,128), "Gray": (64,64,64), "Green": (0,64,0), "Purple": (64,0,64), "Red": (64,0,0), "Teal": (0,64,64), "White": (200,200,200)}
         bg = colors.get(self.settings.get("bg_color", "Black"), (0,0,0))
+        luminance = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
+        fg = (0, 0, 0) if luminance > 128 else (200, 200, 200)
         fs = self.settings.get("font_size", "Medium")
-        self.window.set_display_settings(bg_color=bg, font_size=fs)
+        self.window.set_display_settings(bg_color=bg, font_size=fs, fg_color=fg)
 
     def _apply_keyboard_layout(self):
         self.speak("Restart to apply keyboard layout.")
@@ -650,19 +657,28 @@ class SettingsApp(SoftApp):
                 self.speak(f"No matches for {q}.")
 
     # --- Backup / Restore ---
+    BACKUP_FILES = ["settings.json", "account.json", "notes.json", "installed_apps.json",
+                     "favorite_apps.json", "bookmarks.json", "history.json", "email_config.json",
+                     "chat_profiles.json", "habits.json", "tasks.json", "contacts.json",
+                     "opencode_settings.json", "opencode_sessions.json", "chatgpt_settings.json",
+                     "chatgpt_sessions.json", "scores.json", "pronunciation_dict.json"]
+
     def _do_backup(self):
         docs = os.path.join(TECH_SOFT, 'documents')
         os.makedirs(docs, exist_ok=True)
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_name = f"settings_backup_{ts}.json"
-        backup_path = os.path.join(docs, backup_name)
+        backup_name = f"full_backup_{ts}"
+        backup_dir = os.path.join(docs, backup_name)
         try:
-            if os.path.exists(SETTINGS_PATH):
-                shutil.copy2(SETTINGS_PATH, backup_path)
-                self.speak(f"Backup saved as {backup_name}.")
-                self.window.update_text(f"Backup: {backup_name}")
-            else:
-                self.speak("No settings file to back up.")
+            os.makedirs(backup_dir, exist_ok=True)
+            count = 0
+            for fname in self.BACKUP_FILES:
+                src = os.path.join(TECH_SOFT, fname)
+                if os.path.exists(src):
+                    shutil.copy2(src, os.path.join(backup_dir, fname))
+                    count += 1
+            self.speak(f"Backup saved: {count} files in {backup_name}.")
+            self.window.update_text(f"Backup: {backup_name} ({count} files)")
         except Exception:
             self.speak("Backup failed.")
 
@@ -671,7 +687,8 @@ class SettingsApp(SoftApp):
         if not os.path.exists(docs):
             self.speak("No backups found.")
             return
-        backups = sorted([f for f in os.listdir(docs) if f.startswith("settings_backup_") and f.endswith(".json")])
+        old_backups = sorted([f for f in os.listdir(docs) if f.startswith("settings_backup_") and f.endswith(".json")])
+        backups = sorted([d for d in os.listdir(docs) if d.startswith("full_backup_") and os.path.isdir(os.path.join(docs, d))]) + old_backups
         if not backups:
             self.speak("No backups found.")
             return
@@ -684,12 +701,24 @@ class SettingsApp(SoftApp):
     def _do_restore(self, name):
         backup_path = os.path.join(TECH_SOFT, 'documents', name)
         try:
-            with open(backup_path, 'r') as f:
-                loaded = json.load(f)
-            with open(SETTINGS_PATH, 'w') as f:
-                json.dump(loaded, f)
-            self.settings.update(loaded)
-            self.speak(f"Restored from {name}. Some settings may need a restart.")
+            if os.path.isdir(backup_path):
+                count = 0
+                for fname in self.BACKUP_FILES:
+                    src = os.path.join(backup_path, fname)
+                    if os.path.exists(src):
+                        shutil.copy2(src, os.path.join(TECH_SOFT, fname))
+                        count += 1
+                if os.path.exists(SETTINGS_PATH):
+                    with open(SETTINGS_PATH, 'r') as f:
+                        self.settings.update(json.load(f))
+                self.speak(f"Restored {count} files.")
+            else:
+                with open(backup_path, 'r') as f:
+                    loaded = json.load(f)
+                with open(SETTINGS_PATH, 'w') as f:
+                    json.dump(loaded, f)
+                self.settings.update(loaded)
+                self.speak(f"Restored from {name}.")
             self._back_to_main_menu()
         except Exception:
             self.speak("Restore failed.")

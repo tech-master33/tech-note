@@ -104,7 +104,6 @@ class MenuSystem:
             self.current_index = 0
             self.announce_current()
         elif item.action:
-            self.speak(f"Opening {item.title}")
             item.action()
 
     def back(self):
@@ -174,7 +173,6 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, s
     from apps.media_player import MediaPlayerApp
     from apps.fm_radio import FMRadioApp
     from apps.chat_app import ChatApp
-    from apps.tutorial_app import TutorialApp
     from apps.game_center import GameCenter
     from apps.app_store import AppStore
     from apps.notes_app import NotesApp
@@ -218,8 +216,6 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, s
     root.add_child(MenuNode("Settings", lambda: app_callback(
         lambda m, w: SettingsApp(m, w, on_reset_account=on_reset_account)
     ), "s"))
-    root.add_child(MenuNode("Tutorial", lambda: app_callback(TutorialApp), "t"))
-    
     if not safe_mode:
         _add_installed_apps(root, app_callback)
     

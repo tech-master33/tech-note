@@ -8,13 +8,17 @@ from core.config import TECH_SOFT
 NOTIFY_FILE = os.path.join(TECH_SOFT, 'notifications.json')
 MAX_NOTIFICATIONS = 100
 
+
 class NotificationCenter:
     def __init__(self):
         self._notifications = deque(maxlen=MAX_NOTIFICATIONS)
         self._unread_count = 0
+        self._dnd = False
         self._load()
 
     def post(self, source, text):
+        if self._dnd:
+            return
         notif = {
             "source": source,
             "text": text,
@@ -38,6 +42,12 @@ class NotificationCenter:
     def mark_read(self):
         self._unread_count = 0
 
+    def set_dnd(self, enabled):
+        self._dnd = enabled
+
+    def get_dnd(self):
+        return self._dnd
+
     def _save(self):
         try:
             with open(NOTIFY_FILE, 'w') as f:
@@ -55,8 +65,10 @@ class NotificationCenter:
         except Exception:
             pass
 
+
 _notification_center = None
 _center_lock = threading.Lock()
+
 
 def get_center():
     global _notification_center
