@@ -35,6 +35,7 @@ class TechEdit(SoftApp):
         self._spell_index = 0
         self._spell_suggestions = []
         self._spell_sug_index = 0
+        self._spell_sug_active = False
         self._dirty = False
         self._autosave_registered = False
         self._find_query = ""
@@ -398,7 +399,9 @@ class TechEdit(SoftApp):
 
     def get_help_text(self):
         if self.state == STATE_SPELL:
-            return "Spell Check. Space for next, Backspace for previous. F7 to exit. Escape to cancel."
+            if self._spell_sug_active:
+                return "Suggestions. Press number 1-9 to select a suggestion. Escape to cancel."
+            return "Spell Check. Space for next, Backspace for previous. F8 suggestions, F9 ignore, F7 exit. Escape to cancel."
         if self.state == STATE_FIND:
             return "Find. Type text and press Enter. F5 for next match. Escape to exit."
         if self.state == STATE_REPLACE:
@@ -419,15 +422,22 @@ class TechEdit(SoftApp):
             if not words:
                 self.speak("No words to check.")
                 return
-            misspelled = spell.unknown(words)
+            unique_misspelled = spell.unknown(set(words))
+            seen = set()
             self._spell_misspelled = []
-            for w in misspelled:
-                idx = self.text.find(w)
-                if idx != -1:
-                    self._spell_misspelled.append((w, idx))
+            idx = 0
+            for w in words:
+                next_idx = self.text.find(w, idx)
+                if next_idx == -1:
+                    next_idx = idx
+                if w in unique_misspelled and w.lower() not in seen:
+                    seen.add(w.lower())
+                    self._spell_misspelled.append((w, next_idx))
+                idx = next_idx + len(w)
             if not self._spell_misspelled:
                 self.speak("No misspelled words found.")
                 return
+            self._spell_sug_active = False
             self._spell_index = 0
             self.state = STATE_SPELL
             count = len(self._spell_misspelled)
@@ -442,10 +452,61 @@ class TechEdit(SoftApp):
         word, pos = self._spell_misspelled[self._spell_index]
         total = len(self._spell_misspelled)
         self.cursor = pos
+        self._spell_sug_active = False
         self._update_display()
         self.speak(f"Misspelled: {word}. Word {self._spell_index + 1} of {total}.")
 
+    def _replace_spell_word(self, replacement):
+        word, pos = self._spell_misspelled[self._spell_index]
+        self.text = self.text[:pos] + replacement + self.text[pos + len(word):]
+        self.cursor = pos + len(replacement)
+        self._mark_dirty()
+        idx = self._spell_index
+        self._spell_misspelled.pop(idx)
+        if not self._spell_misspelled:
+            self.state = STATE_EDIT
+            self.speak("No more misspelled words.")
+            self._update_display()
+            return
+        self._spell_index = min(idx, len(self._spell_misspelled) - 1)
+        self._announce_spell_word()
+
+    def _spell_show_suggestions(self):
+        word, _ = self._spell_misspelled[self._spell_index]
+        try:
+            spell = SpellChecker()
+            corr = spell.correction(word)
+            cands = spell.candidates(word)
+            if cands:
+                try:
+                    sorted_cands = sorted(cands, key=lambda c: -spell.word_usage_frequency(c))[:9]
+                except Exception:
+                    sorted_cands = sorted(cands)[:9]
+                self._spell_suggestions = sorted_cands
+                self._spell_sug_active = True
+                labels = [f"{i+1}. {s}" for i, s in enumerate(sorted_cands)]
+                if corr and corr in sorted_cands:
+                    idx = sorted_cands.index(corr)
+                    labels[idx] = f"{idx+1}. {corr} (best)"
+                self.speak("Suggestions: " + ", ".join(labels))
+                self.window.update_text(" | ".join(labels))
+            else:
+                self.speak("No suggestions available.")
+        except Exception:
+            self.speak("Failed to get suggestions.")
+
     def _handle_spell_key(self, vk):
+        if self._spell_sug_active:
+            if 0x31 <= vk <= 0x39:
+                idx = vk - 0x31
+                if idx < len(self._spell_suggestions):
+                    self._replace_spell_word(self._spell_suggestions[idx])
+                return
+            if vk == win32con.VK_ESCAPE:
+                self._spell_sug_active = False
+                self._announce_spell_word()
+            return
+
         if vk == win32con.VK_ESCAPE:
             self.state = STATE_EDIT
             self.speak("Spell check cancelled.")
@@ -453,6 +514,20 @@ class TechEdit(SoftApp):
             return
         if vk == win32con.VK_BACK:
             self._spell_index = (self._spell_index - 1) % len(self._spell_misspelled)
+            self._announce_spell_word()
+            return
+        if vk == win32con.VK_F8:
+            self._spell_show_suggestions()
+            return
+        if vk == win32con.VK_F9:
+            idx = self._spell_index
+            self._spell_misspelled.pop(idx)
+            if not self._spell_misspelled:
+                self.state = STATE_EDIT
+                self.speak("No more misspelled words.")
+                self._update_display()
+                return
+            self._spell_index = min(idx, len(self._spell_misspelled) - 1)
             self._announce_spell_word()
             return
         if vk == win32con.VK_F7:
@@ -469,6 +544,8 @@ class TechEdit(SoftApp):
             self._save_dialog.on_key_up(vk)
             return
         if self.state == STATE_SPELL:
+            if self._spell_sug_active:
+                return
             if vk == win32con.VK_SPACE:
                 if getattr(self.manager, 'space_used_in_chord', False):
                     return
