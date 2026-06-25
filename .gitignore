@@ -1,4 +1,4 @@
-__pycache__/
+		__pycache__/
 *.pyc
 *.pyo
 *.log
@@ -59,8 +59,8 @@ approve_app.py
 
 # Plugin packages
 *.scrugn
-DECtalk.scrugn
-
+dectalk-python/
+dectalk-scrugn
 # User data
 .tech-soft/
 notes.json
@@ -70,3 +70,4 @@ installed_apps.json
 settings.json
 account.json
 resume.json
+dectalk/
