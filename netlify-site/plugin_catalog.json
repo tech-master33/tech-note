@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "dectalk",
+      "name": "DECtalk Synthesizer",
+      "version": "4.64.0",
+      "plugin_type": "synth",
+      "description": "DECtalk text-to-speech engine with Paul, Betty, Harry, Frank, Dennis, Kit, Ursula, Rita, and Wendy voices.",
+      "author": "DECtalk project / packaged for Tech-Note",
+      "download_url": "https://tech-note.surge.sh/plugins/dectalk.scrugn",
+      "filename": "dectalk.scrugn",
+      "size_bytes": 471562,
+      "added_date": "2026-06-30"
+    }
+  ]
+}

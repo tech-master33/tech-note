@@ -127,6 +127,50 @@ def check_on_startup(synth=None, window=None):
         pass
 
 
+def _version_compare(v1, v2):
+    try:
+        p1 = [int(x) for x in v1.split(".")]
+        p2 = [int(x) for x in v2.split(".")]
+        return p1 > p2
+    except:
+        return False
+
+
+def check_plugins_on_startup(synth=None, window=None):
+    try:
+        from core.config import SETTINGS_PATH
+        import json
+        settings = {}
+        if os.path.exists(SETTINGS_PATH):
+            with open(SETTINGS_PATH, 'r') as f:
+                settings = json.load(f)
+        if not settings.get("auto_update_on_startup", False):
+            return
+        from core.plugin_manager import get_plugin_manager
+        pm = get_plugin_manager()
+        catalog = pm.fetch_catalog()
+        if not catalog:
+            return
+        installed = pm.get_all_plugin_info()
+        if not installed:
+            return
+        updates = 0
+        installed_map = {p['name']: p for p in installed}
+        for cat_entry in catalog:
+            name = cat_entry.get('name', '')
+            if name in installed_map:
+                cat_ver = cat_entry.get('version', '0')
+                inst_ver = installed_map[name].get('version', '0')
+                if _version_compare(cat_ver, inst_ver):
+                    if synth:
+                        synth.speak(f"Update for plugin {name} found.")
+                    updates += 1
+        if updates and synth:
+            synth.speak(f"{updates} plugin update{'s' if updates != 1 else ''} available. Open Plugin Manager for details.")
+    except Exception:
+        pass
+
+
 def check_now(synth=None, window=None):
     if synth:
         synth.speak("Checking for updates. Please wait.")

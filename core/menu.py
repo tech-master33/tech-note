@@ -8,6 +8,28 @@ SOUNDS_DIR = os.path.join(BASE_DIR, 'sounds')
 # Global position announcement toggle
 ANNOUNCE_POSITION = True
 SOUND_SCHEME = "Default"
+SOUND_SCHEMES = ["Default", "Minimal", "Classic", "Modern", "Soft", "Loud", "Natural", "None"]
+
+# Braille display patterns for UI elements
+BRAILLE_PATTERNS = {
+    "menu": " Menu.",
+    "submenu": " Submenu.",
+    "item": ".",
+    "checked": " (checked) ",
+    "unchecked": " (unchecked) ",
+    "selected": " (selected) ",
+    "slider": " Slider.",
+    "button": " Button.",
+    "edit": " Edit.",
+    "list": " List.",
+    "tree": " Tree.",
+    "progress": " Progress.",
+    "link": " Link.",
+    "heading": " Heading.",
+    "heading_1": " Heading 1.",
+    "heading_2": " Heading 2.",
+    "heading_3": " Heading 3.",
+}
 
 _audio_player = AudioPlayer()
 
@@ -23,7 +45,7 @@ def _get_scheme_fallback(name):
     return os.path.join(default_dir, name)
 
 def play_move():
-    if SOUND_SCHEME == "Minimal":
+    if SOUND_SCHEME in ("Minimal", "None"):
         return
     path = _get_sound_path('Focus.wav')
     if os.path.exists(path):
@@ -34,7 +56,7 @@ def play_move():
             _audio_player.play_file(fallback)
 
 def play_click():
-    if SOUND_SCHEME == "Minimal":
+    if SOUND_SCHEME in ("Minimal", "None"):
         return
     path = _get_sound_path('clicked.ogg')
     if not os.path.exists(path):
@@ -159,39 +181,86 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None):
     from apps.app_store import AppStore
     from apps.notes_app import NotesApp
     
-    # Optional apps
+    # Phase 5 apps
+    from apps.rss_reader import RSSReader
+
+    # Phase 6 apps
     try:
-        from apps.book_reader import BookReaderApp
+        from apps.expense_tracker import ExpenseTrackerApp
     except ImportError:
-        BookReaderApp = None
+        ExpenseTrackerApp = None
     try:
-        from apps.voice_memo import VoiceMemoApp
+        from apps.password_manager import PasswordManagerApp
     except ImportError:
-        VoiceMemoApp = None
+        PasswordManagerApp = None
     try:
-        from apps.calendar_app import CalendarApp
+        from apps.sleep_timer import SleepTimerApp
     except ImportError:
-        CalendarApp = None
+        SleepTimerApp = None
+    try:
+        from apps.ambient_sound import AmbientSoundApp
+    except ImportError:
+        AmbientSoundApp = None
+    try:
+        from apps.pomodoro_timer import PomodoroTimerApp
+    except ImportError:
+        PomodoroTimerApp = None
+    try:
+        from apps.network_diag import NetworkDiagApp
+    except ImportError:
+        NetworkDiagApp = None
+    try:
+        from apps.app_usage_stats import AppUsageStatsApp
+    except ImportError:
+        AppUsageStatsApp = None
+    try:
+        from apps.auto_backup import AutoBackupApp
+    except ImportError:
+        AutoBackupApp = None
+    try:
+        from apps.bulk_file_ops import BulkFileOpsApp
+    except ImportError:
+        BulkFileOpsApp = None
+    try:
+        from apps.disk_cleanup import DiskCleanupApp
+    except ImportError:
+        DiskCleanupApp = None
 
     root = MenuNode("Main Menu")
     
     root.add_child(MenuNode("Word Processor", lambda: app_callback(TechEdit), "w"))
-    if BookReaderApp:
-        root.add_child(MenuNode("Book Reader", lambda: app_callback(BookReaderApp), "b"))
-    if VoiceMemoApp:
-        root.add_child(MenuNode("Voice Memos", lambda: app_callback(VoiceMemoApp), "v"))
     root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
-    if CalendarApp:
-        root.add_child(MenuNode("Calendar", lambda: app_callback(CalendarApp), "d"))
     root.add_child(MenuNode("Planner", lambda: app_callback(PlannerApp), "p"))
     root.add_child(MenuNode("Address List", lambda: app_callback(AddressListApp), "a"))
     root.add_child(MenuNode("Notes", lambda: app_callback(NotesApp), "n"))
     root.add_child(MenuNode("Email", lambda: app_callback(EmailApp), "e"))
     root.add_child(MenuNode("Internet", lambda: app_callback(InternetApp), "i"))
+    root.add_child(MenuNode("RSS Reader", lambda: app_callback(RSSReader), "r"))
     root.add_child(MenuNode("Chat", lambda: app_callback(ChatApp), "h"))
     media = root.add_child(MenuNode("Media Center", shortcut="m"))
     media.add_child(MenuNode("Media Player", lambda: app_callback(MediaPlayerApp)))
     media.add_child(MenuNode("FM Radio", lambda: app_callback(FMRadioApp)))
+    tools = root.add_child(MenuNode("Tools", shortcut="o"))
+    if ExpenseTrackerApp:
+        tools.add_child(MenuNode("Expense Tracker", lambda: app_callback(ExpenseTrackerApp)))
+    if PasswordManagerApp:
+        tools.add_child(MenuNode("Password Manager", lambda: app_callback(PasswordManagerApp)))
+    if SleepTimerApp:
+        tools.add_child(MenuNode("Sleep Timer", lambda: app_callback(SleepTimerApp)))
+    if AmbientSoundApp:
+        tools.add_child(MenuNode("Ambient Sound", lambda: app_callback(AmbientSoundApp)))
+    if PomodoroTimerApp:
+        tools.add_child(MenuNode("Pomodoro Timer", lambda: app_callback(PomodoroTimerApp)))
+    if NetworkDiagApp:
+        tools.add_child(MenuNode("Network Diag", lambda: app_callback(NetworkDiagApp)))
+    if AppUsageStatsApp:
+        tools.add_child(MenuNode("App Usage Stats", lambda: app_callback(AppUsageStatsApp)))
+    if AutoBackupApp:
+        tools.add_child(MenuNode("Auto Backup", lambda: app_callback(AutoBackupApp)))
+    if BulkFileOpsApp:
+        tools.add_child(MenuNode("Bulk File Ops", lambda: app_callback(BulkFileOpsApp)))
+    if DiskCleanupApp:
+        tools.add_child(MenuNode("Disk Cleanup", lambda: app_callback(DiskCleanupApp)))
     root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
     root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
     root.add_child(MenuNode("App Store", lambda: app_callback(AppStore), "l"))

@@ -20,6 +20,7 @@ class PuzzleGame(SoftApp):
         self.elapsed = 0
         self.game_over = False
         self.scores = self._load_scores()
+        self.hint_count = 3
         self._init_board()
         self._build_menu()
 
@@ -72,6 +73,7 @@ class PuzzleGame(SoftApp):
         root.add_child(MenuNode(f"Moves: {self.moves}", self._announce_moves))
         root.add_child(MenuNode(f"Time: {self._format_time(self.elapsed)}", self._announce_time))
         root.add_child(MenuNode(best_str))
+        root.add_child(MenuNode(f"Hints: {self.hint_count}", self._use_hint))
         root.add_child(MenuNode("New Game", self._new_game))
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
@@ -80,6 +82,7 @@ class PuzzleGame(SoftApp):
         sizes = [3, 4, 5]
         idx = sizes.index(self.size)
         self.size = sizes[(idx + 1) % 3]
+        self.hint_count = 3
         self._new_game()
 
     def _format_time(self, secs):
@@ -92,6 +95,28 @@ class PuzzleGame(SoftApp):
 
     def _announce_time(self):
         self.speak(f"Time: {self._format_time(self.elapsed)}")
+
+    def _use_hint(self):
+        if self.game_over:
+            self.speak("Game is already solved.")
+            return
+        if self.hint_count <= 0:
+            self.speak("No hints remaining.")
+            return
+        er, ec = self.empty_pos
+        for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:
+            tr, tc = er + dr, ec + dc
+            if 0 <= tr < self.size and 0 <= tc < self.size:
+                tile = self.board[tr][tc]
+                target_r = (tile - 1) // self.size
+                target_c = (tile - 1) % self.size
+                dist = abs(tr - target_r) + abs(tc - target_c)
+                if dist > 0:
+                    self.hint_count -= 1
+                    self.speak(f"Hint: move tile {tile} into the empty space.")
+                    self._build_menu()
+                    return
+        self.speak("No useful hint found.")
 
     def _new_game(self):
         self.moves = 0
@@ -125,7 +150,7 @@ class PuzzleGame(SoftApp):
             lines.append(f"Solved in {self.moves} moves and {self._format_time(self.elapsed)}!")
             lines.append("Enter for new game. Escape to exit.")
         else:
-            lines.append("Arrows to slide tiles. Numbers 1-9 to move tile directly.")
+            lines.append("Arrows to slide tiles. Numbers 1-9 to move tile directly. H for hint.")
         return "\n".join(lines)
 
     def _find_tile(self, val):
@@ -227,10 +252,13 @@ class PuzzleGame(SoftApp):
             self._try_slide_empty("left")
         elif vk == win32con.VK_RIGHT:
             self._try_slide_empty("right")
+        elif vk == 0x48:
+            self._use_hint()
+            self.window.update_text(self._render())
         elif 0x31 <= vk <= 0x39:
             self._move_by_number(vk - 0x30)
         elif vk == 0x30:
             self._move_by_number(0)
 
     def get_help_text(self):
-        return "Puzzle. Arrow keys slide tiles. Numbers 1-9 move that tile. Change size in menu. Best scores saved."
+        return "Puzzle. Arrow keys slide tiles. Numbers 1-9 move that tile. H for hint. Change size in menu. Best scores saved."

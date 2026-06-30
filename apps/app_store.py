@@ -15,7 +15,9 @@ FAVORITES_FILE = os.path.join(TECH_SOFT, "favorites.json")
 DOWNLOADS_FILE = os.path.join(TECH_SOFT, "download_counts.json")
 CATALOG_CACHE = os.path.join(TECH_SOFT, "catalog_cache.json")
 
-CATEGORIES = ["Games", "Productivity", "Utilities", "Media"]
+CATEGORIES = ["Games", "Productivity", "Utilities", "Media", "Education", "Development"]
+
+SORT_OPTIONS = ["Name", "Downloads", "Recently Added"]
 
 
 def _version_newer(v1, v2):
@@ -49,6 +51,8 @@ class AppStore(SoftApp):
         self._search_mode = False
         self._search_text = ""
         self._confirm_delete = None
+        self._sort_mode = "Name"
+        self._filter_category = None
         self._build_menu()
 
     def _load_json(self, path, default):
@@ -91,8 +95,10 @@ class AppStore(SoftApp):
         root = MenuNode("App Store")
         root.add_child(MenuNode("Search", self._start_search))
         root.add_child(MenuNode("Favorites", self._show_favorites))
-        for cat in CATEGORIES:
-            root.add_child(MenuNode(cat, self._show_category))
+        root.add_child(MenuNode("Browse by Category", self._show_category_menu))
+        root.add_child(MenuNode("Sort: " + self._sort_mode, self._cycle_sort))
+        if self._filter_category:
+            root.add_child(MenuNode(f"Filter: {self._filter_category} (clear)", lambda: self._clear_filter()))
         root.add_child(MenuNode("My Installed Apps", self._show_installed))
         root.add_child(MenuNode("Refresh Catalog", self._fetch_catalog))
         root.add_child(MenuNode("Back", self.exit_app))
@@ -119,6 +125,9 @@ class AppStore(SoftApp):
         if not results:
             self.speak("No results found.")
             return
+        results = self._sort_apps(results)
+        if self._filter_category:
+            results = [a for a in results if a.get("category", "").lower() == self._filter_category.lower()]
         self._push_history()
         root = MenuNode(f"Search: {self._search_text}")
         for app_info in results:
@@ -145,6 +154,7 @@ class AppStore(SoftApp):
             return
         self._push_history()
         root = MenuNode("Favorites")
+        fav_apps = self._sort_apps(fav_apps)
         for app_info in fav_apps:
             root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
         root.add_child(MenuNode("Back", self._back_from_favorites))
@@ -156,6 +166,19 @@ class AppStore(SoftApp):
             return
         self._build_menu()
         self.menu.announce_current()
+
+    def _rating_stars(self, rating):
+        if not rating:
+            return ""
+        try:
+            r = float(rating)
+            full = int(r)
+            stars = "\u2605" * full
+            if r - full >= 0.5:
+                stars += "\u00BD"
+            return f" {stars}"
+        except:
+            return ""
 
     def _app_label(self, app_info):
         name = app_info.get("name", "Unknown")
@@ -175,8 +198,10 @@ class AppStore(SoftApp):
         dl = self.downloads.get(app_id, 0)
         if dl > 0:
             tags.append(f"{dl} dl")
+        rating = app_info.get("rating", "")
+        stars = self._rating_stars(rating)
         tag_str = f" [{', '.join(tags)}]" if tags else ""
-        return f"{name}{tag_str}"
+        return f"{name}{stars}{tag_str}"
 
     def _fetch_catalog(self):
         self.speak("Fetching catalog. Please wait.")
@@ -202,30 +227,80 @@ class AppStore(SoftApp):
             self.speak("Failed to load catalog.")
             self.window.update_text("Catalog error.")
 
-    def _show_category(self):
-        item = self.menu.get_current_item()
-        if not item:
-            return
-        cat_name = item.title
-
+    def _show_category_menu(self):
         if not self.catalog:
             self._fetch_catalog()
         if not self.catalog:
-            self.speak("No apps available. Check internet.")
+            self.speak("No apps available.")
             return
+        self._push_history()
+        root = MenuNode("Categories")
+        for cat in CATEGORIES:
+            count = len([a for a in self.catalog if a.get("category", "").lower() == cat.lower()])
+            root.add_child(MenuNode(f"{cat} ({count})", lambda c=cat: self._show_category(c)))
+        root.add_child(MenuNode("All Apps", self._show_all_apps))
+        root.add_child(MenuNode("Back", self._back_from_category))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
 
-        apps = [a for a in self.catalog if a.get("category", "").lower() == cat_name.lower()]
-        if not apps:
-            self.speak(f"No {cat_name} available.")
+    def _cycle_sort(self):
+        idx = SORT_OPTIONS.index(self._sort_mode)
+        self._sort_mode = SORT_OPTIONS[(idx + 1) % len(SORT_OPTIONS)]
+        self._build_menu()
+        self.menu.announce_current()
+
+    def _clear_filter(self):
+        self._filter_category = None
+        self._build_menu()
+        self.menu.announce_current()
+
+    def _show_category(self, cat_name):
+        if not self.catalog:
+            self._fetch_catalog()
+        if not self.catalog:
+            self.speak("No apps available.")
             return
-
+        self._filter_category = cat_name
         self._push_history()
         root = MenuNode(cat_name)
+        apps = [a for a in self.catalog if a.get("category", "").lower() == cat_name.lower()]
+        apps = self._sort_apps(apps)
+        if not apps:
+            root.add_child(MenuNode("No apps in this category"))
         for app_info in apps:
             root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
         root.add_child(MenuNode("Back", self._back_from_category))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
+
+    def _show_all_apps(self):
+        if not self.catalog:
+            self._fetch_catalog()
+        if not self.catalog:
+            self.speak("No apps available.")
+            return
+        self._push_history()
+        root = MenuNode("All Apps")
+        apps = self._sort_apps(list(self.catalog))
+        for app_info in apps:
+            root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
+        root.add_child(MenuNode("Back", self._back_from_category))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _sort_apps(self, apps):
+        if self._sort_mode == "Name":
+            return sorted(apps, key=lambda a: a.get("name", "").lower())
+        elif self._sort_mode == "Downloads":
+            return sorted(apps, key=lambda a: self.downloads.get(a.get("id", a.get("name", "")), 0), reverse=True)
+        elif self._sort_mode == "Recently Added":
+            def _sort_key(a):
+                added = a.get("added_date", "")
+                if not added:
+                    return "0000-00-00"
+                return added
+            return sorted(apps, key=_sort_key, reverse=True)
+        return apps
 
     def _back_from_category(self):
         if self._pop_history():
@@ -241,6 +316,8 @@ class AppStore(SoftApp):
         is_installed = app_id in self.installed
         is_fav = app_id in self.favorites
         dl = self.downloads.get(app_id, 0)
+        rating = app_info.get("rating", "")
+        rating_count = app_info.get("rating_count", 0)
 
         self._push_history()
         root = MenuNode(name)
@@ -256,6 +333,13 @@ class AppStore(SoftApp):
 
         if dl > 0:
             root.add_child(MenuNode(f"Downloaded {dl} times"))
+
+        stars = self._rating_stars(rating)
+        if stars:
+            label = f"Rating: {rating}{stars}"
+            if rating_count:
+                label += f" ({rating_count} votes)"
+            root.add_child(MenuNode(label))
 
         if _is_new(app_info):
             root.add_child(MenuNode("Newly added!"))
