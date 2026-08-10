@@ -3,7 +3,7 @@ import json
 import win32con
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
-from core.config import SETTINGS_PATH, ACCOUNT_PATH
+from core.config import SETTINGS_PATH, ACCOUNT_PATH, TECH_SOFT
 from synths.registry import get_available_synths
 import core.error_handler
 import core.pronunciation_dict
@@ -74,6 +74,13 @@ class OptionsApp(SoftApp):
         braille = root.add_child(MenuNode("Braille Menu"))
         braille.add_child(MenuNode("Braille Display", self._enter_braille_display_menu))
         braille.add_child(MenuNode("Braille Grade", self._enter_braille_grade_menu))
+
+        tools = root.add_child(MenuNode("Tools"))
+        tools.add_child(MenuNode("Import Settings", self._import_settings))
+        tools.add_child(MenuNode("Export Settings", self._export_settings))
+        tools.add_child(MenuNode("Reset All to Defaults", self._reset_all_defaults))
+        tools.add_child(MenuNode("Keyboard Shortcuts Reference", self._show_shortcuts_ref))
+        tools.add_child(MenuNode("System Diagnostics", self._show_system_diag))
 
         plugins = root.add_child(MenuNode("Plugin Manager", self._enter_plugin_manager))
 
@@ -914,6 +921,71 @@ class OptionsApp(SoftApp):
         self.adjust_mode = None
         self._build_main_menu()
         self.menu.announce_current()
+
+    def _import_settings(self):
+        path = os.path.join(TECH_SOFT, "settings_backup.json")
+        if not os.path.exists(path):
+            self.speak("No settings_backup.json found.")
+            return
+        try:
+            with open(path, 'r') as f:
+                imported = json.load(f)
+            self.settings.update(imported)
+            self._save_settings()
+            self.speak("Settings imported.")
+            self._load_voice_settings()
+        except Exception:
+            self.speak("Import failed.")
+
+    def _export_settings(self):
+        path = os.path.join(TECH_SOFT, "settings_backup.json")
+        try:
+            with open(path, 'w') as f:
+                json.dump(self.settings, f, indent=2)
+            self.speak("Settings exported to settings_backup.json.")
+        except Exception:
+            self.speak("Export failed.")
+
+    def _reset_all_defaults(self):
+        self.settings = {
+            "rate": 0, "volume": 100, "voice_index": 0,
+            "punctuation_level": "Some", "pitch": 50,
+            "capital_pitch_change": "Off", "char_echo": "Off",
+            "word_echo": "Off", "announce_position": "On",
+            "state_keys": "Off", "volume_ducking": "Off",
+            "sound_scheme": "Default", "voice_profiles": {},
+            "per_app_voice": {}, "speech_history_size": 50,
+            "braille_display": "Off", "braille_grade": 2,
+        }
+        self._save_settings()
+        self.manager.synth.set_rate(0)
+        self.manager.synth.set_volume(100)
+        self.manager.synth.set_pitch(50)
+        self.manager.synth.set_punctuation_level("Some")
+        self.manager.synth.set_capital_pitch_change("Off")
+        import core.menu
+        core.menu.SOUND_SCHEME = "Default"
+        self.speak("All settings reset to defaults.")
+        self._build_main_menu()
+
+    def _show_shortcuts_ref(self):
+        text = "Keyboard Shortcuts. Space next item, Backspace previous item, Enter select, Escape back or exit. F1 help, F5 status, Backtick power menu. Space+O options, Shift+T tutorial. Arrow keys navigate in apps. Ctrl+B bold, Ctrl+I italic, Ctrl+U underline in editor."
+        self.speak(text)
+        self.window.update_text(text)
+
+    def _show_system_diag(self):
+        import platform, sys
+        lines = [
+            f"OS: {platform.system()} {platform.release()}",
+            f"Python: {sys.version.split()[0]}",
+            f"Synth: {type(self.manager.synth).__name__}",
+            f"Settings file: {os.path.exists(SETTINGS_PATH)}",
+            f"Accounts: {os.path.exists(ACCOUNT_PATH)}",
+            f"Tech dir: {TECH_SOFT}",
+        ]
+        text = ". ".join(lines)
+        self.speak(text)
+        self.window.update_text(text)
 
     def _enter_plugin_manager(self):
         from apps.plugin_manager_app import PluginManagerApp

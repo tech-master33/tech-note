@@ -78,6 +78,11 @@ class ChatApp(SoftApp):
         self._poll_interval = 3
         self._background_polling = False
         self._poll_thread = None
+        # Search
+        self._search_query = ""
+        self._search_results = []
+        self._search_index = 0
+        self._search_mode = False
 
     def _load_profile(self):
         self.profile = {}
@@ -101,6 +106,13 @@ class ChatApp(SoftApp):
             except Exception:
                 pass
 
+    def _format_message_text(self, text):
+        import re as _re
+        text = _re.sub(r'\*\*(.+?)\*\*', r'\1 (bold)', text)
+        text = _re.sub(r'\*(.+?)\*', r'\1 (italic)', text)
+        text = _re.sub(r'__(.+?)__', r'\1 (underline)', text)
+        return text
+
     def _display_content(self, content):
         if ChatClient.is_voice_text(content):
             return 'voice message'
@@ -109,7 +121,7 @@ class ChatApp(SoftApp):
             if parsed:
                 return f"file: {parsed['name']} ({parsed['size']} bytes)"
             return 'file message'
-        return content
+        return self._format_message_text(content)
 
     def _poll_events(self):
         now = time.time()
@@ -387,9 +399,17 @@ class ChatApp(SoftApp):
         self.state = STATE_OPTIONS
         root = MenuNode("Options")
         root.add_child(MenuNode(f"Voice record duration: {self._record_duration}s", self._cycle_record_duration, "v"))
+        root.add_child(MenuNode(f"Poll interval: {self._poll_interval}s", self._cycle_poll_interval, "p"))
         root.add_child(MenuNode("Back", self._show_main_menu, "b"))
         self.menu = MenuSystem(root, self.speak)
         self.menu.announce_current()
+
+    def _cycle_poll_interval(self):
+        intervals = [1, 2, 3, 5, 10]
+        idx = intervals.index(self._poll_interval) if self._poll_interval in intervals else 2
+        self._poll_interval = intervals[(idx + 1) % len(intervals)]
+        self.speak(f"Poll interval: {self._poll_interval} seconds")
+        self._enter_options()
 
     def _cycle_record_duration(self):
         durations = [5, 10, 15, 20, 30]
@@ -495,6 +515,44 @@ class ChatApp(SoftApp):
         self.login_username = ""
         self.login_password = ""
         self._show_login_menu()
+
+    def _start_message_search(self):
+        self._search_mode = True
+        self._search_query = ""
+        self.input_buf = ""
+        self.speak("Search messages. Type search text.")
+        self.window.update_text("Search messages:")
+        self.state = STATE_COMPOSING
+        self.login_step = -3
+
+    def _do_message_search(self):
+        q = self.input_buf.strip().lower()
+        if not q:
+            self.speak("No search text.")
+            self._search_mode = False
+            self._return_to_chat()
+            return
+        self._search_results = [i for i, m in enumerate(self.messages) if q in m.get('text', '').lower() or q in m.get('sender', '').lower()]
+        self._search_index = 0
+        self._search_mode = False
+        if self._search_results:
+            self.msg_index = self._search_results[0]
+            m = self.messages[self.msg_index]
+            self.speak(f"Found {len(self._search_results)} matches. {m['sender']}: {m['text']}")
+            self._update_chat_window()
+            self._return_to_chat()
+        else:
+            self.speak("No matches found.")
+            self._return_to_chat()
+
+    def _next_search_result(self):
+        if not self._search_results:
+            return
+        self._search_index = (self._search_index + 1) % len(self._search_results)
+        self.msg_index = self._search_results[self._search_index]
+        m = self.messages[self.msg_index]
+        self.speak(f"Match {self._search_index + 1} of {len(self._search_results)}. {m['sender']}: {m['text']}")
+        self._update_chat_window()
 
     def _start_recording(self):
         if self._recording:
@@ -795,6 +853,12 @@ class ChatApp(SoftApp):
         if vk == win32con.VK_F1:
             self._refresh_room_messages()
             return
+        if vk == win32con.VK_F3:
+            self._start_message_search()
+            return
+        if vk == win32con.VK_F4:
+            self._next_search_result()
+            return
         if vk == 0x56:  # V
             self._start_recording()
             return
@@ -838,6 +902,12 @@ class ChatApp(SoftApp):
             return
         if vk == win32con.VK_F1:
             self._refresh_dm_messages()
+            return
+        if vk == win32con.VK_F3:
+            self._start_message_search()
+            return
+        if vk == win32con.VK_F4:
+            self._next_search_result()
             return
         if vk == 0x56:  # V
             self._start_recording()
@@ -1030,6 +1100,9 @@ class ChatApp(SoftApp):
                     if self.menu:
                         self.menu.announce_current()
                     return
+            if self.login_step == -3:
+                self._do_message_search()
+                return
             if self.login_step == -2:
                 if self.current_room_id == -7:
                     try:
@@ -1275,6 +1348,13 @@ class ChatApp(SoftApp):
             self._show_login_menu()
         except ChatError as e:
             self.speak(f"Registration failed: {e}")
+
+    def get_help_text(self):
+        if self.state in (STATE_ROOM_CHAT, STATE_DM_CHAT):
+            return "Chat. Space/Backspace browse, Enter compose, V voice, D delete, P play voice, F file, S save file, F3 search, F4 next result, F1 refresh."
+        if self.state == STATE_COMPOSING:
+            return "Composing. Type message, Enter send, Escape cancel."
+        return "Chat. Login to message in rooms or direct messages."
 
     def is_text_input_active(self):
         return self.state in (STATE_COMPOSING, STATE_CHANGE_PASSWORD, STATE_LOGIN_FORM, STATE_REGISTER_FORM, STATE_CONFIRM)

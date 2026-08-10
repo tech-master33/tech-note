@@ -137,6 +137,7 @@ class InternetApp(SoftApp):
         root.add_child(MenuNode("Add Bookmark", self._start_add_bookmark, "a"))
         root.add_child(MenuNode("Remove Bookmark", self._enter_remove_bookmark, "r"))
         root.add_child(MenuNode("History", self._show_history, "h"))
+        root.add_child(MenuNode("Downloads", self._show_downloads, "d"))
         items = self.bookmarks.get("__items__", [])
         if items:
             root.add_child(MenuNode("--- Quick Links ---", None))
@@ -175,6 +176,40 @@ class InternetApp(SoftApp):
             del self.bookmarks[name]
             _save_bookmarks(self.bookmarks)
             self.speak(f"{name} removed.")
+        self._build_menu()
+        self.menu.announce_current()
+
+    def _show_downloads(self):
+        if not os.path.exists(DOWNLOADS_DIR):
+            self.speak("No downloads.")
+            return
+        files = []
+        try:
+            for fname in sorted(os.listdir(DOWNLOADS_DIR), key=lambda x: os.path.getmtime(os.path.join(DOWNLOADS_DIR, x)), reverse=True):
+                fpath = os.path.join(DOWNLOADS_DIR, fname)
+                size = os.path.getsize(fpath)
+                size_str = f"{size}B" if size < 1024 else f"{size/1024:.1f}KB" if size < 1048576 else f"{size/1048576:.1f}MB"
+                files.append((fname, fpath, size_str))
+        except Exception:
+            pass
+        if not files:
+            self.speak("No downloads.")
+            return
+        root = MenuNode("Downloads")
+        for fname, fpath, size in files:
+            root.add_child(MenuNode(f"{fname} ({size})", lambda p=fpath: self.speak(f"Path: {p}")))
+        root.add_child(MenuNode("Clear Downloads", self._clear_downloads))
+        root.add_child(MenuNode("Back", self._build_menu))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _clear_downloads(self):
+        try:
+            for fname in os.listdir(DOWNLOADS_DIR):
+                os.remove(os.path.join(DOWNLOADS_DIR, fname))
+            self.speak("Downloads cleared.")
+        except Exception:
+            self.speak("Error clearing downloads.")
         self._build_menu()
         self.menu.announce_current()
 
@@ -283,6 +318,10 @@ class InternetApp(SoftApp):
             self._previous_content()
         elif vk == win32con.VK_RETURN:
             self._follow_link()
+        elif vk == win32con.VK_F5:
+            self._bookmark_current_page()
+        elif vk == win32con.VK_F6:
+            self._show_bookmarks_reading()
         elif vk == 0x44:
             self._download_current()
         elif vk == 0x48:
@@ -315,6 +354,32 @@ class InternetApp(SoftApp):
                 item = self.menu.get_current_item()
                 if item:
                     self.window.update_text("Internet: " + item.title)
+
+    def _bookmark_current_page(self):
+        if not self._page_url:
+            self.speak("No page to bookmark.")
+            return
+        name = self._page_title or self._page_url
+        if name in self.bookmarks or self._page_url in self.bookmarks.values():
+            self.speak("Already bookmarked.")
+            return
+        self.bookmarks[name] = self._page_url
+        if "__items__" not in self.bookmarks:
+            self.bookmarks["__items__"] = []
+        self.bookmarks["__items__"].append(name)
+        _save_bookmarks(self.bookmarks)
+        self.speak("Page bookmarked.")
+
+    def _show_bookmarks_reading(self):
+        root = MenuNode("Bookmarks")
+        keys = [k for k in sorted(self.bookmarks.keys()) if k != "__items__"]
+        for name in keys:
+            url = self.bookmarks[name]
+            root.add_child(MenuNode(name, lambda u=url: self.fetch_page(u)))
+        root.add_child(MenuNode("Add Bookmark", self._start_add_bookmark))
+        root.add_child(MenuNode("Back", lambda: self.speak("Back to reading.")))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
 
     def _handle_add_bookmark(self, vk):
         if vk == win32con.VK_ESCAPE:
@@ -498,8 +563,8 @@ class InternetApp(SoftApp):
 
     def get_help_text(self):
         if self.reading_mode:
-            return "Reading Mode. Space next, Backspace previous. H heading, L link, Enter follow, D download, I info, / search. Escape back."
-        return "Internet. Space next, Backspace previous, Enter open. O URL, A add bookmark, R remove, H history. Escape exit."
+            return "Reading Mode. Space next, Backspace previous. H heading, L link, Enter follow, D download, I info, / search, F5 bookmark, F6 bookmarks. Escape back."
+        return "Internet. Space next, Backspace previous, Enter open. O URL, A add bookmark, R remove, H history, D downloads. Escape exit."
 
     def fetch_page(self, url):
         if not HAS_WEB_DEPS:

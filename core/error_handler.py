@@ -1,3 +1,4 @@
+import datetime
 import os
 import json
 import threading
@@ -5,7 +6,9 @@ import traceback
 from core.config import TECH_SOFT
 
 LOG_FILE = os.path.join(TECH_SOFT, 'tech-note.log')
+CRASH_REPORT_FILE = os.path.join(TECH_SOFT, 'crash_reports.json')
 MAX_LOG_SIZE = 5 * 1024 * 1024
+MAX_CRASH_REPORTS = 20
 
 LEVEL_SILENT = 0
 LEVEL_ERROR = 1
@@ -25,6 +28,52 @@ LEVEL_NAMES = {
 
 _current_level = LEVEL_WARN
 _log_lock = threading.Lock()
+_crash_reports = []
+_crash_lock = threading.Lock()
+
+
+def _load_crash_reports():
+    global _crash_reports
+    try:
+        if os.path.exists(CRASH_REPORT_FILE):
+            with open(CRASH_REPORT_FILE, 'r') as f:
+                _crash_reports = json.load(f)[-MAX_CRASH_REPORTS:]
+    except Exception:
+        _crash_reports = []
+
+
+def _save_crash_reports():
+    try:
+        with open(CRASH_REPORT_FILE, 'w') as f:
+            json.dump(_crash_reports[-MAX_CRASH_REPORTS:], f, indent=2)
+    except Exception:
+        pass
+
+
+def report_crash(exception, context=""):
+    _load_crash_reports()
+    report = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "context": context,
+        "exception": str(exception),
+        "traceback": traceback.format_exc(),
+    }
+    with _crash_lock:
+        _crash_reports.append(report)
+        _save_crash_reports()
+    log(exception, f"CRASH: {context}", level=LEVEL_ERROR)
+
+
+def get_crash_reports():
+    _load_crash_reports()
+    return list(reversed(_crash_reports))
+
+
+def clear_crash_reports():
+    with _crash_lock:
+        _crash_reports.clear()
+        _save_crash_reports()
+
 
 def set_level(level):
     global _current_level

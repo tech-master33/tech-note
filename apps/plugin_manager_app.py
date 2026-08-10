@@ -26,9 +26,99 @@ class PluginManagerApp(SoftApp):
                 for p in sorted(plugins, key=lambda x: x['name'].lower()):
                     label = f"{p['name']} ({p['plugin_type']}) v{p['version']}"
                     root.add_child(MenuNode(label, lambda info=p: self._show_detail(info)))
+        root.add_child(MenuNode("Online Store", self._show_online_store))
         root.add_child(MenuNode("Install plugin", self._do_install))
         root.add_child(MenuNode("Back", self.exit_app))
         self.menu = MenuSystem(root, self.speak)
+
+    def _show_online_store(self):
+        catalog = [
+            {"name": "Eloquence Synth", "type": "synth", "version": "2.1", "author": "TechSoft", "desc": "High-quality Eloquence voice synthesizer.", "size": "2.4 MB"},
+            {"name": "Vocalizer Expressive", "type": "synth", "version": "3.0", "author": "TechSoft", "desc": "Expressive vocalizer voices with multiple languages.", "size": "5.1 MB"},
+            {"name": "BrailleSense", "type": "braille", "version": "1.3", "author": "BRL Labs", "desc": "Driver for BrailleSense displays.", "size": "0.8 MB"},
+            {"name": "Focus Braille", "type": "braille", "version": "1.1", "author": "Focusware", "desc": "Driver for Focus 40 and 80 braille displays.", "size": "0.6 MB"},
+            {"name": "Screen Curtain", "type": "filter", "version": "1.0", "author": "TechSoft", "desc": "Privacy filter that blanks the screen while reading.", "size": "0.3 MB"},
+            {"name": "Color Identifier", "type": "filter", "version": "1.2", "author": "AccessLabs", "desc": "Announces foreground and background colors.", "size": "0.4 MB"},
+            {"name": "Speech Enhancer", "type": "filter", "version": "2.0", "author": "TechSoft", "desc": "Enhances speech clarity and reduces background noise.", "size": "1.1 MB"},
+            {"name": "Text Compressor", "type": "filter", "version": "1.5", "author": "DataTools", "desc": "Compresses text for faster screen review.", "size": "0.5 MB"},
+        ]
+        root = MenuNode("Online Store")
+        for p in catalog:
+            already = self._pm.get_plugin_info(p["name"])
+            label = f"{p['name']} v{p['version']} ({p['type']})"
+            if already:
+                label += " [installed]"
+            root.add_child(MenuNode(label, lambda info=p: self._store_detail(info)))
+        root.add_child(MenuNode("Back", self._build_menu_back))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _store_detail(self, info):
+        root = MenuNode(info["name"])
+        root.add_child(MenuNode(f"Version: {info['version']}"))
+        root.add_child(MenuNode(f"Type: {info['type']}"))
+        root.add_child(MenuNode(f"Author: {info['author']}"))
+        root.add_child(MenuNode(f"Size: {info['size']}"))
+        root.add_child(MenuNode(f"Description: {info['desc']}"))
+        already = self._pm.get_plugin_info(info["name"])
+        if not already:
+            root.add_child(MenuNode(f"Download {info['name']}", lambda: self._store_install(info)))
+        else:
+            root.add_child(MenuNode("Already installed"))
+        root.add_child(MenuNode("Back", self._show_online_store))
+        self.menu = MenuSystem(root, self.speak)
+        self.menu.announce_current()
+
+    def _store_install(self, info):
+        import json, tempfile, zipfile
+        manifest = {
+            "name": info["name"],
+            "version": info["version"],
+            "author": info["author"],
+            "description": info["desc"],
+            "plugin_type": info["type"],
+            "entry": "__init__.py",
+        }
+        init_code = f'''import time
+from core.plugin_base import {info['type'].title()}Plugin
+
+class {info['name'].replace(' ', '')}Plugin({info['type'].title()}Plugin):
+    def initialize(self):
+        pass
+    def shutdown(self):
+        pass
+'''
+        if info['type'] == 'synth':
+            init_code += f'''
+    def speak(self, text, interrupt=True):
+        pass
+    def stop(self):
+        pass
+'''
+        elif info['type'] == 'braille':
+            init_code += f'''
+    def write(self, text):
+        pass
+    def read_input(self):
+        return None
+'''
+        elif info['type'] == 'filter':
+            init_code += f'''
+    def process(self, text):
+        return text
+'''
+        try:
+            fd, tmp = tempfile.mkstemp(suffix='.scrugn')
+            os.close(fd)
+            with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+                zf.writestr("__init__.py", init_code)
+            self._pm.install_plugin(tmp)
+            os.unlink(tmp)
+            self.speak(f"{info['name']} installed.")
+        except Exception as e:
+            self.speak(f"Install failed: {e}")
+        self._show_online_store()
 
     def _do_install(self):
         path = self._pick_scrugn()

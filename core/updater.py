@@ -6,6 +6,10 @@ import time
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+_background_check_result = None
+_background_check_time = 0
+_background_check_lock = threading.Lock()
+
 
 def get_version():
     try:
@@ -60,6 +64,27 @@ def _git_pull(branch="main"):
         _git_run(["branch", "--set-upstream-to", f"origin/{branch}", branch], timeout=30)
         result = _git_run(["pull", "origin", branch], timeout=60)
     return result
+
+
+def _git_log(since=None, count=10):
+    args = ["log", f"--oneline", f"-{count}"]
+    if since:
+        args.append(f"{since}..HEAD")
+    result = _git_run(args, timeout=10)
+    if result and result.returncode == 0:
+        return result.stdout.strip()
+    return ""
+
+
+def get_changelog(count=10):
+    return _git_log(count=count)
+
+
+def get_recent_commits(limit=10):
+    result = _git_run(["log", f"-{limit}", "--oneline", "--decorate"], timeout=10)
+    if result and result.returncode == 0:
+        return result.stdout.strip().split("\n")
+    return []
 
 
 def _install_requirements():
@@ -192,3 +217,25 @@ def check_now(synth=None, window=None):
         if synth:
             synth.speak("Update error.")
         return False
+
+
+def check_background(callback=None):
+    global _background_check_result, _background_check_time
+    now = time.time()
+    with _background_check_lock:
+        if now - _background_check_time < 300:
+            if callback:
+                callback(_background_check_result)
+            return _background_check_result
+    result = check_now()
+    with _background_check_lock:
+        _background_check_result = result
+        _background_check_time = now
+    if callback:
+        callback(result)
+    return result
+
+
+def get_cached_check():
+    with _background_check_lock:
+        return _background_check_result, _background_check_time

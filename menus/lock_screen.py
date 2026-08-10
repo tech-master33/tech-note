@@ -35,6 +35,7 @@ class LockScreenApp(SoftApp):
         else:
             self.account = {}
         self.lock_type = self.account.get("lock_type", "pin")
+        self.lock_message = self.account.get("lock_message", "")
 
     def _load_time_format(self):
         self._time_format = "12h"
@@ -67,6 +68,8 @@ class LockScreenApp(SoftApp):
         root = MenuNode("Lock Screen")
         root.add_child(MenuNode(f"Time: {time_str}"))
         root.add_child(MenuNode(f"Date: {date_str}"))
+        if self.lock_message:
+            root.add_child(MenuNode(self.lock_message))
         bat = self._battery_text()
         if bat:
             root.add_child(MenuNode(bat))

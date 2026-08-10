@@ -155,6 +155,40 @@ def _register_builtins(registry):
         except ValueError:
             return f"Invalid volume: {arg}"
 
+    def _run(arg):
+        if not arg:
+            return "Usage: run <app_name>. Available: " + ", ".join(_get_app_list())
+        target = arg.strip().lower()
+        try:
+            from core.menu import build_braillenote_menu
+            from main import _run_app_by_name
+            if _run_app_by_name(target):
+                return f"Running {target}."
+            else:
+                return f"App '{target}' not found."
+        except Exception:
+            return f"Could not run {target}."
+
+    def _switch(arg):
+        if not arg:
+            return "Usage: switch <app_name>. Use 'apps' to list."
+        try:
+            from main import _switch_to_app
+            if _switch_to_app(arg.strip()):
+                return f"Switched to {arg}."
+            else:
+                return f"App '{arg}' not found."
+        except Exception:
+            return f"Could not switch to {arg}."
+
+    def _get_app_list():
+        try:
+            from core.menu import build_braillenote_menu
+            menu = build_braillenote_menu(None, None, lambda x: None, None, None)
+            return [child.title for child in (menu.children or []) if child.title]
+        except Exception:
+            return []
+
     def _reboot(arg):
         import os
         os._exit(42)
@@ -176,6 +210,8 @@ def _register_builtins(registry):
         ("voice", "Set voice: voice <name>", _voice),
         ("rate", "Get or set speech rate: rate [value]", _rate),
         ("volume", "Get or set volume: volume [value]", _volume),
+        ("run", "Launch an app: run <app_name>", _run),
+        ("switch", "Switch to a running app: switch <app_name>", _switch),
         ("reboot", "Restart Tech-Note", _reboot),
         ("shutdown", "Exit Tech-Note", _shutdown),
     ]
