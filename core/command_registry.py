@@ -189,6 +189,144 @@ def _register_builtins(registry):
         except Exception:
             return []
 
+    def _services(arg):
+        from core.systmanserv import get_manager
+        m = get_manager()
+        parts = arg.split()
+        if not parts:
+            statuses = m.status()
+            if not statuses:
+                return "No services registered."
+            return "Services: " + ", ".join(
+                f"{s['name']} {s['state']}" for s in statuses
+            )
+        action = parts[0].lower()
+        name = parts[1].strip() if len(parts) > 1 else ""
+        if action == "log":
+            if not name:
+                return "Usage: services log <name>"
+            entries = m.get_log(name)  # live history + on-disk journal
+            if not entries:
+                return f"No run history for {name}."
+            lines = []
+            for e in reversed(entries):
+                ts = time.strftime("%H:%M:%S", time.localtime(e["time"]))
+                status = "ok" if e["ok"] else "error"
+                dur = f"{e['duration']:.1f}s"
+                desc = f" ({e['desc']})" if e.get("desc") else ""
+                err = f" - {e['error']}" if e.get("error") else ""
+                lines.append(f"{ts} {status} {dur}{desc}{err}")
+            return f"Log for {name}: " + "; ".join(lines)
+        if m.get(action) is not None and not name:
+            # `services <name>` -> full status and statistics for one service
+            info = {s["name"]: s for s in m.status()}.get(action)
+            if info:
+                bits = [f"{action} {info['state']}"]
+                bits.append("enabled" if info["enabled"] else "disabled")
+                bits.append(f"{info['runs']} runs")
+                if info["successes"] or info["failures"]:
+                    bits.append(f"{info['successes']} ok, {info['failures']} failed")
+                if info.get("avg_duration") is not None:
+                    bits.append(f"avg {info['avg_duration']}s")
+                if info["pending"] is not None:
+                    bits.append(f"{info['pending']} pending")
+                if info["restart"] != "no":
+                    bits.append(f"restart {info['restart']} ({info['max_restarts']} max)")
+                if info["consecutive_failures"]:
+                    bits.append(f"{info['consecutive_failures']} failures in a row")
+                if info.get("last_error"):
+                    bits.append(f"last error: {info['last_error']}")
+                return "Service: " + ", ".join(bits)
+        if not name:
+            return "Usage: services <log|start|stop|restart|enable|disable> <name>"
+        if action == "start":
+            if m.start(name):
+                return f"{name} started."
+            svc = m.get(name)
+            if not svc:
+                return f"Service '{name}' not found."
+            if not svc.enabled:
+                return f"{name} is disabled. Enable it first: services enable {name}"
+            return f"{name} is already running."
+        if action == "stop":
+            if m.stop(name):
+                return f"{name} stopped."
+            return f"Service '{name}' not found."
+        if action == "restart":
+            if m.restart(name):
+                return f"{name} restarted."
+            svc = m.get(name)
+            if not svc:
+                return f"Service '{name}' not found."
+            if not svc.enabled:
+                return f"{name} is disabled. Enable it first: services enable {name}"
+            return f"Could not restart {name}."
+        if action == "enable":
+            if m.enable(name):
+                return f"{name} enabled."
+            return f"Service '{name}' not found."
+        if action == "disable":
+            if m.disable(name):
+                return f"{name} disabled."
+            return f"Service '{name}' not found."
+        return "Usage: services <log|start|stop|restart|enable|disable> <name>"
+
+    def _audio(arg):
+        from core.systmanau import get_audio_manager
+        am = get_audio_manager()
+        parts = arg.split()
+        if not parts or parts[0].lower() == "status":
+            st = am.status()
+            head = (f"Now playing {st['desc'] or st['source']} on {st['channel']}"
+                    if st["channel"] else "No audio playing")
+            paused = f", paused: {', '.join(st['paused'])}" if st["paused"] else ""
+            pending = f", pending: {', '.join(st['pending'])}" if st["pending"] else ""
+            muted = "muted" if st["muted"] else f"volume {st['volume']}"
+            ducking = "ducking on" if st["ducking"] else "ducking off"
+            pause = ("pause while playing on" if st["pause_while_playing"]
+                     else "pause while playing off")
+            return f"{head}{paused}{pending}. {muted}, EQ {st['eq']}, {ducking}, {pause}."
+        action = parts[0].lower()
+        if action == "stop":
+            if len(parts) > 1:
+                am.stop_channel(parts[1])
+                return f"Stopped {parts[1]}."
+            am.stop_all()
+            return "Stopped all audio."
+        if action in ("vol", "volume"):
+            if len(parts) > 1:
+                try:
+                    am.set_volume(int(parts[1]))
+                    return f"Volume set to {parts[1]}."
+                except ValueError:
+                    return f"Invalid volume: {parts[1]}"
+            return f"Volume is {am.get_volume()}."
+        if action == "mute":
+            am.set_muted(True)
+            return "Muted."
+        if action == "unmute":
+            am.set_muted(False)
+            return "Unmuted."
+        if action == "duck":
+            am.duck()
+            return "Ducked."
+        if action == "unduck":
+            am.unduck()
+            return "Unducked."
+        if action == "eq":
+            if len(parts) > 1:
+                am.set_eq(parts[1])
+                return f"EQ set to {parts[1]}."
+            return f"EQ is {am.get_eq()}."
+        if action == "pause":
+            if len(parts) > 1:
+                on = parts[1].lower() in ("on", "1", "true", "yes")
+                am.set_pause_while_playing(on)
+                return f"Pause while playing {'on' if on else 'off'}."
+            return ("Pause while playing is on." if am.status()["pause_while_playing"]
+                    else "Pause while playing is off.")
+        return "Usage: audio <status|stop [channel]|vol [value]|mute|unmute|duck|unduck|eq [preset]|pause [on|off]>"
+
     def _reboot(arg):
         import os
         os._exit(42)
@@ -212,6 +350,8 @@ def _register_builtins(registry):
         ("volume", "Get or set volume: volume [value]", _volume),
         ("run", "Launch an app: run <app_name>", _run),
         ("switch", "Switch to a running app: switch <app_name>", _switch),
+        ("services", "Manage background services: services [log|start|stop|restart|enable|disable <name>]", _services),
+        ("audio", "Control audio: audio [status|stop|vol|mute|unmute|duck|unduck|eq]", _audio),
         ("reboot", "Restart Tech-Note", _reboot),
         ("shutdown", "Exit Tech-Note", _shutdown),
     ]

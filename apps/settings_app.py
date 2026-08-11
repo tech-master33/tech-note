@@ -28,6 +28,9 @@ class SettingsApp(SoftApp):
             "smooth_shutdown_audio": True,
             "app_sleep_hibernate": True,
             "shutdown_key_protection": True,
+            "block_on_unsaved": True,
+            "warn_unsaved_on_shutdown": True,
+            "auto_lock_minutes": 0,
             "log_level": "WARN"
         }
         self.load_settings()
@@ -56,6 +59,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Find Setting", self._enter_find_setting))
         root.add_child(MenuNode("Backup Settings", self._do_backup))
         root.add_child(MenuNode("Restore Settings", self._enter_restore))
+        root.add_child(MenuNode("Cloud Backup", self._enter_cloud_backup_menu))
         root.add_child(MenuNode("Check for Updates", self._check_for_updates))
         root.add_child(MenuNode("About Tech-Note", self._about))
         root.add_child(MenuNode("Reset TechNote", self._reset_technote))
@@ -78,6 +82,8 @@ class SettingsApp(SoftApp):
         root = MenuNode("System Settings")
         root.add_child(MenuNode("Time Format", lambda: self._enter_list_setting("time_format", ["12h", "24h"])))
         root.add_child(MenuNode("Startup Sound", lambda: self._enter_list_setting("startup_sound", ["On", "Off"])))
+        from core.autostart import is_autostart_enabled
+        root.add_child(MenuNode("Start with Windows (" + ("On" if is_autostart_enabled() else "Off") + ")", lambda: self._toggle_autostart()))
         root.add_child(MenuNode("Keyboard Layout", lambda: self._enter_list_setting("keyboard_layout", ["US", "UK", "Arabic"], side_effect=self._kbd_side_effect)))
         root.add_child(MenuNode("Update Channel", lambda: self._enter_list_setting("update_channel", ["stable", "unstable"], side_effect=self._update_side_effect)))
         root.add_child(MenuNode("Auto-Update on Startup", lambda: self._enter_list_setting("auto_update_on_startup", [False, True], display_map={False: "Off", True: "On"})))
@@ -85,10 +91,69 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Fade Audio on Shutdown", lambda: self._enter_list_setting("smooth_shutdown_audio", [False, True], display_map={False: "Off", True: "On"})))
         root.add_child(MenuNode("Sleep/Hibernate Options", lambda: self._enter_list_setting("app_sleep_hibernate", [False, True], display_map={False: "Off", True: "On"})))
         root.add_child(MenuNode("Block Keys During Shutdown", lambda: self._enter_list_setting("shutdown_key_protection", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Block Shutdown on Unsaved Work", lambda: self._enter_list_setting("block_on_unsaved", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Warn on Unsaved Work", lambda: self._enter_list_setting("warn_unsaved_on_shutdown", [False, True], display_map={False: "Off", True: "On"})))
+        root.add_child(MenuNode("Auto-Lock After Idle (minutes)", self._enter_auto_lock_menu))
         root.add_child(MenuNode("Log Level", lambda: self._enter_list_setting("log_level", ["SILENT", "ERROR", "WARN", "INFO", "DEBUG", "ALL"], side_effect=self._log_level_side_effect)))
         root.add_child(MenuNode("Do Not Disturb", lambda: self._enter_list_setting("dnd_enabled", [False, True], display_map={False: "Off", True: "On"}, side_effect=self._dnd_side_effect)))
         root.add_child(MenuNode("Back", self._back_to_main_menu))
         self._switch_to_submenu(root, "System Settings")
+
+    def _enter_auto_lock_menu(self):
+        """Auto-Lock After Idle (minutes), 0 = off. Same numeric pattern as
+        the Options menu's TTS Volume: Edit Value..., Reset to Default, Back.
+        No side effect — the auto-lock systmanserv service reads
+        auto_lock_minutes from settings.json."""
+        self._build_numeric_menu("Auto-Lock After Idle (minutes)",
+                                 "auto_lock_minutes", 0, 0, 120)
+
+    def _build_numeric_menu(self, title, setting_key, default, min_val, max_val,
+                            side_effect=None):
+        root = MenuNode(title)
+        root.add_child(MenuNode("Edit Value...", lambda: self._start_numeric_input(setting_key, min_val, max_val, side_effect)))
+        root.add_child(MenuNode(f"Reset to Default ({default})", lambda: self._reset_numeric(setting_key, default, side_effect)))
+        root.add_child(MenuNode("Back", self._current_parent_back or self._back_to_main_menu))
+        self._switch_to_submenu(root, title)
+
+    def _start_numeric_input(self, setting_key, min_val, max_val, side_effect=None):
+        self.adjust_mode = "numeric_input"
+        self._numeric_key = setting_key
+        self._numeric_min = min_val
+        self._numeric_max = max_val
+        self._numeric_side_effect = side_effect
+        self._text_input_buf = ""
+        self.speak(f"Enter value between {min_val} and {max_val}. 0 turns it off.")
+        self.window.update_text(f"{setting_key.replace('_', ' ').title()}: ")
+
+    def _handle_numeric_input(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self.adjust_mode = None
+            if self._current_parent_back:
+                self._current_parent_back()
+            return
+        if vk == win32con.VK_RETURN:
+            val = self._text_input_buf.strip()
+            try:
+                num = int(val)
+                if self._numeric_min <= num <= self._numeric_max:
+                    self._set_setting_and_back(self._numeric_key, num, side_effect=getattr(self, '_numeric_side_effect', None))
+                else:
+                    self.speak(f"Value must be between {self._numeric_min} and {self._numeric_max}.")
+            except ValueError:
+                self.speak("Invalid number.")
+            return
+        if vk == win32con.VK_BACK:
+            if self._text_input_buf:
+                self._text_input_buf = self._text_input_buf[:-1]
+                self.window.update_text(self._text_input_buf if self._text_input_buf else " ")
+            return
+        ch = self._vk_to_char(vk)
+        if ch and (ch.isdigit() or (ch == '-' and not self._text_input_buf)):
+            self._text_input_buf += ch
+            self.window.update_text(self._text_input_buf)
+
+    def _reset_numeric(self, setting_key, default, side_effect=None):
+        self._set_setting_and_back(setting_key, default, side_effect=side_effect)
 
     def _enter_list_setting(self, key, options, display_map=None, side_effect=None):
         root = MenuNode(key.replace('_', ' ').title())
@@ -191,11 +256,18 @@ class SettingsApp(SoftApp):
             self._handle_find_setting(vk)
             return
 
+        if self.adjust_mode == "numeric_input":
+            self._handle_numeric_input(vk)
+            return
+
         if self.pin_mode:
             self._handle_pin_input(vk)
             return
 
         if self.text_input is not None:
+            if getattr(self, 'text_input_field', None) == "cloud_backup_label":
+                self._handle_cloud_label_input(vk)
+                return
             if self.adjust_mode == "text_input":
                 self._handle_text_input(vk)
                 return
@@ -316,6 +388,17 @@ class SettingsApp(SoftApp):
             self._start_pin_reset()
         else:
             self._start_account_text_input("password", "Enter new password.")
+
+    def _toggle_autostart(self):
+        from core.autostart import is_autostart_enabled, enable_autostart, disable_autostart
+        if is_autostart_enabled():
+            disable_autostart()
+            self.speak("Start with Windows Off.")
+        else:
+            if enable_autostart():
+                self.speak("Start with Windows On.")
+            else:
+                self.speak("Could not enable Start with Windows.")
 
     def _toggle_shutdown_pin(self):
         self.settings["shutdown_pin"] = not self.settings["shutdown_pin"]
@@ -556,6 +639,11 @@ class SettingsApp(SoftApp):
             self.window.update_text("*" * len(self._text_input_buf))
 
     def _restart_app(self):
+        if self.manager._unsaved_warnings_enabled():
+            names = self.manager._unsaved_app_names()
+            if names and self.manager._unsaved_blocks_exit():
+                self.speak(f"Unsaved work in {names}. Restart cancelled.")
+                return
         subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
         self.manager._exit_app()
 
@@ -605,6 +693,9 @@ class SettingsApp(SoftApp):
             "Fade Audio on Shutdown": ("System Settings", "smooth_shutdown_audio"),
             "Sleep/Hibernate Options": ("System Settings", "app_sleep_hibernate"),
             "Block Keys During Shutdown": ("System Settings", "shutdown_key_protection"),
+            "Block Shutdown on Unsaved Work": ("System Settings", "block_on_unsaved"),
+            "Warn on Unsaved Work": ("System Settings", "warn_unsaved_on_shutdown"),
+            "Auto-Lock After Idle": ("System Settings", "auto_lock_minutes"),
             "Log Level": ("System Settings", "log_level"),
             "Username": ("Account", "username"),
             "Custom Goodbye": ("Account", "custom_goodbye"),
@@ -721,6 +812,101 @@ class SettingsApp(SoftApp):
                 self.speak(f"Restored from {name}.")
             self._back_to_main_menu()
         except Exception:
+            self.speak("Restore failed.")
+
+    # --- Cloud Backup ---
+    def _enter_cloud_backup_menu(self):
+        self._in_sub_menu = True
+        self._current_parent_back = self._back_to_main_menu
+        root = MenuNode("Cloud Backup")
+        root.add_child(MenuNode("Export Backup", self._start_cloud_backup))
+        root.add_child(MenuNode("Restore Latest", self._do_restore_latest_cloud))
+        root.add_child(MenuNode("List Backups", self._enter_cloud_backup_list))
+        root.add_child(MenuNode("Back", self._back_to_main_menu))
+        self._switch_to_submenu(root, "Cloud Backup")
+
+    def _start_cloud_backup(self):
+        self.text_input = ""
+        self.adjust_mode = "text_input"
+        self.text_input_field = "cloud_backup_label"
+        self._text_input_buf = ""
+        self.speak("Backup label. Type a name and press Enter, or press Enter for an automatic label.")
+        self.window.update_text("Backup label: ")
+
+    def _handle_cloud_label_input(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self.text_input = None
+            self.adjust_mode = None
+            self.speak("Cancelled.")
+            self._announce_main()
+            return
+        if vk == win32con.VK_RETURN:
+            label = self._text_input_buf.strip()
+            self.text_input = None
+            self.adjust_mode = None
+            from core.cloud_sync import export_to_cloud
+            if export_to_cloud(label):
+                self.speak(f"Cloud backup saved{(' as ' + label) if label else ''}.")
+            else:
+                self.speak("Cloud backup failed.")
+            self._announce_main()
+            return
+        if vk == win32con.VK_BACK:
+            if self._text_input_buf:
+                self._text_input_buf = self._text_input_buf[:-1]
+                self.window.update_text(f"Backup label: {self._text_input_buf}")
+            return
+        ch = self._vk_to_char(vk)
+        if ch is not None:
+            self._text_input_buf += ch
+            self.window.update_text(f"Backup label: {self._text_input_buf}")
+
+    def _do_restore_latest_cloud(self):
+        from core.cloud_sync import import_from_cloud
+        if import_from_cloud():
+            try:
+                with open(SETTINGS_PATH, 'r') as f:
+                    self.settings.update(json.load(f))
+            except Exception:
+                pass
+            self.speak("Restored latest cloud backup.")
+            self._back_to_main_menu()
+        else:
+            self.speak("No cloud backups found.")
+
+    def _enter_cloud_backup_list(self):
+        from core.cloud_sync import list_cloud_backups
+        backups = list_cloud_backups()
+        if not backups:
+            self.speak("No cloud backups found.")
+            return
+        root = MenuNode("Cloud Backups")
+        for b in backups:
+            label = b.get("label") or b.get("filename")
+            when = ""
+            try:
+                ts = b.get("timestamp", 0)
+                if ts:
+                    import datetime
+                    when = datetime.datetime.fromtimestamp(ts).strftime(" %Y-%m-%d %H:%M")
+            except Exception:
+                pass
+            title = f"{label}{when}"
+            root.add_child(MenuNode(title, lambda path=b["path"]: self._do_restore_cloud(path)))
+        root.add_child(MenuNode("Back", self._current_parent_back or self._back_to_main_menu))
+        self._switch_to_submenu(root, "Cloud Backups")
+
+    def _do_restore_cloud(self, path):
+        from core.cloud_sync import import_from_cloud
+        if import_from_cloud(path):
+            try:
+                with open(SETTINGS_PATH, 'r') as f:
+                    self.settings.update(json.load(f))
+            except Exception:
+                pass
+            self.speak("Cloud backup restored.")
+            self._back_to_main_menu()
+        else:
             self.speak("Restore failed.")
 
     def _switch_branch(self):

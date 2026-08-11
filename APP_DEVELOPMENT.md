@@ -68,9 +68,9 @@ def __init__(self, manager, window, app_type='app')
 | `self.active` | `bool` — set to `False` to signal app exit |
 | `self.app_type` | Optional type string |
 | `self.input_mode` | Current input mode: `'menu'` or `'text'` (default `'menu'`) |
-| `self._input_buf` | Text input buffer |
-| `self._input_prompt` | Text input prompt string |
-| `self._input_callback` | Callback for text input submission |
+| `self.input_buf` | Text input buffer |
+| `self.input_prompt` | Text input prompt string |
+| `self.input_callback` | Callback for text input submission |
 
 ### Lifecycle Methods (all optional)
 
@@ -122,20 +122,21 @@ def __init__(self, manager, window, app_type='app')
 
 ```
 User selects "Word Processor" in main menu
-  → app_manager.launch(TechEdit)
-    → current_app.on_pause()        # if an app was active
+  → BrailleNoteApp.launch_app(TechEdit)
+    → current_app.on_pause()        # only if an app was active
     → new_app = TechEdit(manager, window)
     → new_app.on_focus()
     → current_app = new_app
-    → push old app onto stack
 
 User presses Escape in Word Processor
-  → app_manager.exit_current()
-    → current_app.on_destroy()
-    → current_app.exit_app()
-    → pop previous app from stack
-    → previous_app.on_resume()
-    → current_app = previous_app
+  → exit_app() sets active = False
+  → handle_key calls _finalize_exited_app()
+    → app_manager.exit_current()
+    → resumes the app on the stack (if any), else returns to the main menu
+
+Nested app (e.g. Plugin Manager opened from Options)
+  → app_manager.launch(PluginManagerApp)   # pauses + pushes the caller
+  → app_manager.exit_current() on exit     # pops and resumes the caller
 ```
 
 ---
@@ -273,16 +274,19 @@ The third argument is an optional shortcut key (letter or number). Use letters t
 
 Apps can also be installed dynamically by placing a manifest in the `apps/` directory:
 
-1. Create a subdirectory in `apps/your_app/`
+1. Create a subdirectory in `apps/your_app/` containing your app's Python file
 2. Add a `manifest.json`:
    ```json
    {
        "name": "Your App",
-       "module": "apps.your_app",
-       "class": "YourAppClass"
+       "entry_point": "your_app.py"
    }
    ```
 3. The app is automatically picked up when the menu is built.
+
+The `entry_point` is the Python file containing your app class. The class does not need to be named: Tech-Note discovers it by scanning the module for a `SoftApp` subclass with `on_key` and `exit_app` methods.
+
+Apps installed from the App Store are recorded in `~/.tech-soft/installed_apps.json` (same `entry_point` field) and load the same way. In Safe Mode, installed third-party apps are hidden from the main menu.
 
 ---
 
@@ -392,7 +396,7 @@ The best way to learn app development is to study the built-in apps:
 
 - Always provide a prompt when starting text input
 - Handle `VK_ESCAPE` to cancel text input
-- Remember that `_input_buf` is managed by the base class during text input
+- Remember that `input_buf` is managed by the base class during text input
 - The callback receives the final text string
 
 ### Help Text

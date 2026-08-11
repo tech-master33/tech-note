@@ -28,7 +28,8 @@ class ChatClient:
         self._event_lock = threading.Lock()
         self._stop_polling = threading.Event()
         self._stop_polling.set()
-        self._poll_thread = None
+        self._poll_failures = 0
+        self._poll_heartbeat = 0
 
     def _headers(self):
         h = {'Content-Type': 'application/json'}
@@ -110,6 +111,8 @@ class ChatClient:
 
     def logout(self):
         self._stop_polling.set()
+        from core.systmanserv import get_manager
+        get_manager().stop("chat-client-poll")
         self.is_connected = False
         self.token = None
         self.user_id = None
@@ -289,21 +292,14 @@ class ChatClient:
 
     @staticmethod
     def play_voice(path):
-        """Play a WAV file."""
+        """Play a voice message through the audio manager (voice channel)."""
         try:
-            import winsound
-            winsound.PlaySound(path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            from core.systmanau import get_audio_manager
+            get_audio_manager().play(
+                "voice", path, kind="file", desc="voice message", wait=True
+            )
         except Exception:
-            try:
-                import sounddevice as sd
-                import numpy as np
-                with wave.open(path, 'rb') as wf:
-                    frames = wf.readframes(wf.getnframes())
-                    data = np.frombuffer(frames, dtype=np.int16)
-                    sd.play(data, wf.getframerate())
-                    sd.wait()
-            except Exception:
-                pass
+            pass
 
     # --- File Helpers (inline base64 with ! prefix) ---
     @staticmethod
@@ -329,12 +325,14 @@ class ChatClient:
 
     # --- Polling ---
     def _start_polling(self):
-        if self._poll_thread and self._poll_thread.is_alive():
-            self._stop_polling.set()
-            self._poll_thread.join(timeout=2)
+        from core.systmanserv import get_manager
+        m = get_manager()
+        m.stop("chat-client-poll")
         self._stop_polling.clear()
-        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
-        self._poll_thread.start()
+        m.register("chat-client-poll",
+                   description="Poll chat server for new messages",
+                   run=self._poll_once, interval=3)
+        m.start("chat-client-poll")
         self._start_websocket()
 
     def _start_websocket(self):
@@ -371,48 +369,45 @@ class ChatClient:
         except Exception:
             pass
 
-    def _poll_loop(self):
-        failures = 0
-        heartbeat_count = 0
-        while not self._stop_polling.is_set():
-            try:
-                heartbeat_count += 1
-                if heartbeat_count % 5 == 0:
-                    self._post('heartbeat')
-                rooms_resp = self._get('rooms')
-                failures = 0
-                for room in rooms_resp.get('rooms', []):
-                    rid = room.get('id')
-                    unread = room.get('unread_count', 0)
-                    if rid and unread > 0:
-                        result = self.get_messages(rid, limit=unread)
-                        for m in result.get('messages', []):
-                            with self._event_lock:
-                                self.event_queue.append(('room_message', m))
+    def _poll_once(self):
+        """One polling pass over the chat server. Runs as the
+        'chat-client-poll' systmanserv service (3-second interval)."""
+        try:
+            self._poll_heartbeat += 1
+            if self._poll_heartbeat % 5 == 0:
+                self._post('heartbeat')
+            rooms_resp = self._get('rooms')
+            self._poll_failures = 0
+            for room in rooms_resp.get('rooms', []):
+                rid = room.get('id')
+                unread = room.get('unread_count', 0)
+                if rid and unread > 0:
+                    result = self.get_messages(rid, limit=unread)
+                    for m in result.get('messages', []):
+                        with self._event_lock:
+                            self.event_queue.append(('room_message', m))
 
-                dms_resp = self._get('dm')
-                for convo in dms_resp.get('conversations', []):
-                    unread = convo.get('unread_count', 0)
-                    if unread > 0:
-                        last = convo.get('last_message')
-                        if last:
-                            with self._event_lock:
-                                self.event_queue.append(('dm_message', last))
-            except ChatError as e:
-                failures += 1
-                if "401" in str(e) or "Authentication required" in str(e):
-                    if self._saved_username:
-                        self.reconnect()
-                elif failures >= 3:
-                    if self._saved_username:
-                        self.reconnect()
-                        failures = 0
-            except Exception:
-                failures += 1
-                if failures >= 5:
-                    failures = 3
-            if self._stop_polling.wait(3):
-                break
+            dms_resp = self._get('dm')
+            for convo in dms_resp.get('conversations', []):
+                unread = convo.get('unread_count', 0)
+                if unread > 0:
+                    last = convo.get('last_message')
+                    if last:
+                        with self._event_lock:
+                            self.event_queue.append(('dm_message', last))
+        except ChatError as e:
+            self._poll_failures += 1
+            if "401" in str(e) or "Authentication required" in str(e):
+                if self._saved_username:
+                    self.reconnect()
+            elif self._poll_failures >= 3:
+                if self._saved_username:
+                    self.reconnect()
+                    self._poll_failures = 0
+        except Exception:
+            self._poll_failures += 1
+            if self._poll_failures >= 5:
+                self._poll_failures = 3
 
     def poll_event(self):
         with self._event_lock:

@@ -44,7 +44,7 @@ def import_from_cloud(path=None):
         backups = list_cloud_backups()
         if not backups:
             return False
-        path = backups[-1]["path"]
+        path = backups[0]["path"]  # list is sorted newest-first
     try:
         with open(path, 'r') as f:
             data = json.load(f)
@@ -64,7 +64,7 @@ def list_cloud_backups():
     _ensure_cloud_dir()
     backups = []
     try:
-        for fname in sorted(os.listdir(CLOUD_DIR), reverse=True):
+        for fname in os.listdir(CLOUD_DIR):
             fpath = os.path.join(CLOUD_DIR, fname)
             if fname.endswith('.json'):
                 try:
@@ -83,6 +83,9 @@ def list_cloud_backups():
                         "label": fname,
                         "timestamp": 0,
                     })
+        # Newest first, by the timestamp recorded at export time (filename
+        # ordering is unreliable across digit-length changes and custom labels).
+        backups.sort(key=lambda b: b.get("timestamp", 0), reverse=True)
     except Exception:
         pass
     return backups

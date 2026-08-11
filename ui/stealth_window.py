@@ -13,6 +13,10 @@ WS_EX_NOACTIVATE = 0x08000000
 WS_EX_TOOLWINDOW = 0x00000080
 LWA_ALPHA = 0x2
 
+# Custom message: run one queued task on the window (message pump) thread.
+# WM_APP (0x8000) and up are reserved for application use.
+WM_APP_TASK = 0x8001
+
 class StealthWindow:
     def __init__(self, on_key_down=None, on_key_up=None):
         self.hwnd = None
@@ -21,6 +25,8 @@ class StealthWindow:
         self.space_down = False
         self.running = True
         self.current_text = "Main Menu"
+        self._tasks = []
+        self._task_lock = threading.Lock()
         
         # UI Settings
         self.bg_color = win32api.RGB(0, 0, 0) # Default Black
@@ -105,6 +111,18 @@ class StealthWindow:
         pythoncom.CoInitialize()
         win32gui.PumpMessages()
 
+    def post_task(self, fn):
+        """Queue `fn` to run on the window (message pump) thread. Safe to
+        call from any thread; the task is executed by the pump via a posted
+        WM_APP_TASK message, so app-state changes stay on one thread."""
+        with self._task_lock:
+            self._tasks.append(fn)
+        if self.hwnd:
+            try:
+                win32gui.PostMessage(self.hwnd, WM_APP_TASK, 0, 0)
+            except Exception as e:
+                print(f"StealthWindow: post_task PostMessage failed: {e}")
+
     def show(self):
         if self.hwnd:
             print(f"StealthWindow: Explicitly showing window {self.hwnd}")
@@ -177,6 +195,15 @@ class StealthWindow:
             win32gui.DestroyWindow(hwnd)
             return 0
         elif msg == 0x003D:  # WM_GETOBJECT
+            return 0
+        elif msg == WM_APP_TASK:
+            with self._task_lock:
+                task = self._tasks.pop(0) if self._tasks else None
+            if task:
+                try:
+                    task()
+                except Exception as e:
+                    print(f"StealthWindow: task error: {e}")
             return 0
         elif msg == win32con.WM_ACTIVATE:
             if wparam == win32con.WA_INACTIVE:

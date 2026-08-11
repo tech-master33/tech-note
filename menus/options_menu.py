@@ -31,6 +31,7 @@ class OptionsApp(SoftApp):
             "state_keys": "Off",
             "volume_ducking": "Off",
             "sound_scheme": "Default",
+            "pause_while_playing": "Off",
             "voice_profiles": {},
             "per_app_voice": {},
             "speech_history_size": 50,
@@ -70,6 +71,7 @@ class OptionsApp(SoftApp):
         audio = root.add_child(MenuNode("Audio Menu"))
         audio.add_child(MenuNode("Volume Ducking", self._enter_volume_ducking_menu))
         audio.add_child(MenuNode("Sound Scheme", self._enter_sound_scheme_menu))
+        audio.add_child(MenuNode("Pause While Playing", self._enter_pause_while_playing_menu))
 
         braille = root.add_child(MenuNode("Braille Menu"))
         braille.add_child(MenuNode("Braille Display", self._enter_braille_display_menu))
@@ -169,6 +171,10 @@ class OptionsApp(SoftApp):
                 import core.menu
                 if "sound_scheme" in loaded:
                     core.menu.SOUND_SCHEME = self.settings["sound_scheme"]
+                if "pause_while_playing" in loaded:
+                    from core.systmanau import get_audio_manager
+                    get_audio_manager().set_pause_while_playing(
+                        self.settings["pause_while_playing"] == "On")
 
             except Exception:
                 pass
@@ -434,6 +440,16 @@ class OptionsApp(SoftApp):
     def _sound_scheme_side_effect(self, key, value):
         import core.menu
         core.menu.SOUND_SCHEME = value
+
+    def _enter_pause_while_playing_menu(self):
+        self._current_parent_back = self._back_to_audio_menu
+        self._build_list_menu("Pause While Playing", "pause_while_playing",
+                             ["On", "Off"],
+                             side_effect=self._pause_while_playing_side_effect)
+
+    def _pause_while_playing_side_effect(self, key, value):
+        from core.systmanau import get_audio_manager
+        get_audio_manager().set_pause_while_playing(value == "On")
 
     # --- Braille Settings ---
 
@@ -953,7 +969,8 @@ class OptionsApp(SoftApp):
             "capital_pitch_change": "Off", "char_echo": "Off",
             "word_echo": "Off", "announce_position": "On",
             "state_keys": "Off", "volume_ducking": "Off",
-            "sound_scheme": "Default", "voice_profiles": {},
+            "sound_scheme": "Default", "pause_while_playing": "Off",
+            "voice_profiles": {},
             "per_app_voice": {}, "speech_history_size": 50,
             "braille_display": "Off", "braille_grade": 2,
         }
@@ -965,6 +982,8 @@ class OptionsApp(SoftApp):
         self.manager.synth.set_capital_pitch_change("Off")
         import core.menu
         core.menu.SOUND_SCHEME = "Default"
+        from core.systmanau import get_audio_manager
+        get_audio_manager().set_pause_while_playing(False)
         self.speak("All settings reset to defaults.")
         self._build_main_menu()
 

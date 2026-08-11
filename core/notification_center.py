@@ -41,6 +41,19 @@ class NotificationCenter:
         self._notifications.append(notif)
         self._unread_count += 1
         self._save()
+        self._play_sound(source)
+
+    def _play_sound(self, source):
+        """Play the source's configured sound on the notify channel. The
+        sound files referenced by DEFAULT_SOUNDS may not ship yet, so the
+        resolve helper falls back to a real sound."""
+        try:
+            from core.systmanau import get_audio_manager, resolve_notify_sound
+            path = resolve_notify_sound(self.get_sound_for_source(source))
+            if path:
+                get_audio_manager().play("notify", path)
+        except Exception:
+            pass
 
     def set_min_priority(self, priority):
         self._min_priority = priority

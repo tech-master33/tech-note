@@ -74,9 +74,9 @@ class AppStore(SoftApp):
         return False
 
     def _auto_refresh(self):
-        import threading
-        threading.Thread(target=self._fetch_catalog, daemon=True).start()
-        threading.Thread(target=self._check_updates_background, daemon=True).start()
+        from core.systmanserv import run_once
+        run_once("appstore-catalog", self._fetch_catalog, description="Refresh app catalog")
+        run_once("appstore-updates", self._check_updates_background, description="Check for app updates")
 
     def _check_updates_background(self):
         import time

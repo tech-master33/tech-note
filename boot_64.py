@@ -4,7 +4,6 @@ import json
 import subprocess
 import win32api
 import win32con
-import threading
 import time
 import pythoncom
 from core.menu import MenuSystem, build_braillenote_menu, _get_sound_path, SOUNDS_DIR, SOUND_SCHEME
@@ -15,7 +14,7 @@ from menus.options_menu import OptionsApp
 from menus.power_menu import PowerApp
 from menus.tutorial_app import TutorialApp
 from core.setup_core import TechNoteSetup
-from core.audio_player import AudioPlayer
+from core.systmanau import get_audio_manager
 from core.config import TECH_SOFT
 import core.error_handler
 from core.notification_center import get_center as get_notification_center
@@ -52,10 +51,11 @@ class BrailleNoteApp:
         self._state_keys = "Off"
         self.space_used_in_chord = False
         self._shutting_down = False
-        self._stop_auto_save = threading.Event()
         self._search_mode = False
         self._search_buffer = ""
         self._last_unlock_time = -float('inf')
+        self._auto_lock_due = False
+        self._sleeping = False
 
         # Detect keyboard layout for power key assignment
         self._detect_keyboard_layout()
@@ -65,12 +65,6 @@ class BrailleNoteApp:
 
         # Apply visual settings to window (may trigger speech)
         self._apply_visual_settings()
-
-        # Startup update check (if enabled)
-        threading.Thread(
-            target=self._check_startup_update,
-            daemon=True
-        ).start()
 
     def speak(self, text, interrupt=True):
         if self.synth:
@@ -103,7 +97,7 @@ class BrailleNoteApp:
             if not os.path.exists(path):
                 path = os.path.join(SOUNDS_DIR, 'startup.mp3')
             if os.path.exists(path):
-                AudioPlayer().play_sound_blocking(path)
+                get_audio_manager().play_blocking("ui", path)
         except Exception as e:
             print(f"Startup sound error: {e}")
         return True
@@ -200,6 +194,8 @@ class BrailleNoteApp:
                 self.synth.set_volume_ducking(s.get("volume_ducking", "Off") == "On")
                 import core.menu
                 core.menu.SOUND_SCHEME = s.get("sound_scheme", "Default")
+                get_audio_manager().set_pause_while_playing(
+                    s.get("pause_while_playing", "Off") != "Off")
             except Exception:
                 pass
         else:
@@ -297,26 +293,65 @@ class BrailleNoteApp:
             pass
         return True
 
-    def _start_auto_save(self):
-        def save_loop():
-            while not self._stop_auto_save.is_set():
-                if self._stop_auto_save.wait(60):
-                    break
-                try:
-                    if self.current_app and self.current_app.active:
-                        app_module = self.current_app.__class__.__module__
-                        if app_module not in ("menus.power_menu", "menus.lock_screen"):
-                            app_data = {
-                                "app_module": app_module,
-                                "app_class": self.current_app.__class__.__name__
-                            }
-                            if hasattr(self.current_app, "get_state"):
-                                app_data["state"] = self.current_app.get_state()
-                            with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
-                                json.dump(app_data, f)
-                except:
-                    pass
-        threading.Thread(target=save_loop, daemon=True).start()
+    def _save_session_state(self):
+        """Persist the current app for crash recovery (systmanserv
+        'session-save' service, 60-second tick)."""
+        try:
+            if self.current_app and self.current_app.active:
+                app_module = self.current_app.__class__.__module__
+                if app_module not in ("menus.power_menu", "menus.lock_screen"):
+                    app_data = {
+                        "app_module": app_module,
+                        "app_class": self.current_app.__class__.__name__
+                    }
+                    if hasattr(self.current_app, "get_state"):
+                        app_data["state"] = self.current_app.get_state()
+                    with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
+                        json.dump(app_data, f)
+        except:
+            pass
+
+    def _start_services(self):
+        """Register and start the systmanserv boot services: autosave,
+        session-save for crash recovery, and the one-shot startup update
+        check. Replaces the old hand-rolled daemon threads."""
+        from core.systmanserv import get_manager
+        import core.auto_save
+        m = get_manager()
+        # Long-lived audio playback (radio/media) surfaces as services
+        get_audio_manager().set_service_manager(m)
+        m.register(
+            "autosave",
+            description="Autosave dirty apps every 10 seconds",
+            run=core.auto_save.tick,
+            interval=10,
+        )
+        m.register(
+            "session-save",
+            description="Persist the current app for crash recovery every 60 seconds",
+            run=self._save_session_state,
+            interval=60,
+        )
+        m.register(
+            "update-check",
+            description="Check for updates once at startup",
+            run=self._check_startup_update,
+            oneshot=True,
+        )
+        # Bridge apps that still spawn raw worker threads (opencode_client is
+        # blocked from the editing tools, so it is patched here, not edited)
+        try:
+            from core.app_workers import install_legacy_bridges
+            install_legacy_bridges()
+        except Exception:
+            pass
+        m.register(
+            "auto-lock",
+            description="Lock the screen after the configured idle period (auto_lock_minutes, 0 = off)",
+            run=self._auto_lock_tick,
+            interval=15,
+        )
+        m.start_all()
 
     def load_main_menu(self):
         import core.menu
@@ -340,8 +375,8 @@ class BrailleNoteApp:
             self.synth.speak("Previous session ended unexpectedly. Resuming last session.")
         self._write_clean_flag(False)
 
-        # Start periodic auto-save
-        self._start_auto_save()
+        # Start systmanserv boot services
+        self._start_services()
 
         # Check for resume
         if os.path.exists(resume_path):
@@ -443,13 +478,17 @@ class BrailleNoteApp:
             except Exception as e:
                 core.error_handler.log(e, "per-app voice override", level=core.error_handler.LEVEL_WARN)
 
+    def _finalize_exited_app(self):
+        """The current app has set active=False. Resume the app it interrupted
+        (if any) or fall back to the main menu."""
+        self.app_manager.exit_current()
+        self.current_app = self.app_manager.current_app
+        if self.current_app is None and self.menu:
+            self.menu.announce_current()
+
     def _open_options(self):
         self._typing_buffer = ""
-        if self.app_manager.is_active():
-            try:
-                self.current_app.on_pause()
-            except Exception:
-                pass
+        self.app_manager.push_current()
         self.current_app = OptionsApp(self, self.window)
         self.current_app.on_focus()
         self.app_manager.current_app = self.current_app
@@ -470,17 +509,111 @@ class BrailleNoteApp:
                     with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
                         json.dump(app_data, f)
                 except Exception as e: core.error_handler.log(e, "Saving resume data")
-            try:
-                self.current_app.on_pause()
-            except Exception:
-                pass
+        # Pause and remember the interrupted app so it can be resumed on Back
+        self.app_manager.push_current()
         self.current_app = PowerApp(
             self, self.window,
             on_restart=self._reload_app,
-            on_exit=self._exit_app
+            on_exit=self._exit_app,
+            on_lock=self._lock_from_power
         )
         self.current_app.on_focus()
         self.app_manager.current_app = self.current_app
+
+    # --------------------------------------------------------------- locking
+
+    def _lock_from_power(self):
+        """Lock from the power menu: swap the power menu (already on the app
+        stack above the interrupted app) for the lock screen, so a successful
+        unlock resumes the app the power menu interrupted."""
+        from menus.lock_screen import LockScreenApp
+        self._typing_buffer = ""
+        lock = LockScreenApp(self, self.window, self._unlock_done)
+        self.current_app = lock
+        self.app_manager.current_app = lock
+        lock.on_focus()
+
+    def _lock_now(self):
+        """Show the lock screen from anywhere. The current app (if any) is
+        paused and stacked so it resumes after unlock; from the main menu the
+        user returns to the menu."""
+        from menus.lock_screen import LockScreenApp
+        self._typing_buffer = ""
+        self.app_manager.push_current()
+        lock = LockScreenApp(self, self.window, self._unlock_done)
+        self.current_app = lock
+        self.app_manager.current_app = lock
+        lock.on_focus()
+
+    def _unlock_done(self):
+        """Lock screen succeeded: pop it and resume the app it interrupted
+        (or return to the main menu if nothing was open)."""
+        self.app_manager.exit_current()
+        if self.current_app is None and self.menu:
+            self.menu.announce_current()
+
+    def _account_has_credential(self):
+        try:
+            from core.config import ACCOUNT_PATH
+            if os.path.exists(ACCOUNT_PATH):
+                with open(ACCOUNT_PATH, 'r') as f:
+                    acct = json.load(f)
+                return bool(acct.get("pin") or acct.get("password"))
+        except Exception:
+            pass
+        return False
+
+    @staticmethod
+    def _idle_seconds():
+        """Seconds since the last keyboard/mouse input anywhere on the
+        system (GetLastInputInfo)."""
+        import ctypes
+        try:
+            class LASTINPUTINFO(ctypes.Structure):
+                _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+            lii = LASTINPUTINFO()
+            lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+            if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                return 0.0
+            return (ctypes.windll.kernel32.GetTickCount() - lii.dwTime) / 1000.0
+        except Exception:
+            return 0.0
+
+    def _auto_lock_tick(self):
+        """Called by the 'auto-lock' service (15s tick on the systmanserv
+        worker thread). If the idle threshold is met and a credential exists,
+        flag the lock and hand it to the window thread — app state must only
+        be touched there."""
+        try:
+            minutes = 0
+            settings_path = os.path.join(self.tech_soft, 'settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    minutes = json.load(f).get("auto_lock_minutes", 0) or 0
+            if minutes <= 0:
+                return
+            if self._idle_seconds() < minutes * 60:
+                return
+            if not self._account_has_credential():
+                return
+            self._auto_lock_due = True
+            self.window.post_task(self._apply_idle_lock)
+        except Exception:
+            pass
+
+    def _apply_idle_lock(self):
+        """Run on the window thread: if an auto-lock is due and we're not
+        already locked or shutting down, show the lock screen."""
+        if not self._auto_lock_due:
+            return
+        self._auto_lock_due = False
+        if self._shutting_down:
+            return
+        from menus.lock_screen import LockScreenApp
+        from menus.power_menu import PowerApp
+        if isinstance(self.current_app, (LockScreenApp, PowerApp)):
+            return
+        self._lock_now()
 
     def _read_notifications(self):
         count = self._notifications.get_unread_count()
@@ -529,11 +662,7 @@ class BrailleNoteApp:
 
     def _open_tutorial(self):
         self._typing_buffer = ""
-        if self.app_manager.is_active():
-            try:
-                self.current_app.on_pause()
-            except Exception:
-                pass
+        self.app_manager.push_current()
         self.current_app = TutorialApp(self, self.window)
         self.current_app.on_focus()
         self.app_manager.current_app = self.current_app
@@ -546,9 +675,93 @@ class BrailleNoteApp:
             pass
 
     def _restart_process(self):
+        # Preserve the app across the restart (same as hibernate, gated by
+        # auto_resume_apps) so a restart lands back where the user was. The
+        # current app here is the power menu (already inactive), so look
+        # below it on the app stack for the app it interrupted.
+        try:
+            auto_resume = True
+            settings_path = os.path.join(self.tech_soft, 'settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    auto_resume = json.load(f).get("auto_resume_apps", True)
+            if auto_resume:
+                app = self.current_app
+                if app is None or app.__class__.__module__ in (
+                        "menus.power_menu", "menus.lock_screen"):
+                    stack = getattr(self.app_manager, "_app_stack", [])
+                    app = stack[-1] if stack else None
+                if app is not None and app.__class__.__module__ not in (
+                        "menus.power_menu", "menus.lock_screen"):
+                    app_data = {
+                        "app_module": app.__class__.__module__,
+                        "app_class": app.__class__.__name__
+                    }
+                    if hasattr(app, "get_state"):
+                        app_data["state"] = app.get_state()
+                    with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
+                        json.dump(app_data, f)
+        except Exception as e:
+            core.error_handler.log(e, "Saving restart resume data")
         subprocess.Popen([sys.executable] + sys.argv, creationflags=subprocess.CREATE_NO_WINDOW)
-        self._exit_app()
+        self._exit_app(mode="restart")
         os._exit(0)
+
+    def _dirty_apps(self):
+        """Return the running apps that report unsaved changes."""
+        dirty = []
+        for app in self.app_manager.get_running_apps():
+            try:
+                if app.is_dirty():
+                    dirty.append(app)
+            except Exception:
+                pass
+        return dirty
+
+    def _unsaved_app_names(self):
+        """Natural-language list of the dirty apps' titles, or '' if none."""
+        titles = []
+        for app in self._dirty_apps():
+            try:
+                title = app.get_app_title()
+            except Exception:
+                title = None
+            titles.append(title or "an app")
+        if not titles:
+            return ""
+        if len(titles) == 1:
+            return titles[0]
+        if len(titles) == 2:
+            return f"{titles[0]} and {titles[1]}"
+        return f"{', '.join(titles[:-1])}, and {titles[-1]}"
+
+    def _unsaved_blocks_exit(self):
+        """Return True if shutdown/restart/sleep/hibernate should abort when apps
+        have unsaved work (settings key block_on_unsaved, default True). When
+        False, the app warns and proceeds instead."""
+        try:
+            settings_path = os.path.join(self.tech_soft, 'settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+                return s.get("block_on_unsaved", True)
+        except Exception:
+            pass
+        return True
+
+    def _unsaved_warnings_enabled(self):
+        """Master switch for unsaved-work warnings on shutdown. When False,
+        shutdown/restart/sleep/hibernate proceed silently regardless of unsaved
+        work (settings key warn_unsaved_on_shutdown, default True)."""
+        try:
+            settings_path = os.path.join(self.tech_soft, 'settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    s = json.load(f)
+                return s.get("warn_unsaved_on_shutdown", True)
+        except Exception:
+            pass
+        return True
 
     def _exit_app(self, mode="shutdown"):
         # Load latest settings for shutdown logic
@@ -560,7 +773,12 @@ class BrailleNoteApp:
                     settings = json.load(f)
             except Exception as e: core.error_handler.log(e, "Loading settings")
 
-        self._stop_auto_save.set()
+        # Stop all background services cleanly
+        try:
+            from core.systmanserv import get_manager
+            get_manager().shutdown_all()
+        except Exception:
+            pass
 
         # 7. Keyboard Lockout
         if settings.get("shutdown_key_protection", True):
@@ -573,9 +791,11 @@ class BrailleNoteApp:
                 self.window.set_display_settings(bg_color=(0,0,0))
             except Exception as e: core.error_handler.log(e, "Applying night mode filter")
 
-        # Delete resume.json unless hibernating (clean slate on shutdown/restart/sleep)
+        # Delete resume.json unless hibernating or restarting (a restart keeps
+        # the saved app so the new session resumes it; hibernate keeps it for
+        # the same reason)
         resume_path = os.path.join(self.tech_soft, 'resume.json')
-        if mode not in ("hibernate",):
+        if mode not in ("hibernate", "restart"):
             try:
                 if os.path.exists(resume_path):
                     os.remove(resume_path)
@@ -599,11 +819,11 @@ class BrailleNoteApp:
         # 3. Volume Fade-Out
         if settings.get("smooth_shutdown_audio", True):
             try:
-                AudioPlayer().fade_out(1000)
+                get_audio_manager().fade_out(1000)
             except Exception as e: core.error_handler.log(e, "Fading out audio")
         else:
             try:
-                AudioPlayer().stop()
+                get_audio_manager().stop_all()
             except Exception as e: core.error_handler.log(e, "Stopping audio")
 
         # 2. Custom Goodbye Message
@@ -614,6 +834,14 @@ class BrailleNoteApp:
             goodbye_msg = "Entering Sleep Mode."
         elif mode == "hibernate":
             goodbye_msg = "Hibernating Tech-Note."
+
+        # Warn about unsaved work before any lossy mode (shutdown, restart,
+        # sleep, hibernate). Prepended so speech is not cut off by the goodbye.
+        # Skipped entirely when unsaved-work warnings are disabled in settings.
+        if self._unsaved_warnings_enabled():
+            names = self._unsaved_app_names()
+            if names:
+                goodbye_msg = f"Warning: Unsaved work in {names}. " + goodbye_msg
 
         try:
             self.synth.speak(goodbye_msg)
@@ -629,7 +857,15 @@ class BrailleNoteApp:
 
         if mode == "sleep":
             self.speak("Sleep mode active. Press any key to wake.")
+            self._sleeping = True
             self._shutting_down = False
+            # Restart background services for the resumed session (they were
+            # stopped by shutdown_all above)
+            try:
+                from core.systmanserv import get_manager
+                get_manager().start_all()
+            except Exception:
+                pass
             return
 
         # Play shutdown sound after speech finishes
@@ -642,7 +878,7 @@ class BrailleNoteApp:
             if not os.path.exists(path):
                 path = _get_sound_path('unlock.mp3')
             if os.path.exists(path):
-                AudioPlayer().play_sound_blocking(path)
+                get_audio_manager().play_blocking("ui", path)
         except Exception as e: core.error_handler.log(e, "Playing shutdown sound")
 
         self._write_clean_flag(True)
@@ -741,6 +977,21 @@ class BrailleNoteApp:
             return
         print(f"Key pressed: {vk}")
 
+        # Wake from sleep: the first keypress wakes the session. With a
+        # PIN/password set, route through the lock screen instead of resuming
+        # straight into the app; after unlock the interrupted app resumes.
+        if self._sleeping:
+            self._sleeping = False
+            if self._account_has_credential():
+                self._lock_now()
+                return
+
+        # If the current app already exited outside of on_key (e.g. sleep mode
+        # or an on_key_up exit), resume the interrupted app / return to the menu.
+        if self.current_app and not self.current_app.active:
+            self._finalize_exited_app()
+            return
+
         # Block all global shortcuts when locked or during setup/login
         from menus.lock_screen import LockScreenApp
         if isinstance(self.current_app, LockScreenApp):
@@ -752,10 +1003,14 @@ class BrailleNoteApp:
                     print(f"Lock screen on_key error: {e}")
                 if not lock_app.active:
                     self._last_unlock_time = time.time()
+                    # Boot lock: unlock goes straight to the main menu. A lock
+                    # raised from the power menu / auto-lock already swapped
+                    # current_app to the resumed app via the unlock callback,
+                    # so only the boot path announces the menu here.
                     if self.current_app is lock_app:
                         self.current_app = None
-                    if self.menu:
-                        self.menu.announce_current()
+                        if self.menu:
+                            self.menu.announce_current()
                 return
 
         if isinstance(self.current_app, TechNoteSetup):
@@ -816,24 +1071,41 @@ class BrailleNoteApp:
         # --- Active App Delegation (apps get ALL keys first) ---
         if self.current_app and self.current_app.active:
             text_active = self.current_app.is_text_input_active() if hasattr(self.current_app, 'is_text_input_active') else False
+            masked = False
+            if hasattr(self.current_app, 'is_masked_input'):
+                try:
+                    masked = bool(self.current_app.is_masked_input())
+                except Exception:
+                    masked = False
+
             # Word echo on Space (only when in text input)
             if text_active and self._word_echo == "On" and vk == win32con.VK_SPACE and self._typing_buffer:
                 self.synth.speak(self._typing_buffer)
                 self._typing_buffer = ""
-            
+
             # Clear buffer on Enter or Escape
             if vk in (win32con.VK_RETURN, win32con.VK_ESCAPE):
                 self._typing_buffer = ""
+
+            # Character echo (when enabled): speak each typed character in
+            # text input, never on masked fields like passwords. The same
+            # pass accumulates characters into the typing buffer, which is
+            # what Word Echo speaks on Space — both echo settings were dead
+            # because nothing ever filled that buffer.
+            if text_active and not masked:
+                ch = self._vk_to_char(vk)
+                if ch and ch.isprintable():
+                    if vk != win32con.VK_SPACE:
+                        self._typing_buffer += ch
+                    if self._char_echo == "On" and vk != win32con.VK_SPACE:
+                        self.synth.speak(ch)
 
             try:
                 self.current_app.on_key(vk)
             except Exception as e:
                 print(f"App on_key error: {e}")
             if not self.current_app.active:
-                self.current_app = None
-                self.app_manager.current_app = None
-                if self.menu:
-                    self.menu.announce_current()
+                self._finalize_exited_app()
             return
 
         # --- Main Menu / No App Active ---

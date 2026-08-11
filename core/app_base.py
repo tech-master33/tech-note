@@ -1,11 +1,14 @@
 import json
 import os
+import re
 import tempfile
 import win32con
 import core.error_handler
 
 
 class SoftApp:
+    app_title = None  # Friendly display name used in messages (e.g. "Word Processor")
+
     def __init__(self, manager, window, app_type='app'):
         self.manager = manager
         self.window = window
@@ -44,6 +47,19 @@ class SoftApp:
 
     def set_state(self, state):
         pass
+
+    def is_dirty(self):
+        """Return True if the app has unsaved changes that would be lost on
+        shutdown. Apps that track unsaved state should override this."""
+        return False
+
+    def get_app_title(self):
+        """Friendly display name for this app, used in messages such as the
+        unsaved-work warning. Set app_title on the class to override the
+        default, which is a humanized version of the class name."""
+        if self.app_title:
+            return self.app_title
+        return re.sub(r'(?<!^)(?=[A-Z])', ' ', self.__class__.__name__)
 
     def exit_app(self):
         self.manager.reset_temp_params()
@@ -173,6 +189,12 @@ class SoftApp:
     def is_text_input_active(self):
         return bool(self.input_mode)
 
+    def is_masked_input(self):
+        """True when the app's current text input is a password/masked field,
+        which Character Echo must never speak aloud. Apps with password entry
+        (e.g. Chat) override this."""
+        return False
+
 
 class AppManager:
     def __init__(self, manager):
@@ -202,6 +224,18 @@ class AppManager:
                     pass
             return False
 
+    def push_current(self):
+        """Pause the currently active app (if any) and push it onto the stack
+        so it can be resumed when the app/overlay on top exits."""
+        if self.current_app and self.current_app.active:
+            try:
+                self.current_app.on_pause()
+            except Exception as e:
+                core.error_handler.log(e, f"on_pause failed for {type(self.current_app).__name__}")
+            self._app_stack.append(self.current_app)
+            return True
+        return False
+
     def exit_current(self):
         if not self.current_app:
             return
@@ -209,10 +243,11 @@ class AppManager:
             self.current_app.on_destroy()
         except Exception as e:
             core.error_handler.log(e, f"on_destroy failed for {type(self.current_app).__name__}")
-        try:
-            self.current_app.exit_app()
-        except Exception as e:
-            core.error_handler.log(e, f"exit_current failed for {type(self.current_app).__name__}")
+        if self.current_app.active:
+            try:
+                self.current_app.exit_app()
+            except Exception as e:
+                core.error_handler.log(e, f"exit_current failed for {type(self.current_app).__name__}")
         self.current_app = None
         if self._app_stack:
             self.current_app = self._app_stack.pop()
@@ -220,9 +255,24 @@ class AppManager:
                 self.current_app.on_resume()
             except Exception as e:
                 core.error_handler.log(e, f"on_resume failed for {type(self.current_app).__name__}")
+            # on_focus is called whenever the app becomes active (launched or
+            # resumed) per the SoftApp contract: it announces state and refreshes
+            # content, so the user hears where they are after an overlay closes.
+            try:
+                self.current_app.on_focus()
+            except Exception as e:
+                core.error_handler.log(e, f"on_focus failed for {type(self.current_app).__name__}")
 
     def is_active(self):
         return self.current_app is not None and self.current_app.active
+
+    def get_running_apps(self):
+        """Return all live apps: the current one plus anything paused on the stack."""
+        apps = []
+        if self.current_app:
+            apps.append(self.current_app)
+        apps.extend(self._app_stack)
+        return apps
 
     def reset(self):
         if self.current_app:

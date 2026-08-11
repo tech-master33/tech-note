@@ -47,6 +47,7 @@ DEFAULT_SCHEMA = {
     "audio": {
         "volume_ducking": "Off",
         "sound_scheme": "Default",
+        "pause_while_playing": "Off",
     },
     "braille": {
         "braille_display": "Off",

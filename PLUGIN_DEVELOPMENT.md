@@ -445,9 +445,20 @@ python tools/pack_scrugn.py extract MySynth.scrugn -o my_synth_extracted
 2. Select "Install plugin"
 3. Browse to your `.scrugn` file and confirm
 
+### Using the Online Store (v7+)
+
+The Plugin Manager includes an Online Store that lists available synth, braille, and filter plugins with version, author, and size:
+
+1. Open the Plugin Manager and select "Online Store"
+2. Browse the catalog and select a plugin to view its details
+3. Select "Download <name>" to install it
+4. The plugin is added to `~/.tech-soft/plugins/` and appears in the Plugin Manager
+
+Synth plugins installed this way can be selected in Options > TTS Engine.
+
 ### Distribution
 
-Share the `.scrugn` file. Users place it in their `~/.tech-soft/plugins/` directory. There is no centralized plugin store at this time.
+Share the `.scrugn` file, or list it in the Plugin Manager's Online Store catalog (see [Using the Online Store](#using-the-online-store-v7)). Users can also place the file directly in `~/.tech-soft/plugins/`.
 
 ---
 

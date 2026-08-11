@@ -8,8 +8,13 @@ import win32api
 import psutil
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem, _get_sound_path, SOUNDS_DIR
-from core.audio_player import AudioPlayer
+from core.systmanau import get_audio_manager
 from core.config import ACCOUNT_PATH, SETTINGS_PATH, TECH_SOFT
+
+# A failed attempt within this many seconds is announced on focus. The
+# attempt time itself is kept in memory only — it is deliberately NOT
+# persisted to disk.
+RECENT_ATTEMPT_WINDOW = 3600
 
 class LockScreenApp(SoftApp):
     def __init__(self, manager, window, success_callback):
@@ -21,7 +26,9 @@ class LockScreenApp(SoftApp):
         self._attempts = 0
         self._max_attempts = 3
         self._locked_until = 0
+        self._lockout_announced = True  # False only while a lockout is active
         self._clock_timer = None
+        self._last_failed_attempt = 0  # in-memory only, never persisted
         self._load_time_format()
         self._build_menu()
 
@@ -58,6 +65,24 @@ class LockScreenApp(SoftApp):
         except Exception:
             return ""
 
+    def _record_failed_attempt(self):
+        """Remember the time of this failed unlock attempt (in memory only,
+        never written to disk) so the lock screen can surface it."""
+        self._last_failed_attempt = time.time()
+
+    def _format_attempt_time(self, ts):
+        try:
+            dt = datetime.datetime.fromtimestamp(ts)
+            if self._time_format == "24h":
+                time_str = dt.strftime("%H:%M")
+            else:
+                time_str = dt.strftime("%I:%M %p").lstrip("0")
+            if dt.date() == datetime.datetime.now().date():
+                return time_str
+            return f"{dt.strftime('%b %d')}, {time_str}"
+        except Exception:
+            return ""
+
     def _build_menu(self):
         now = datetime.datetime.now()
         if self._time_format == "24h":
@@ -73,6 +98,8 @@ class LockScreenApp(SoftApp):
         bat = self._battery_text()
         if bat:
             root.add_child(MenuNode(bat))
+        if self._last_failed_attempt:
+            root.add_child(MenuNode(f"Last failed unlock: {self._format_attempt_time(self._last_failed_attempt)}"))
         if time.time() < self._locked_until:
             remaining = int(self._locked_until - time.time())
             root.add_child(MenuNode(f"Unlock (locked {remaining}s)", lambda: self._locked_warn()))
@@ -90,13 +117,31 @@ class LockScreenApp(SoftApp):
     def _schedule_clock_update(self):
         if self._clock_timer:
             self._clock_timer.cancel()
-        self._clock_timer = threading.Timer(60, self._clock_tick)
+        # While locked out, tick once a second so the countdown actually
+        # counts down; otherwise refresh the clock once a minute.
+        delay = 1.0 if time.time() < self._locked_until else 60.0
+        self._clock_timer = threading.Timer(delay, self._clock_tick)
         self._clock_timer.daemon = True
         self._clock_timer.start()
 
     def _clock_tick(self):
-        self._build_menu()
-        self.window.update_text(self._display_text())
+        if time.time() < self._locked_until:
+            # Count down in place so the menu keeps its position; rebuild only
+            # once the lockout has expired.
+            remaining = int(self._locked_until - time.time())
+            for child in self.menu.current_node.children:
+                if child.title.startswith("Unlock (locked"):
+                    child.title = f"Unlock (locked {remaining}s)"
+                    break
+            self.window.update_text(self._display_text())
+        else:
+            # Lockout expired (or there never was one): refresh the menu.
+            # Announce the end of a lockout exactly once.
+            if not self._lockout_announced:
+                self._lockout_announced = True
+                self.speak("You can now unlock your system.")
+            self._build_menu()
+            self.window.update_text(self._display_text())
         self._schedule_clock_update()
 
     def _display_text(self):
@@ -114,7 +159,11 @@ class LockScreenApp(SoftApp):
         item = self.menu.get_current_item()
         title = item.title if item else "Lock Screen"
         self.window.update_text(self._display_text())
-        self.speak("Locked. " + title)
+        prefix = ""
+        if self._last_failed_attempt and time.time() - self._last_failed_attempt < RECENT_ATTEMPT_WINDOW:
+            prefix = (f"Warning: last failed unlock attempt at "
+                      f"{self._format_attempt_time(self._last_failed_attempt)}. ")
+        self.speak(prefix + "Locked. " + title)
         self._schedule_clock_update()
 
     def on_key(self, vk):
@@ -192,12 +241,15 @@ class LockScreenApp(SoftApp):
             self._unlock()
         else:
             self._attempts += 1
+            self._record_failed_attempt()
             if self._attempts >= self._max_attempts:
                 self._locked_until = time.time() + 30
                 self.speak("Too many attempts. Locked for 30 seconds.")
                 self.pin_mode = False
                 self._build_menu()
                 self.window.update_text(self._display_text())
+                self._lockout_announced = False
+                self._schedule_clock_update()
             else:
                 remaining = self._max_attempts - self._attempts
                 self.speak(f"Wrong PIN. {remaining} attempt{'s' if remaining != 1 else ''} left.")
@@ -211,6 +263,7 @@ class LockScreenApp(SoftApp):
                 self._unlock()
             else:
                 self._attempts += 1
+                self._record_failed_attempt()
                 if self._attempts >= self._max_attempts:
                     self._locked_until = time.time() + 30
                     self.speak("Too many attempts. Locked for 30 seconds.")
@@ -257,12 +310,10 @@ class LockScreenApp(SoftApp):
     def _unlock(self):
         if self._clock_timer:
             self._clock_timer.cancel()
-        resume_path = os.path.join(TECH_SOFT, 'resume.json')
-        try:
-            if os.path.exists(resume_path):
-                os.remove(resume_path)
-        except Exception:
-            pass
+        # NOTE: resume.json is deliberately NOT deleted here. It carries the
+        # crash-recovery / hibernate session state, and load_main_menu reads
+        # it after unlock — deleting it here silently discarded that state
+        # for every user with a PIN/password.
         self._play_unlock()
         self.success_callback()
         self.exit_app()
@@ -272,5 +323,5 @@ class LockScreenApp(SoftApp):
         if not os.path.exists(unlock_sound):
             unlock_sound = os.path.join(SOUNDS_DIR, 'unlock.mp3')
         if os.path.exists(unlock_sound):
-            AudioPlayer().play_sound_blocking(unlock_sound)
+            get_audio_manager().play_blocking("ui", unlock_sound)
         self.speak("Unlocked.")

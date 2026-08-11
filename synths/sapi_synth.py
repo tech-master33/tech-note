@@ -19,7 +19,13 @@ class SapiSynthBase:
         self.speak_punctuation = False
         self._pitch = 50
         self._capital_pitch_change = "Off"
-        self._ducker = AudioDucker()
+        try:
+            # Share the app-wide ducker owned by the audio manager, so
+            # ducking state has a single source of truth.
+            from core.systmanau import get_audio_manager
+            self._ducker = get_audio_manager().get_ducker()
+        except Exception:
+            self._ducker = AudioDucker()
         self._default_voice_index = None
         self._default_rate = None
         self._default_pitch = None

@@ -24,8 +24,13 @@ STATE_FIND = 4
 STATE_REPLACE = 5
 STATE_DICT_MANAGER = 6
 STATE_TEMPLATES = 7
+STATE_EXIT_CONFIRM = 8
+
+EXIT_CONFIRM_CHOICES = ["Save and Exit", "Exit Without Saving", "Cancel"]
 
 class TechEdit(SoftApp):
+    app_title = "Word Processor"
+
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.text = ""
@@ -43,6 +48,8 @@ class TechEdit(SoftApp):
         self._spell_sug_index = 0
         self._spell_sug_active = False
         self._dirty = False
+        self._exit_after_save = False
+        self._confirm_index = 0
         self._autosave_registered = False
         self._find_query = ""
         self._replace_query = ""
@@ -64,6 +71,9 @@ class TechEdit(SoftApp):
 
     def _mark_dirty(self):
         self._dirty = True
+
+    def is_dirty(self):
+        return self._dirty
 
     def _get_autosave_name(self):
         if self.filename:
@@ -93,6 +103,8 @@ class TechEdit(SoftApp):
         if self.state == STATE_EDIT:
             self._update_display()
             self.speak("Word Processor. F1 Save, F2 Save As, F3 Open, F5 Find, F6 Replace, F7 Spell, F8 Count.")
+        elif self.state == STATE_EXIT_CONFIRM:
+            self._announce_confirm()
 
     def _update_display(self):
         if not self.text:
@@ -134,6 +146,7 @@ class TechEdit(SoftApp):
     def _on_save_file(self, path):
         self._save_dialog = None
         if not path:
+            self._exit_after_save = False
             self.state = STATE_EDIT
             self.on_focus()
             return
@@ -146,7 +159,11 @@ class TechEdit(SoftApp):
             self.speak(f"Saved to {path}.")
             self.state = STATE_EDIT
             self._update_display()
+            if self._exit_after_save:
+                self._exit_after_save = False
+                self.exit_app()
         except Exception:
+            self._exit_after_save = False
             self.speak("Failed to save file.")
             self.state = STATE_EDIT
 
@@ -169,6 +186,8 @@ class TechEdit(SoftApp):
             self._handle_dict_key(vk)
         elif self.state == STATE_TEMPLATES:
             self._handle_template_key(vk)
+        elif self.state == STATE_EXIT_CONFIRM:
+            self._handle_exit_confirm_key(vk)
 
     def _is_ctrl_pressed(self):
         return win32api.GetAsyncKeyState(win32con.VK_CONTROL) & 0x8000
@@ -179,7 +198,10 @@ class TechEdit(SoftApp):
 
     def _handle_edit_key(self, vk):
         if vk == win32con.VK_ESCAPE:
-            self.exit_app()
+            if self._dirty:
+                self._enter_exit_confirm()
+            else:
+                self.exit_app()
             return
 
         if self._is_ctrl_pressed():
@@ -277,6 +299,60 @@ class TechEdit(SoftApp):
             self.cursor += 1
             self._mark_dirty()
             self._update_display()
+
+    def _enter_exit_confirm(self):
+        self.state = STATE_EXIT_CONFIRM
+        self._confirm_index = 0
+        self._announce_confirm()
+
+    def _announce_confirm(self):
+        choice = EXIT_CONFIRM_CHOICES[self._confirm_index]
+        pos = self._confirm_index + 1
+        total = len(EXIT_CONFIRM_CHOICES)
+        self.speak(f"Unsaved changes. {choice}. {pos} of {total}. Enter to select, Escape to cancel.")
+        self.window.update_text(f"Unsaved changes: {choice}")
+
+    def _cancel_exit_confirm(self):
+        self._exit_after_save = False
+        self.state = STATE_EDIT
+        self._update_display()
+        self.speak("Canceled.")
+
+    def _handle_exit_confirm_key(self, vk):
+        if vk == win32con.VK_ESCAPE:
+            self._cancel_exit_confirm()
+            return
+        if vk == win32con.VK_RETURN:
+            self._select_exit_confirm_option()
+            return
+        if vk in (win32con.VK_DOWN, win32con.VK_RIGHT):
+            self._confirm_index = (self._confirm_index + 1) % len(EXIT_CONFIRM_CHOICES)
+            self._announce_confirm()
+            return
+        if vk in (win32con.VK_UP, win32con.VK_LEFT):
+            self._confirm_index = (self._confirm_index - 1) % len(EXIT_CONFIRM_CHOICES)
+            self._announce_confirm()
+            return
+        if 0x31 <= vk <= 0x33:
+            self._confirm_index = vk - 0x31
+            self._select_exit_confirm_option()
+
+    def _select_exit_confirm_option(self):
+        choice = EXIT_CONFIRM_CHOICES[self._confirm_index]
+        if choice == "Save and Exit":
+            self._exit_after_save = True
+            self.save_file()
+            if self._save_dialog:
+                return
+            if not self._dirty:
+                self.exit_app()
+            else:
+                self._cancel_exit_confirm()
+        elif choice == "Exit Without Saving":
+            self._exit_after_save = False
+            self.exit_app()
+        else:
+            self._cancel_exit_confirm()
 
     def _on_open_file(self, path):
         self._file_dialog = None
@@ -539,6 +615,8 @@ class TechEdit(SoftApp):
             return "User Dictionary. Space and Backspace to browse. F8 remove word, F9 add word, F10 clear all, Escape to close."
         if self.state == STATE_TEMPLATES:
             return f"Templates ({self._template_index + 1} of {len(self._templates)}). Space and Backspace to browse. Enter to use. Escape to cancel."
+        if self.state == STATE_EXIT_CONFIRM:
+            return "Unsaved changes. Space and Backspace to choose. Enter to select. Escape to cancel."
         return "Word Processor. Type to enter text. Home/End for start/end of line. Left/Right to move cursor. Ctrl+B Bold, Ctrl+I Italic, Ctrl+U Underline. F1 Save, F2 Save As, F3 Open. F5 Find, F6 Replace, F7 Spell, F8 Count, F9 Templates. Escape to exit."
 
     def _load_user_dict(self):
@@ -894,6 +972,16 @@ class TechEdit(SoftApp):
             return
         if self._save_dialog and self._save_dialog.active:
             self._save_dialog.on_key_up(vk)
+            return
+        if self.state == STATE_EXIT_CONFIRM:
+            if vk == win32con.VK_SPACE:
+                if getattr(self.manager, 'space_used_in_chord', False):
+                    return
+                self._confirm_index = (self._confirm_index + 1) % len(EXIT_CONFIRM_CHOICES)
+                self._announce_confirm()
+            elif vk == win32con.VK_BACK:
+                self._confirm_index = (self._confirm_index - 1) % len(EXIT_CONFIRM_CHOICES)
+                self._announce_confirm()
             return
         if self.state == STATE_DICT_MANAGER:
             if self._awaiting_add_word:

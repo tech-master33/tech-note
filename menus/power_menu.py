@@ -2,7 +2,6 @@ import os
 import win32con
 import json
 import time
-import threading
 from core.app_base import SoftApp
 from core.menu import MenuNode, MenuSystem
 from core.config import TECH_SOFT, SETTINGS_PATH, ACCOUNT_PATH
@@ -12,10 +11,12 @@ SCHEDULE_FILE = os.path.join(TECH_SOFT, "power_schedule.json")
 
 
 class PowerApp(SoftApp):
-    def __init__(self, manager, window, on_restart=None, on_exit=None):
+    def __init__(self, manager, window, on_restart=None, on_exit=None,
+                 on_lock=None):
         super().__init__(manager, window)
         self.on_restart = on_restart
         self.on_exit = on_exit
+        self.on_lock = on_lock
         self.settings = self._load_settings()
         self.pin_mode = None
         self.pin_input = ""
@@ -45,30 +46,48 @@ class PowerApp(SoftApp):
             pass
 
     def _start_schedule_watcher(self):
-        if self._schedule.get("enabled") and self._schedule.get("time"):
-            def _watch():
-                while True:
-                    now = time.localtime()
-                    current = f"{now.tm_hour:02d}:{now.tm_min:02d}"
-                    if current == self._schedule.get("time"):
-                        if self._schedule.get("action") == "shutdown":
-                            self.speak("Scheduled shutdown. Saving work.")
-                            if self._check_unsaved():
-                                self.speak("Unsaved work detected. Schedule cancelled.")
-                                return
-                            self._shutdown_impl()
-                        elif self._schedule.get("action") == "sleep":
-                            self._do_sleep()
-                        break
-                    time.sleep(30)
-            t = threading.Thread(target=_watch, daemon=True)
-            t.start()
+        """Register the 'power-schedule' systmanserv service (30-second
+        tick) so a scheduled shutdown/sleep fires while enabled. Replaces
+        the old hand-rolled watcher thread."""
+        if not (self._schedule.get("enabled") and self._schedule.get("time")):
+            return
+        from core.systmanserv import get_manager
+        m = get_manager()
+        m.register(
+            "power-schedule",
+            description="Fire scheduled shutdown/sleep at the configured time",
+            run=self._schedule_tick,
+            interval=30,
+        )
+        m.start("power-schedule")
 
-    def _check_unsaved(self):
-        if hasattr(self.manager, "app_manager") and hasattr(self.manager.app_manager, "_running_apps"):
-            for app in self.manager.app_manager._running_apps.values():
-                if hasattr(app, "is_dirty") and app.is_dirty():
-                    return True
+    def _schedule_tick(self):
+        """One check of the power schedule (called by systmanserv). Fires
+        once when the current time matches, then disables the schedule so
+        later ticks don't re-fire it."""
+        if not (self._schedule.get("enabled") and self._schedule.get("time")):
+            return
+        now = time.localtime()
+        current = f"{now.tm_hour:02d}:{now.tm_min:02d}"
+        if current != self._schedule.get("time"):
+            return
+        self._schedule["enabled"] = False
+        self._save_schedule()
+        if self._schedule.get("action") == "shutdown":
+            self._handle_scheduled_shutdown()
+        elif self._schedule.get("action") == "sleep":
+            self._do_sleep()
+
+    def _handle_scheduled_shutdown(self):
+        """Fire a scheduled shutdown. Returns True if the schedule was cancelled
+        because of unsaved work in blocking mode; False if shutdown proceeded."""
+        self.speak("Scheduled shutdown. Saving work.")
+        if self.manager._unsaved_warnings_enabled():
+            names = self.manager._unsaved_app_names()
+            if names and self.manager._unsaved_blocks_exit():
+                self.speak(f"Unsaved work in {names}. Schedule cancelled.")
+                return True
+        self._shutdown_impl()
         return False
 
     def _enter_schedule_shutdown(self):
@@ -97,11 +116,25 @@ class PowerApp(SoftApp):
             except Exception as e: core.error_handler.log(e, "Loading settings")
         return {}
 
+    def _account_has_credential(self):
+        """True if a PIN or password is set, so locking actually protects
+        the session. Without one, the lock screen could never be unlocked."""
+        try:
+            if os.path.exists(ACCOUNT_PATH):
+                with open(ACCOUNT_PATH, 'r') as f:
+                    acct = json.load(f)
+                return bool(acct.get("pin") or acct.get("password"))
+        except Exception:
+            pass
+        return False
+
     def _build_menu(self):
         root = MenuNode("Power Options")
         root.add_child(MenuNode("Restart Tech-Note", self._do_restart))
         root.add_child(MenuNode("Shutdown Tech-Note", self._do_shutdown))
-        
+        if self._account_has_credential():
+            root.add_child(MenuNode("Lock Tech-Note", self._do_lock))
+
         if self.settings.get("app_sleep_hibernate", True):
             root.add_child(MenuNode("Sleep Tech-Note", self._do_sleep))
             root.add_child(MenuNode("Hibernate Tech-Note", self._do_hibernate))
@@ -234,13 +267,20 @@ class PowerApp(SoftApp):
             return False
         return True
 
+    def _do_lock(self):
+        """Lock Tech-Note. The manager swaps the power menu for the lock
+        screen, so a successful unlock resumes the app the power menu had
+        interrupted."""
+        if self.on_lock:
+            self.on_lock()
+
     def _do_restart(self):
         if not self._check_security(self._restart_impl): return
-        if self._check_unsaved():
-            self.speak("Warning: Unsaved work in open apps. Proceeding anyway.")
         self._restart_impl()
 
     def _restart_impl(self):
+        if self._unsaved_blocks_action("Restart"):
+            return
         self.speak("Restarting Tech-Note.")
         self.window.update_text("Restarting Tech-Note...")
         self.exit_app()
@@ -249,21 +289,41 @@ class PowerApp(SoftApp):
 
     def _do_shutdown(self):
         if not self._check_security(self._shutdown_impl): return
-        if self._check_unsaved():
-            self.speak("Warning: Unsaved work in open apps. Proceeding anyway.")
         self._shutdown_impl()
 
     def _shutdown_impl(self):
+        if self._unsaved_blocks_action("Shutdown"):
+            return
         if self.on_exit:
             self.on_exit()
 
     def _do_sleep(self):
+        if self._unsaved_blocks_action("Sleep"):
+            return
         self.exit_app()
         if hasattr(self.manager, "_exit_app"):
             self.manager._exit_app(mode="sleep")
 
     def _do_hibernate(self):
-        if not self._check_security(self._do_hibernate): return
+        if not self._check_security(self._hibernate_impl): return
+        self._hibernate_impl()
+
+    def _hibernate_impl(self):
+        if self._unsaved_blocks_action("Hibernate"):
+            return
         self.exit_app()
         if hasattr(self.manager, "_exit_app"):
             self.manager._exit_app(mode="hibernate")
+
+    def _unsaved_blocks_action(self, action):
+        """If unsaved-work warnings are enabled, unsaved work exists, and the
+        block setting is on, abort the action and return the user to the app
+        they interrupted. Returns True if aborted."""
+        if not self.manager._unsaved_warnings_enabled():
+            return False
+        names = self.manager._unsaved_app_names()
+        if names and self.manager._unsaved_blocks_exit():
+            self.speak(f"Unsaved work in {names}. {action} cancelled.")
+            self.exit_app()
+            return True
+        return False

@@ -1,6 +1,7 @@
 import importlib
 import math
 import os
+import queue
 import subprocess
 import tempfile
 import threading
@@ -19,13 +20,202 @@ EQ_PRESETS = {
 EQ_BANDS_HZ = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
 
 
+class _StreamPlayer:
+    """One stream (live URL or local file). ffmpeg decodes it to a pipe; a
+    reader thread keeps draining it (so ffmpeg never stalls and stays
+    current); an sd.OutputStream callback plays the audio. pause() silences
+    the output while ffmpeg keeps decoding, so resume() continues where it
+    left off — a click pauses the radio/track instead of killing it.
+
+    live=True (radio): audio arriving while paused is discarded so resume
+    returns to the live stream. live=False (local tracks): audio is buffered
+    while paused (position preserved), and the buffered tail keeps playing
+    after ffmpeg finishes decoding, so the end of a track isn't truncated.
+    This replaces the old ffplay subprocess, which could only be killed."""
+
+    def __init__(self, owner, source, live=True):
+        self.owner = owner          # AudioPlayer (for volume/EQ)
+        self.source = source
+        self.live = live
+        self._proc = None
+        self._reader = None
+        self._out = None            # sd.OutputStream
+        self._queue = queue.Queue(maxsize=32)
+        self._buf = b""
+        self._paused = False
+        self._fade_ms = 0
+        self._fade_start = 0.0
+        self._eof = False
+        self._stop = False
+
+    def start(self):
+        self.owner._ensure_audio()
+        try:
+            self._proc = subprocess.Popen(
+                ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', self.source,
+                 '-vn', '-acodec', 'pcm_f32le', '-ar', '44100', '-ac', '1',
+                 '-f', 'f32le', '-'],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+            )
+        except Exception:
+            return False
+        self._reader = threading.Thread(target=self._read_loop, daemon=True)
+        self._reader.start()
+        try:
+            sd = AudioPlayer._sd
+            self._out = sd.OutputStream(
+                samplerate=44100, channels=1, dtype='float32',
+                callback=self._callback,
+            )
+            self._out.start()
+        except Exception:
+            self.stop()
+            return False
+        self.owner.playing = True
+        return True
+
+    def _read_loop(self):
+        try:
+            while not self._stop:
+                chunk = self._proc.stdout.read(16384)
+                if not chunk:
+                    break
+                chunk = chunk[:len(chunk) - (len(chunk) % 4)]
+                if not chunk:
+                    continue
+                if self._paused and self.live:
+                    continue  # live: discard while paused (stay current)
+                try:
+                    self._queue.put_nowait(chunk)
+                except queue.Full:
+                    pass  # drop when the buffer is saturated (stay live)
+        except Exception:
+            pass
+        self._eof = True
+        # ffmpeg may finish decoding while audio is still buffered — play
+        # the tail out before finishing (avoids truncating the track/stream).
+        while not self._stop:
+            if self._queue.empty() and not self._buf:
+                time.sleep(0.05)
+                if self._queue.empty() and not self._buf:
+                    break
+            elif self._paused:
+                time.sleep(0.05)
+            else:
+                time.sleep(0.02)
+        self.stop()
+
+    def _callback(self, outdata, frames, time_info, status):
+        np = AudioPlayer._np
+        need = frames * 4  # f32 mono bytes
+        while len(self._buf) < need and not self._paused:
+            try:
+                self._buf += self._queue.get_nowait()
+            except queue.Empty:
+                break
+        vol = self.owner.get_volume()
+        if self._fade_ms:
+            elapsed = time.time() - self._fade_start
+            total = self._fade_ms / 1000.0
+            if elapsed >= total:
+                vol = 0.0
+            else:
+                vol *= 1.0 - elapsed / total
+        if self._paused or len(self._buf) < need or vol <= 0.0:
+            if self._paused and self.live:
+                self._buf = b""  # live: drop stale audio so resume is current
+            if (not self._paused and self._eof and len(self._buf) >= 4
+                    and len(self._buf) < need):
+                # End of input: play the final partial block, zero-padded.
+                n = len(self._buf) // 4
+                chunk = self._buf[:n * 4]
+                self._buf = b""
+                arr = np.frombuffer(chunk, dtype=np.float32)
+                arr = self._apply_eq(arr)
+                outdata[:len(arr), 0] = arr * vol
+                if len(arr) < frames:
+                    outdata[len(arr):, 0] = 0
+                return
+            outdata.fill(0)
+            return
+        chunk = self._buf[:need]
+        self._buf = self._buf[need:]
+        arr = np.frombuffer(chunk, dtype=np.float32)
+        arr = self._apply_eq(arr)
+        outdata[:, 0] = arr * vol
+
+    def _apply_eq(self, arr):
+        """Apply the player's EQ preset to one callback chunk (mono).
+        Skipped when Flat so the realtime path stays cheap."""
+        preset = self.owner.get_eq_preset()
+        if preset == "Flat" or len(arr) < 512 or len(arr) % 2:
+            return arr
+        np = AudioPlayer._np
+        gains = EQ_PRESETS.get(preset, EQ_PRESETS["Flat"])
+        freqs = np.fft.rfftfreq(len(arr), 1.0 / 44100)
+        spectrum = np.fft.rfft(arr)
+        band_idx = 0
+        for i, f in enumerate(freqs):
+            while band_idx < len(EQ_BANDS_HZ) - 1 and f > EQ_BANDS_HZ[band_idx + 1]:
+                band_idx += 1
+            if band_idx < len(gains):
+                spectrum[i] *= 10.0 ** (gains[band_idx] / 20.0)
+        return np.fft.irfft(spectrum)
+
+    def pause(self):
+        self._paused = True
+        self._buf = b""
+
+    def resume(self):
+        self._paused = False
+
+    def fade_out(self, ms=1000):
+        self._fade_ms = ms
+        self._fade_start = time.time()
+
+        def _finish():
+            time.sleep(ms / 1000.0 + 0.3)
+            self.stop()
+
+        threading.Thread(target=_finish, daemon=True).start()
+
+    def is_alive(self):
+        if self._proc is not None and self._proc.poll() is None:
+            return True
+        # ffmpeg exited: still alive while buffered audio remains to play.
+        if self._eof:
+            return not (self._queue.empty() and not self._buf)
+        return True  # decoding in progress (or between checks)
+
+    def stop(self):
+        self._stop = True
+        if self._proc:
+            try:
+                self._proc.kill()
+            except Exception:
+                pass
+            self._proc = None
+        if self._out:
+            try:
+                self._out.stop()
+            except Exception:
+                pass
+            try:
+                self._out.close()
+            except Exception:
+                pass
+            self._out = None
+        self._buf = b""
+        self.owner.playing = False
+
+
 class AudioPlayer:
     _sd = None
     _sf = None
     _np = None
 
     def __init__(self):
-        self._ffplay_proc = None
+        self._stream = None
         self.playing = False
         self._eq_preset = "Flat"
         self._volume = 1.0
@@ -153,7 +343,7 @@ class AudioPlayer:
         def _play():
             self.playing = True
             try:
-                self._play_file_blocking(path, fade_in_ms, fade_out_ms)
+                self.play_file_blocking(path, fade_in_ms, fade_out_ms)
             except Exception:
                 pass
             finally:
@@ -161,7 +351,7 @@ class AudioPlayer:
         t = threading.Thread(target=_play, daemon=True)
         t.start()
 
-    def _play_file_blocking(self, path, fade_in_ms=0, fade_out_ms=0):
+    def play_file_blocking(self, path, fade_in_ms=0, fade_out_ms=0):
         if not os.path.exists(path):
             return
         ext = os.path.splitext(path)[1].lower()
@@ -221,29 +411,56 @@ class AudioPlayer:
                     pass
 
     def play_url(self, url):
-        self.stop()
-        try:
-            self._ffplay_proc = subprocess.Popen(
-                ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet', url],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            self.playing = True
-            return True
-        except Exception:
+        """Start streaming a URL through the app's own audio pipeline.
+        The stream stays alive across pause()/resume(), so radio preempted
+        by a click resumes instantly instead of rebuffering."""
+        return self.play_stream(url, live=True)
+
+    def play_stream_file(self, path):
+        """Stream a local audio file through the streaming engine so it can
+        true-pause and resume mid-track instead of restarting after a click."""
+        if not os.path.exists(path):
             return False
+        return self.play_stream(path, live=False)
+
+    def play_stream(self, source, live=True):
+        self.stop()
+        stream = _StreamPlayer(self, source, live=live)
+        if not stream.start():
+            return False
+        self._stream = stream
+        self.playing = True
+        return True
+
+    def pause(self):
+        """Silence the current stream (if any) without killing it; a file
+        being played simply stops (the caller replays it on resume)."""
+        if self._stream:
+            self._stream.pause()
+        elif AudioPlayer._sd:
+            AudioPlayer._sd.stop()
+
+    def resume(self):
+        """Un-silence a paused stream (radio returns to live audio)."""
+        if self._stream:
+            self._stream.resume()
 
     def stop(self):
+        if self._stream:
+            self._stream.stop()
+            self._stream = None
         if AudioPlayer._sd:
             AudioPlayer._sd.stop()
-        if self._ffplay_proc:
-            try:
-                self._ffplay_proc.kill()
-            except Exception:
-                pass
-            self._ffplay_proc = None
         self.playing = False
 
+    def is_url_playing(self):
+        """True while a URL stream is still decoding."""
+        return self._stream is not None and self._stream.is_alive()
+
     def fade_out(self, duration_ms=1000):
+        if self._stream:
+            self._stream.fade_out(duration_ms)
+            return
         if not self.playing:
             return
         try:

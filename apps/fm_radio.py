@@ -1,13 +1,12 @@
 import win32con
 from core.app_base import SoftApp
-from core.audio_player import AudioPlayer
+from core.systmanau import get_audio_manager
 from core.menu import MenuNode, MenuSystem
 
 
 class FMRadioApp(SoftApp):
     def __init__(self, manager, window):
         super().__init__(manager, window)
-        self.player = AudioPlayer()
         self.stations = [
             ("BBC World Service", "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service"),
             ("Classic FM", "https://icecast.thisisdax.com/ClassicFMMP3"),
@@ -31,15 +30,15 @@ class FMRadioApp(SoftApp):
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
-            self.player.stop()
+            get_audio_manager().stop_channel("media")
             self.exit_app()
             return
         if vk == win32con.VK_F1:
-            self.player.stop()
+            get_audio_manager().stop_channel("media")
             self.speak("Stopped")
             return
         if vk in (win32con.VK_BACK):
-            self.player.stop()
+            get_audio_manager().stop_channel("media")
             self.menu.previous()
         elif vk == win32con.VK_RETURN:
             self.menu.select()
@@ -60,7 +59,9 @@ class FMRadioApp(SoftApp):
 
     def _tune(self, name, url):
         self.speak("Tuning to " + name)
-        ok = self.player.play_url(url)
+        ok = get_audio_manager().play(
+            "media", url, kind="url", desc=name, resumable=True, wait=True
+        )
         if ok:
             self._announce("Now playing " + name)
         else:

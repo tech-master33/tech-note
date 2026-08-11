@@ -1,5 +1,5 @@
 import os
-from core.audio_player import AudioPlayer
+from core.systmanau import get_audio_manager
 
 # Standard sound path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -8,8 +8,6 @@ SOUNDS_DIR = os.path.join(BASE_DIR, 'sounds')
 # Global position announcement toggle
 ANNOUNCE_POSITION = True
 SOUND_SCHEME = "Default"
-
-_audio_player = AudioPlayer()
 
 def _get_sound_path(name):
     scheme_dir = os.path.join(SOUNDS_DIR, SOUND_SCHEME.lower())
@@ -27,11 +25,11 @@ def play_move():
         return
     path = _get_sound_path('Focus.wav')
     if os.path.exists(path):
-        _audio_player.play_file(path)
+        get_audio_manager().play("ui", path)
     elif SOUND_SCHEME != "Default":
         fallback = _get_scheme_fallback('Focus.wav')
         if os.path.exists(fallback):
-            _audio_player.play_file(fallback)
+            get_audio_manager().play("ui", fallback)
 
 def play_click():
     if SOUND_SCHEME == "Minimal":
@@ -40,13 +38,13 @@ def play_click():
     if not os.path.exists(path):
         path = _get_sound_path('clicked.wav')
     if os.path.exists(path):
-        _audio_player.play_file(path)
+        get_audio_manager().play("ui", path)
     elif SOUND_SCHEME != "Default":
         fallback = _get_scheme_fallback('clicked.ogg')
         if not os.path.exists(fallback):
             fallback = _get_scheme_fallback('clicked.wav')
         if os.path.exists(fallback):
-            _audio_player.play_file(fallback)
+            get_audio_manager().play("ui", fallback)
 
 class MenuNode:
     def __init__(self, title, action=None, shortcut=None):

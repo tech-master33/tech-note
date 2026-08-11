@@ -1,7 +1,6 @@
 import os
 import json
 import re
-import threading
 import win32con
 import requests
 from core.app_base import SoftApp
@@ -405,7 +404,8 @@ class EmailApp(SoftApp):
         self._busy = True
         self.speak("Fetching emails...")
         self.window.update_text("Fetching...")
-        threading.Thread(target=self._do_fetch_inbox, daemon=True).start()
+        from core.systmanserv import run_once
+        run_once("email-inbox", self._do_fetch_inbox, description="Fetch email inbox")
 
     def _do_fetch_inbox(self):
         try:
@@ -438,7 +438,8 @@ class EmailApp(SoftApp):
         self._current_email_idx = idx
         msg_id = self.current_email.get('msg_id', '')
         if msg_id:
-            threading.Thread(target=self._do_read_email, args=(msg_id,), daemon=True).start()
+            from core.systmanserv import run_once
+            run_once("email-read", lambda: self._do_read_email(msg_id), description="Load email content")
         self.speak(f"From: {self.current_email['sender']}. Subject: {self.current_email['subject']}. Fetching content. F2 move to trash, F3 move to sent.")
         self.window.update_text(f"Reading: {self.current_email['subject']}")
 
@@ -516,7 +517,8 @@ class EmailApp(SoftApp):
         self.state = STATE_READING
         msg_id = email.get('msg_id', '')
         if msg_id:
-            threading.Thread(target=self._do_read_email, args=(msg_id,), daemon=True).start()
+            from core.systmanserv import run_once
+            run_once("email-read", lambda: self._do_read_email(msg_id), description="Load email content")
         self.speak(f"From: {email['sender']}. Subject: {email['subject']}. Fetching content.")
         self.window.update_text(f"Reading: {email['subject']}")
 
@@ -721,7 +723,8 @@ class EmailApp(SoftApp):
         self._busy = True
         self.speak("Sending...")
         self.window.update_text("Sending...")
-        threading.Thread(target=self._do_send_email, daemon=True).start()
+        from core.systmanserv import run_once
+        run_once("email-send", self._do_send_email, description="Send email")
 
     def _do_send_email(self):
         try:

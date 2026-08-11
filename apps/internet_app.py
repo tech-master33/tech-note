@@ -1,5 +1,4 @@
 import win32con
-import threading
 import time
 import os
 import json
@@ -502,7 +501,8 @@ class InternetApp(SoftApp):
             self.speak("No link to download.")
             return
         self.speak(f"Downloading {item.text[:50]}.")
-        threading.Thread(target=self._do_download, args=(item.url,), daemon=True).start()
+        from core.systmanserv import run_once
+        run_once("internet-download", lambda: self._do_download(item.url), description="Download file")
 
     def _do_download(self, url):
         try:
@@ -572,7 +572,8 @@ class InternetApp(SoftApp):
             return
         self.fetching = True
         self.speak("Fetching.")
-        threading.Thread(target=self._do_fetch, args=(url,), daemon=True).start()
+        from core.systmanserv import run_once
+        run_once("internet-fetch", lambda: self._do_fetch(url), description="Fetch web page")
 
     def _do_fetch(self, url):
         try:

@@ -1,7 +1,7 @@
 import os
 import win32con
 from core.app_base import SoftApp
-from core.audio_player import AudioPlayer
+from core.systmanau import get_audio_manager
 from core.config import TECH_SOFT
 from core.menu import MenuNode, MenuSystem
 
@@ -11,7 +11,6 @@ class MediaPlayerApp(SoftApp):
         super().__init__(manager, window)
         self.media_path = os.path.join(TECH_SOFT, 'media')
         os.makedirs(self.media_path, exist_ok=True)
-        self.player = AudioPlayer()
         self.menu = None
         self.tracks = []
 
@@ -36,8 +35,9 @@ class MediaPlayerApp(SoftApp):
         if not os.path.exists(file_path):
             self.speak("File not found.")
             return
-        self.player.stop()
-        ok = self.player.play_file(file_path)
+        ok = get_audio_manager().play(
+            "media", file_path, kind="track", desc=filename, resumable=True, wait=True
+        )
         if ok:
             self._announce("Playing " + filename)
         else:
@@ -50,11 +50,11 @@ class MediaPlayerApp(SoftApp):
 
     def on_key(self, vk):
         if vk == win32con.VK_ESCAPE:
-            self.player.stop()
+            get_audio_manager().stop_channel("media")
             self.exit_app()
             return
         if vk == win32con.VK_F1:
-            self.player.stop()
+            get_audio_manager().stop_channel("media")
             self.speak("Stopped")
             return
         if vk == win32con.VK_BACK:
@@ -81,8 +81,9 @@ class MediaPlayerApp(SoftApp):
 
     def load_file(self, path):
         filename = os.path.basename(path)
-        self.player.stop()
-        ok = self.player.play_file(path)
+        ok = get_audio_manager().play(
+            "media", path, kind="track", desc=filename, resumable=True, wait=True
+        )
         if ok:
             self._announce("Playing " + filename)
         else:

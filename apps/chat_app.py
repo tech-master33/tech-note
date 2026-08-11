@@ -2,7 +2,6 @@ import os
 import tempfile
 import threading
 import time
-import winsound
 import json
 import wave
 import win32con
@@ -77,7 +76,6 @@ class ChatApp(SoftApp):
         self._last_poll_time = 0
         self._poll_interval = 3
         self._background_polling = False
-        self._poll_thread = None
         # Search
         self._search_query = ""
         self._search_results = []
@@ -99,12 +97,13 @@ class ChatApp(SoftApp):
 
     def _notify_sound(self):
         try:
-            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            from core.systmanau import get_audio_manager, resolve_notify_sound
+            from core.notification_center import get_center
+            path = resolve_notify_sound(get_center().get_sound_for_source("chat"))
+            if path:
+                get_audio_manager().play("notify", path)
         except Exception:
-            try:
-                winsound.Beep(1000, 200)
-            except Exception:
-                pass
+            pass
 
     def _format_message_text(self, text):
         import re as _re
@@ -142,16 +141,16 @@ class ChatApp(SoftApp):
         if self._background_polling:
             return
         self._background_polling = True
-        def _poll_loop():
-            while self._background_polling:
-                self._poll_events()
-                time.sleep(1)
-        self._poll_thread = threading.Thread(target=_poll_loop, daemon=True)
-        self._poll_thread.start()
+        from core.systmanserv import get_manager
+        m = get_manager()
+        m.register("chat-poll", description="Poll chat for new messages",
+                   run=self._poll_events, interval=1)
+        m.start("chat-poll")
 
     def _stop_background_polling(self):
         self._background_polling = False
-        self._poll_thread = None
+        from core.systmanserv import get_manager
+        get_manager().stop("chat-poll")
 
     def _on_room_message(self, data):
         room_id = data.get('room_id')
@@ -1358,6 +1357,16 @@ class ChatApp(SoftApp):
 
     def is_text_input_active(self):
         return self.state in (STATE_COMPOSING, STATE_CHANGE_PASSWORD, STATE_LOGIN_FORM, STATE_REGISTER_FORM, STATE_CONFIRM)
+
+    def is_masked_input(self):
+        """Password fields must never be spoken by Character Echo: the whole
+        change-password flow, and the username/password forms' password
+        field (editing is done in STATE_COMPOSING with _editing_field set)."""
+        if self.state == STATE_CHANGE_PASSWORD:
+            return True
+        if self.state == STATE_COMPOSING and getattr(self, "_editing_field", None) == "password":
+            return True
+        return False
 
     def exit_app(self):
         self._stop_background_polling()
