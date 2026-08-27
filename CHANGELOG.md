@@ -17,7 +17,7 @@ All notable changes to Tech-Note are documented here.
 ### syst
 - **The daemon family is unified under one name.** `core/syst.py` exposes a single facade — `syst.services()`, `syst.audio()`, a unified `status()` — over systmanserv + systmanau, and the Terminal gains a `syst` command (`syst status`, `syst services <args>`, `syst audio <args>`).
 
-## v8.0.0
+## v8.0.0 (released)
 
 ### App lifecycle
 - Options, Power, and Tutorial overlays now resume the app they interrupted instead of dropping the user back on the main menu.
