@@ -107,7 +107,10 @@ class MenuSystem:
     def back(self):
         if self.current_node.parent:
             parent = self.current_node.parent
-            self.current_index = parent.children.index(self.current_node)
+            if hasattr(self.current_node, '_return_index'):
+                self.current_index = self.current_node._return_index
+            else:
+                self.current_index = parent.children.index(self.current_node)
             self.current_node = parent
             play_move()
             self.announce_current()

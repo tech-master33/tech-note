@@ -72,3 +72,7 @@ account.json
 resume.json
 dectalk/
 .freebuff/
+
+# bridge build artifacts (the compiled exe itself is committed)
+bridge/build-venv/
+bridge/build/

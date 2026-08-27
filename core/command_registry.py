@@ -327,6 +327,29 @@ def _register_builtins(registry):
                     else "Pause while playing is off.")
         return "Usage: audio <status|stop [channel]|vol [value]|mute|unmute|duck|unduck|eq [preset]|pause [on|off]>"
 
+    def _syst(arg):
+        from core.syst import get_syst
+        parts = arg.split()
+        if not parts or parts[0].lower() == "status":
+            st = get_syst().status()
+            svc = ", ".join(st["services"]) or "none"
+            if st["now_playing"]:
+                head = (f"{st['playing_desc'] or st['now_playing']} playing on "
+                        f"{st['now_playing']}")
+            else:
+                head = "No audio playing"
+            paused = f", paused: {', '.join(st['paused'])}" if st["paused"] else ""
+            paused += f", pending: {', '.join(st['pending'])}" if st["pending"] else ""
+            vol = "muted" if st["muted"] else f"volume {st['volume']}"
+            pause = "pause on" if st["pause_while_playing"] else "pause off"
+            return (f"{st['service_count']} services running: {svc}. "
+                    f"{head}{paused}. {vol}, EQ {st['eq']}, {pause}.")
+        if parts[0].lower() == "services":
+            return _services(" ".join(parts[1:]))
+        if parts[0].lower() == "audio":
+            return _audio(" ".join(parts[1:]))
+        return "Usage: syst [status|services <args>|audio <args>]"
+
     def _reboot(arg):
         import os
         os._exit(42)
@@ -351,7 +374,8 @@ def _register_builtins(registry):
         ("run", "Launch an app: run <app_name>", _run),
         ("switch", "Switch to a running app: switch <app_name>", _switch),
         ("services", "Manage background services: services [log|start|stop|restart|enable|disable <name>]", _services),
-        ("audio", "Control audio: audio [status|stop|vol|mute|unmute|duck|unduck|eq]", _audio),
+        ("audio", "Control audio: audio [status|stop|vol|mute|unmute|duck|unduck|eq|pause]", _audio),
+        ("syst", "Unified system view: syst [status|services <args>|audio <args>]", _syst),
         ("reboot", "Restart Tech-Note", _reboot),
         ("shutdown", "Exit Tech-Note", _shutdown),
     ]

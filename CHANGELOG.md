@@ -2,7 +2,22 @@
 
 All notable changes to Tech-Note are documented here.
 
-## v8.0.0 (unreleased)
+## v9.0.0 (unreleased)
+
+### Unified 32-bit bridge (one exe)
+- **Both 32-bit bridges are now one program.** `bridge/bridge_main.py` serves the SAPI TTS backend and `bits: 32` synth plugins over the same socket protocol (`tts` / `plugin <path>` modes), compiled by PyInstaller under 32-bit Python into a single `bridge/TechNoteBridge32.exe`. `core/bridge_launcher.py` resolves the launch command — the exe when present, otherwise a 32-bit Python plus the source script for development — and `BridgeTTS` (`core/tts_bridge.py`) and `BridgePluginSynth` (`core/plugin_bridge.py`) both drive it.
+- **32-bit TTS engines run inside 64-bit Tech-Note.** The bridge serves SAPI (pywin32, falling back to 32-bit PowerShell's System.Speech) over a localhost socket; it appears in the TTS Engine menu as "SAPI5 (32-bit bridge)". No separate 32-bit Python install is needed when the exe ships.
+- **Synth plugins can declare an optional `bits` manifest field (32 or 64) — never shown in the UI; it's a DLL-loading directive.** A synth declaring `bits: 32` cannot load its DLLs in the 64-bit process, so the plugin manager **never imports or instantiates it in-process**: it's registered bridge-only, listed in the TTS Engine menu, and `create_synth` routes it to `BridgePluginSynth`, which launches the unified bridge in `plugin` mode and proxies the whole SynthPlugin interface over the socket (generic `call` RPC, auto-respawn on death). Plugins without `bits` (or `bits: 64`) load in-process exactly as before.
+- Fixed a latent deadlock in both bridge clients: the reconnect path re-entered the non-reentrant request lock, and the helper never acked `shutdown` (so close could respawn it). The helper now acks shutdown and runs the backend/plugin `shutdown()` hook before exiting.
+- The bridge exe bundles the stdlib modules plugins commonly need (`platform`, `ctypes`, `re`, `time`, ...); build instructions live in `bridge/README.md`.
+
+### Plugin settings menus
+- **Plugins can contribute their own settings screens to Options.** `ScrugnPlugin.get_option_menus()` returns a list of `PluginOptionMenu(title, build_fn, path="")`; the Options app builds a **Plugin Settings** area (Options > Plugin Settings > <plugin name>) from them, and a pipe-separated `path` (e.g. `"TTS Menu|Advanced"`) places a menu anywhere in the Options tree, creating intermediate nodes if missing. `build_fn` receives the live OptionsApp so plugins build with the same Tech-Note UI calls (`MenuNode`/`MenuSystem`, `_build_list_menu`, `_build_numeric_menu`, `app.speak`, `app.settings` + `_save_settings()`), and Back returns to the exact entry that opened the menu (`MenuSystem.back()` honors a per-node return index). Only in-process plugins can contribute menus; `bits: 32` synths live in the bridge and use a companion plugin for UI.
+
+### syst
+- **The daemon family is unified under one name.** `core/syst.py` exposes a single facade — `syst.services()`, `syst.audio()`, a unified `status()` — over systmanserv + systmanau, and the Terminal gains a `syst` command (`syst status`, `syst services <args>`, `syst audio <args>`).
+
+## v8.0.0
 
 ### App lifecycle
 - Options, Power, and Tutorial overlays now resume the app they interrupted instead of dropping the user back on the main menu.

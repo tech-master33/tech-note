@@ -86,6 +86,10 @@ class OptionsApp(SoftApp):
 
         plugins = root.add_child(MenuNode("Plugin Manager", self._enter_plugin_manager))
 
+        plugin_settings = MenuNode("Plugin Settings")
+        if self._add_plugin_option_menus(root, plugin_settings):
+            root.add_child(plugin_settings)
+
         self.menu = MenuSystem(root, self.speak)
 
     def on_focus(self):
@@ -1009,3 +1013,103 @@ class OptionsApp(SoftApp):
     def _enter_plugin_manager(self):
         from apps.plugin_manager_app import PluginManagerApp
         self.manager.app_manager.launch(PluginManagerApp)
+
+    # --- Plugin Settings (menus contributed by plugins) ---
+
+    def _add_plugin_option_menus(self, root, fallback):
+        """Attach each plugin's PluginOptionMenu entries to the Options
+        tree. Menus with a pipe path ("TTS Menu|Advanced") are placed at
+        that spot in the tree (creating intermediate nodes if needed);
+        pathless menus land under Options > Plugin Settings > <plugin>.
+        Returns True if anything was added."""
+        from core.plugin_manager import get_plugin_manager
+        try:
+            pm = get_plugin_manager()
+            pm.scan()
+            plugins = pm.get_plugins()
+        except Exception:
+            return False
+        added = False
+        for plugin in plugins:
+            try:
+                menus = plugin.get_option_menus() or []
+            except Exception as e:
+                core.error_handler.log(e, "Plugin option menus")
+                menus = []
+            if not menus:
+                continue
+            pnode = None
+            for opt in menus:
+                if opt.path:
+                    target = self._resolve_menu_path(root, opt.path)
+                    target.add_child(MenuNode(opt.title,
+                                              lambda o=opt: self._enter_plugin_option_menu(o)))
+                    added = True
+                else:
+                    if pnode is None:
+                        pnode = fallback.add_child(MenuNode(plugin.plugin_name))
+                    pnode.add_child(MenuNode(opt.title,
+                                             lambda o=opt: self._enter_plugin_option_menu(o)))
+                    added = True
+        return added
+
+    def _resolve_menu_path(self, root, path):
+        """Walk a pipe-separated route (e.g. "TTS Menu|Advanced") through
+        the Options tree, creating any missing intermediate nodes."""
+        node = root
+        for part in (p.strip() for p in path.split("|") if p.strip()):
+            found = None
+            for child in node.children:
+                if child.title == part:
+                    found = child
+                    break
+            if found is None:
+                found = node.add_child(MenuNode(part))
+            node = found
+        return node
+
+    def _enter_plugin_option_menu(self, opt):
+        """Open a plugin-built menu. The tree returned by opt.build_fn is
+        attached under the current menu level so Back returns to the exact
+        entry that opened it; plugin helper menus (list/numeric) return
+        here too via `_plugin_settings_back`."""
+        self.adjust_mode = None
+        parent_system = self.menu
+        parent_node = self.menu.current_node
+        leaf = self.menu.get_current_item()
+        entry_index = parent_node.children.index(leaf) if leaf is not None else 0
+        self._plugin_parent_system = parent_system
+        self._plugin_parent_node = parent_node
+        self._plugin_entry_index = entry_index
+        self._plugin_current = None
+        self._current_parent_back = self._plugin_settings_back
+        try:
+            node = opt.build_fn(self)
+        except Exception as e:
+            core.error_handler.log(e, "Plugin option menu build")
+            self.speak(f"Plugin menu error: {e}")
+            return
+        if node is None:
+            # build_fn replaced the menu itself (e.g. via _build_list_menu).
+            return
+        self._plugin_current = node
+        parent_node.add_child(node)
+        node._return_index = entry_index
+        self.menu = parent_system
+        self.menu.current_node = node
+        self.menu.current_index = 0
+        # Announce the menu the plugin opened (not its first child).
+        self.speak(node.title)
+        self.window.update_text(node.title)
+
+    def _plugin_settings_back(self):
+        """Return target for plugin helper menus: back into the plugin's
+        own tree when it has one, otherwise to the entry that opened it."""
+        self.menu = self._plugin_parent_system
+        if self._plugin_current is not None:
+            self.menu.current_node = self._plugin_current
+            self.menu.current_index = 0
+        else:
+            self.menu.current_node = self._plugin_parent_node
+            self.menu.current_index = self._plugin_entry_index
+        self.menu.announce_current()

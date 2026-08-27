@@ -14,9 +14,10 @@ Tech-Note plugins (`.scrugn` files) let you add speech synthesizers, braille dis
 6. [Filter Plugin Tutorial](#6-filter-plugin-tutorial)
 7. [Complete Interface Reference](#7-complete-interface-reference)
 8. [Adding Terminal Commands](#8-adding-terminal-commands)
-9. [Packaging and Distribution](#9-packaging-and-distribution)
-10. [Best Practices](#10-best-practices)
-11. [Troubleshooting](#11-troubleshooting)
+9. [Plugin Settings Menus in Options](#9-plugin-settings-menus-in-options)
+10. [Packaging and Distribution](#10-packaging-and-distribution)
+11. [Best Practices](#11-best-practices)
+12. [Troubleshooting](#12-troubleshooting)
 
 ---
 
@@ -88,6 +89,7 @@ The `manifest.json` file is required at the root of the `.scrugn` archive.
 | `entry` | **Yes** | `"__init__.py"` | Entry point file relative to archive root |
 | `description` | No | `""` | Human-readable description |
 | `author` | No | `"Unknown"` | Author name |
+| `bits` | No | `""` | Architecture hint for synths: `"32"` or `"64"`. Never shown in the UI — it is a **DLL-loading directive**. A synth declaring `"32"` cannot load its DLLs in the 64-bit Tech-Note process, so it is never imported or instantiated in-process: the 32-bit bridge hosts it under a 32-bit Python interpreter and proxies the whole synth interface over a socket. Omit it (or use `"64"`) for normal in-process plugins. |
 
 ---
 
@@ -417,7 +419,57 @@ class MySynth(SynthPlugin):
 
 ---
 
-## 9. Packaging and Distribution
+## 9. Plugin Settings Menus in Options
+
+Plugins can contribute their own settings screens to the **Options** app, built entirely with the same Tech-Note UI primitives the app itself uses (`MenuNode`, `MenuSystem`, the Options helpers). Return a list of `PluginOptionMenu` from your plugin's `get_option_menus()`:
+
+```python
+from core.plugin_base import PluginOptionMenu
+from core.menu import MenuNode
+
+class MySynth(SynthPlugin):
+    # ... required methods ...
+
+    def get_option_menus(self):
+        def build_my_settings(app):
+            # `app` is the OptionsApp: speak(), window.update_text(),
+            # settings dict + _save_settings(), and the helper builders
+            # _build_list_menu / _build_numeric_menu all work here.
+            root = MenuNode("My Synth Settings")
+            root.add_child(MenuNode(
+                "Ducking",
+                lambda: app._build_list_menu("Ducking",
+                                             "my_ducking",
+                                             ["Off", "On"])))
+            root.add_child(MenuNode(
+                "Threshold",
+                lambda: app._build_numeric_menu("Threshold",
+                                                "my_threshold", 5, 0, 100)))
+            return root
+
+        return [
+            # Default slot: Options > Plugin Settings > My Synth
+            PluginOptionMenu("My Synth Settings", build_my_settings),
+            # Placed anywhere in the tree via a pipe-separated path
+            PluginOptionMenu("My Synth Settings", build_my_settings,
+                             path="TTS Menu|Advanced"),
+        ]
+```
+
+### How it behaves
+
+- **Default placement** (no `path`): the menu appears under **Options > Plugin Settings > <plugin name>**.
+- **`path="TTS Menu|Advanced"`**: the menu is placed at that spot in the Options tree; intermediate nodes are created if missing. This lets a synth plugin drop its settings right next to the built-in speech settings.
+- **Back navigation**: pressing Back/Escape inside a plugin menu returns to the exact entry that opened it. If the plugin uses the `_build_list_menu` / `_build_numeric_menu` helpers, their Back items return into the plugin's own menu tree.
+- The `build_fn` receives the live `OptionsApp` instance, so settings can be read/written through `app.settings` and persisted with `app._save_settings()`. Values land in `settings.json` alongside every other setting.
+
+### Notes
+
+- Only plugins loaded **in-process** can contribute menus. A synth declaring `bits: 32` runs entirely in the 32-bit bridge and cannot build in-process UI — give it a separate plain (non-`bits`) companion plugin for settings, or manage its configuration from its own files.
+
+---
+
+## 10. Packaging and Distribution
 
 ### Using the Packaging Tool
 
@@ -462,7 +514,7 @@ Share the `.scrugn` file, or list it in the Plugin Manager's Online Store catalo
 
 ---
 
-## 10. Best Practices
+## 11. Best Practices
 
 ### Error Handling
 
@@ -514,7 +566,7 @@ def speak(self, text, interrupt=True):
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 ### Plugin not showing up
 

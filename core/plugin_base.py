@@ -1,6 +1,27 @@
 import abc
 
 
+class PluginOptionMenu:
+    """A menu a plugin contributes to Options.
+
+    title — the spoken/displayed menu label.
+    path — where in the Options tree the menu appears, as a pipe-separated
+        route such as "TTS Menu|Advanced". Intermediate nodes are created
+        if missing. Empty means the default slot: Options > Plugin
+        Settings > <plugin name>.
+    build_fn(options_app) -> MenuNode — called when the user opens the
+        menu. It receives the OptionsApp instance, so a plugin can speak(),
+        read/write `app.settings`, persist with `app._save_settings()`, and
+        build its screen with the Tech-Note UI primitives (MenuNode,
+        MenuSystem, `_build_list_menu`, `_build_numeric_menu`, ...).
+    """
+
+    def __init__(self, title, build_fn, path=""):
+        self.title = title
+        self.build_fn = build_fn
+        self.path = path
+
+
 class ScrugnPlugin(abc.ABC):
     plugin_type = None
     plugin_name = ""
@@ -15,6 +36,15 @@ class ScrugnPlugin(abc.ABC):
         pass
 
     def get_commands(self):
+        return []
+
+    def get_option_menus(self):
+        """Option screens this plugin contributes to the Options app.
+
+        Return a list of PluginOptionMenu. Each entry becomes a menu the
+        user can open from Options; the menu is built with Tech-Note UI
+        primitives at open time.
+        """
         return []
 
 

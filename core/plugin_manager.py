@@ -25,6 +25,7 @@ class PluginManager:
         self._synth_plugins = {}
         self._braille_plugins = {}
         self._filter_plugins = []
+        self._bridge_synth_plugins = {}  # name -> .scrugn path
         self._loaded_modules = {}
         self._plugin_infos = {}
         self._temp_dirs = []
@@ -33,6 +34,7 @@ class PluginManager:
         self._synth_plugins.clear()
         self._braille_plugins.clear()
         self._filter_plugins.clear()
+        self._bridge_synth_plugins.clear()
         self._plugin_infos.clear()
         for path, (mod, tmp) in list(self._loaded_modules.items()):
             shutil.rmtree(tmp, ignore_errors=True)
@@ -58,6 +60,12 @@ class PluginManager:
             version = manifest.get('version', '1.0')
             author = manifest.get('author', 'Unknown')
             description = manifest.get('description', '')
+            # Optional architecture hint ('32' / '64') for synths. Not
+            # required, and never shown in the UI: bits is a DLL-loading
+            # directive. A synth declaring '32' cannot load its DLLs in
+            # this 64-bit process at all, so it is hosted in the 32-bit
+            # bridge instead (see core/plugin_bridge.py).
+            bits = manifest.get('bits', '')
             if not plugin_type or not entry:
                 return
             if entry not in names:
@@ -68,9 +76,17 @@ class PluginManager:
                 'author': author,
                 'description': description,
                 'plugin_type': plugin_type,
+                'bits': bits,
                 'path': path,
                 'filename': os.path.basename(path),
             }
+            if plugin_type == 'synth' and bits == '32':
+                # 32-bit DLL-based synth: it must never be imported or
+                # instantiated in this process (loading its DLL would
+                # crash the 64-bit app). Record it bridge-only; the TTS
+                # engine menu lists it and the bridge client drives it.
+                self._bridge_synth_plugins[name] = path
+                return
             tmp = tempfile.mkdtemp()
             try:
                 z.extractall(tmp)
@@ -131,6 +147,7 @@ class PluginManager:
         self._synth_plugins.pop(name, None)
         self._braille_plugins.pop(name, None)
         self._filter_plugins[:] = [p for p in self._filter_plugins if p.plugin_name != name]
+        self._bridge_synth_plugins.pop(name, None)
         self._plugin_infos.pop(name, None)
         if os.path.exists(path):
             os.remove(path)
@@ -145,11 +162,22 @@ class PluginManager:
     def get_synth_plugins(self):
         return dict(self._synth_plugins)
 
+    def get_bridge_synth_plugins(self):
+        """Synth plugins declared `bits: 32` — hosted in the 32-bit bridge,
+        never loaded in-process. Maps plugin name to .scrugn path."""
+        return dict(self._bridge_synth_plugins)
+
     def get_braille_plugins(self):
         return dict(self._braille_plugins)
 
     def get_filter_plugins(self):
         return list(self._filter_plugins)
+
+    def get_plugins(self):
+        """Every loaded plugin instance, of any type."""
+        return (list(self._synth_plugins.values())
+                + list(self._braille_plugins.values())
+                + list(self._filter_plugins))
 
     def shutdown_all(self):
         for plugin in list(self._synth_plugins.values()) + list(self._braille_plugins.values()) + self._filter_plugins:
@@ -160,6 +188,7 @@ class PluginManager:
         self._synth_plugins.clear()
         self._braille_plugins.clear()
         self._filter_plugins.clear()
+        self._bridge_synth_plugins.clear()
         for path, (mod, tmp) in list(self._loaded_modules.items()):
             shutil.rmtree(tmp, ignore_errors=True)
         self._loaded_modules.clear()
