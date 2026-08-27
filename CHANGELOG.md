@@ -2,9 +2,9 @@
 
 All notable changes to Tech-Note are documented here.
 
-> **Release policy:** the current in-app version is **never** published as a GitHub release. GitHub releases archive every version behind it: while the app is on **v9**, the latest tagged release is **v8**; when the version bumps to v10, v9 gets tagged and released as the new latest, and so on. (The archive currently covers v1 – v8.)
+> **Status terms:** **released** means the source is on GitHub (pushed to `main`); **released to archive** means it is also tagged as a GitHub release. Every shipped version is released; only the ones behind the current version are released to archive — while the app is on **v9**, the archive tops out at **v8**, and when the version bumps to v10, v9 gets tagged and released to archive as the new latest, and so on.
 
-## v9.0.0 (unreleased)
+## v9.0.0 (released)
 
 ### Unified 32-bit bridge (one exe)
 - **Both 32-bit bridges are now one program.** `bridge/bridge_main.py` serves the SAPI TTS backend and `bits: 32` synth plugins over the same socket protocol (`tts` / `plugin <path>` modes), compiled by PyInstaller under 32-bit Python into a single `bridge/TechNoteBridge32.exe`. `core/bridge_launcher.py` resolves the launch command — the exe when present, otherwise a 32-bit Python plus the source script for development — and `BridgeTTS` (`core/tts_bridge.py`) and `BridgePluginSynth` (`core/plugin_bridge.py`) both drive it.
@@ -19,7 +19,7 @@ All notable changes to Tech-Note are documented here.
 ### syst
 - **The daemon family is unified under one name.** `core/syst.py` exposes a single facade — `syst.services()`, `syst.audio()`, a unified `status()` — over systmanserv + systmanau, and the Terminal gains a `syst` command (`syst status`, `syst services <args>`, `syst audio <args>`).
 
-## v8.0.0 (released)
+## v8.0.0 (released to archive)
 
 ### App lifecycle
 - Options, Power, and Tutorial overlays now resume the app they interrupted instead of dropping the user back on the main menu.
@@ -77,7 +77,7 @@ All notable changes to Tech-Note are documented here.
 - Scheduled shutdown's unsaved-work check no longer reads the nonexistent `app_manager._running_apps`.
 - Cloud backup restore with no path no longer restores the oldest backup.
 
-## v7.0.0
+## v7.0.0 (released to archive)
 
 - 100 components; enhancements across the app suite.
 - Plugin store: the Plugin Manager gains an Online Store listing synth, braille, and filter plugins.
@@ -85,27 +85,27 @@ All notable changes to Tech-Note are documented here.
 - Power menu: scheduled shutdown/sleep, PIN protection, hibernate.
 - Tutorial app with categories, an interactive walkthrough, and all-topics modes.
 
-## v6.0
+## v6.0 (released to archive)
 
 - Major feature release.
 
-## v5.0.1
+## v5.0.1 (released to archive)
 
 - Full spell checker with suggestions.
 - Speech fixes; removed the Opening message.
 
-## v5.0.0
+## v5.0.0 (released to archive)
 
 - Menus refactor, speech fixes, settings manager, plugin UI, App Store update, rate boost.
 
-## v4.0.0
+## v4.0.0 (released to archive)
 
 - Release.
 
-## v3.1.0
+## v3.1.0 (released to archive)
 
 - Release.
 
-## v3.0.0
+## v3.0.0 (released to archive)
 
 - Release.
