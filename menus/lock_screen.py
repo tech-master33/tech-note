@@ -319,7 +319,14 @@ class LockScreenApp(SoftApp):
         # it after unlock — deleting it here silently discarded that state
         # for every user with a PIN/password.
         self._play_unlock()
-        self.success_callback()
+        try:
+            self.success_callback()
+        except Exception as e:
+            # A callback failure must NEVER leave the screen locked. Log it,
+            # tell the user, and still deactivate the lock screen below.
+            import core.error_handler
+            core.error_handler.log(e, "Unlock success_callback failed")
+            self.speak("Unlocked, but the menu failed to load. Restart may be needed.")
         self.exit_app()
 
     def _play_unlock(self):

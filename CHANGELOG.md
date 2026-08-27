@@ -4,6 +4,12 @@ All notable changes to Tech-Note are documented here.
 
 > **Status terms:** **released** means the source is on GitHub (pushed to `main`); **released to archive** means it is also tagged as a GitHub release. Every shipped version is released; only the ones behind the current version are released to archive — while the app is on **v9**, the archive tops out at **v8**, and when the version bumps to v10, v9 gets tagged and released to archive as the new latest, and so on.
 
+## v9.2.1 (released)
+
+### Bug fixes
+- **Unlock no longer fails with `NameError: TECH_SOFT is not defined`.** `_load_main_menu_layout()` and `_save_main_menu_layout()` in `core/menu.py` referenced `TECH_SOFT` without importing it. On unlock, `load_main_menu()` → `build_braillenote_menu()` → `_load_main_menu_layout()` raised, which aborted `_unlock()` **before `exit_app()` ran** — so the PIN was accepted, the unlock sound played, and the lock screen stayed active. The import is fixed, and `_unlock()` now wraps `success_callback()` in try/except so a callback failure can never leave the screen locked (it logs, announces the failure, and still deactivates).
+- **Main menu no longer lists every app twice.** When no custom layout was saved, `build_braillenote_menu`'s fallback branch never populated `listed_ids`, so the "add unlisted defaults" pass re-added all 14 built-ins a second time.
+
 ## v9.2.0 (released)
 
 ### Bug fixes

@@ -1,4 +1,5 @@
 import os
+from core.config import TECH_SOFT
 from core.systmanau import get_audio_manager
 
 # Standard sound path
@@ -294,7 +295,12 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, s
                     root.add_child(MenuNode(label, _make_cb(cls, on_reset), shortcut))
 
     root = MenuNode("Main Menu")
-    layout = _load_main_menu_layout()
+    try:
+        layout = _load_main_menu_layout()
+    except Exception as e:
+        import core.error_handler
+        core.error_handler.log(e, "Loading main menu layout")
+        layout = None
     listed_ids = set()
     hidden_ids = {}
 
@@ -313,6 +319,9 @@ def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, s
             _add_entry(root, entry, hidden_ids, on_reset_account)
     else:
         for entry in DEFAULT_MAIN_MENU:
+            # Must track these as listed too, or the "unlisted defaults"
+            # pass below re-adds every built-in a second time.
+            listed_ids.add(entry["id"])
             _add_entry(root, entry, hidden_ids, on_reset_account)
 
     if not safe_mode:
