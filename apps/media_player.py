@@ -44,6 +44,9 @@ class MediaPlayerApp(SoftApp):
         else:
             self.speak("Playback failed.")
 
+    def on_destroy(self):
+        get_audio_manager().stop_channel("media")
+
     def on_focus(self):
         self._build_menu()
         item = self.menu.get_current_item()

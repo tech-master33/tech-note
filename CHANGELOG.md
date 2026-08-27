@@ -4,6 +4,16 @@ All notable changes to Tech-Note are documented here.
 
 > **Status terms:** **released** means the source is on GitHub (pushed to `main`); **released to archive** means it is also tagged as a GitHub release. Every shipped version is released; only the ones behind the current version are released to archive — while the app is on **v9**, the archive tops out at **v8**, and when the version bumps to v10, v9 gets tagged and released to archive as the new latest, and so on.
 
+## v9.2.0 (released)
+
+### Bug fixes
+- **FM Radio / Media Player: orphaned streams no longer play over other apps.** Both apps now implement `on_destroy()` to call `stop_channel("media")` when the app is interrupted by power menu, auto-lock, or another app launch. Previously the audio stream kept playing in the background with no way to stop it.
+- **Options / Settings apps: stale input modes no longer persist across app switches.** `OptionsApp.on_pause()` clears `adjust_mode`; `SettingsApp.on_pause()` clears `adjust_mode`, `pin_mode`, `confirm_mode`, `text_input`, and `_find_setting_mode`. Previously, being mid-edit when the power menu or auto-lock interrupted would leave the app in an invisible input mode on resume.
+- **Chat client: WebSocket now auto-reconnects on disconnect.** The `on_close` handler triggers exponential backoff reconnection (1s → 2s → 4s → ... → 30s cap, reset on successful open). Previously a network blip silently killed the chat with no recovery.
+- **Bridge orphan cleanup on startup.** `boot_64.py` now kills any lingering `TechNoteBridge32.exe` processes from previous crashes on startup. Windows doesn't clean up child processes, so zombies held SAPI/COM resources and sockets.
+- **Bare `except:` clauses replaced with `except Exception:`** in boot_64.py to prevent catching `KeyboardInterrupt` and `SystemExit`.
+- **`_edit_menu_add_app` closure fix.** Removed stale `idx` default argument that evaluated at lambda definition time instead of click time.
+
 ## v9.1.0 (released)
 
 ### Bug fixes

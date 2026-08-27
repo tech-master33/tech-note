@@ -99,6 +99,11 @@ class OptionsApp(SoftApp):
         self.speak("Options. " + title)
         self.window.update_text("Options: " + title)
 
+    def on_pause(self):
+        # Clear any active input mode so stale sub-states don't leak
+        # across app switches (power menu, auto-lock, etc.).
+        self.adjust_mode = None
+
     def on_key(self, vk):
         if self.adjust_mode == "key_bind":
             self._handle_key_bind(vk)
@@ -1075,7 +1080,8 @@ class OptionsApp(SoftApp):
         for entry in DEFAULT_MAIN_MENU:
             if entry["id"] not in listed:
                 lbl = entry.get("label", entry["id"])
-                def _add(idx=self._edit_menu_entries.__len__(), e=dict(entry)):
+                # Capture entry in default arg to avoid closure-over-loop-var
+                def _add(e=dict(entry)):
                     self._edit_menu_entries.append(dict(e))
                     self._edit_menu_dirty = True
                     self.speak(f"{e.get('label', e.get('id'))} added.")

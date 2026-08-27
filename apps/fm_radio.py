@@ -24,6 +24,9 @@ class FMRadioApp(SoftApp):
             root.add_child(MenuNode(name, lambda n=name, u=url: self._tune(n, u)))
         self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
+    def on_destroy(self):
+        get_audio_manager().stop_channel("media")
+
     def on_focus(self):
         self._build_menu()
         name = self.menu.get_current_item().title if self.menu.get_current_item() else "Unknown"

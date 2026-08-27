@@ -342,14 +342,33 @@ class ChatClient:
             self._ws = websocket.WebSocketApp(ws_url,
                 on_message=lambda ws, msg: self._on_ws_message(msg),
                 on_error=lambda ws, err: None,
-                on_close=lambda ws, code, msg: None)
-            self._ws.on_open = lambda ws: self._ws_send({'type': 'subscribe', 'user_id': self.user_id, 'rooms': []})
+                on_close=lambda ws, code, msg: self._ws_on_close(code))
+            self._ws.on_open = lambda ws: (
+                setattr(self, '_ws_backoff', 1),
+                self._ws_send({'type': 'subscribe', 'user_id': self.user_id, 'rooms': []}))
             self._ws_thread = threading.Thread(target=self._ws.run_forever, daemon=True)
             self._ws_thread.start()
         except ImportError:
             self._ws = None
         except Exception:
             self._ws = None
+
+    def _ws_on_close(self, code):
+        """WebSocket closed — auto-reconnect with exponential backoff.
+
+        Backoff starts at 1 s and doubles each attempt up to 30 s.
+        Reset to 1 s on successful open (handled in on_open above).
+        """
+        if getattr(self, '_shutting_down', False):
+            return
+        backoff = min(getattr(self, '_ws_backoff', 1) * 2, 30)
+        self._ws_backoff = backoff
+        self.is_connected = False
+        def _reconnect():
+            time.sleep(backoff)
+            if not getattr(self, '_shutting_down', False):
+                self._start_websocket()
+        threading.Thread(target=_reconnect, daemon=True).start()
 
     def _ws_send(self, data):
         if self._ws:

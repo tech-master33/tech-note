@@ -31,6 +31,11 @@ class BrailleNoteApp:
             for folder in ['documents', 'downloads', 'contacts', 'desktop']:
                 os.makedirs(os.path.join(self.tech_soft, folder))
 
+        # Kill orphaned bridge processes left over from crashes.
+        # Windows doesn't clean up child processes, so zombies from
+        # a previous session hold SAPI/COM and socket resources.
+        self._kill_orphan_bridges()
+
         self.synth = SapiSynthBase()
         core.error_handler.load_level_from_settings()
         self._notifications = get_notification_center()
@@ -91,7 +96,7 @@ class BrailleNoteApp:
                         s = json.load(f)
                     if s.get("startup_sound") == "Off":
                         return False
-                except:
+                except Exception:
                     pass
             path = _get_sound_path('startup.mp3')
             if not os.path.exists(path):
@@ -102,6 +107,34 @@ class BrailleNoteApp:
             print(f"Startup sound error: {e}")
         return True
 
+    def _kill_orphan_bridges(self):
+        """Kill TechNoteBridge32.exe processes left over from crashes.
+
+        Windows doesn't clean up child processes when the parent dies,
+        so zombies from a previous session hold SAPI/COM resources and
+        listen on sockets, preventing a clean restart."""
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['tasklist', '/FI', 'IMAGENAME eq TechNoteBridge32.exe',
+                 '/FO', 'CSV', '/NH'],
+                capture_output=True, text=True, timeout=5,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+            )
+            for line in result.stdout.strip().splitlines():
+                if 'TechNoteBridge32' in line:
+                    pid = line.split(',')[1].strip('"')
+                    try:
+                        subprocess.run(
+                            ['taskkill', '/F', '/PID', pid],
+                            capture_output=True, timeout=5,
+                            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
+                        )
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     def _detect_keyboard_layout(self):
         settings_path = os.path.join(self.tech_soft, 'settings.json')
         saved_layout = None
@@ -110,7 +143,7 @@ class BrailleNoteApp:
                 with open(settings_path, 'r') as f:
                     s = json.load(f)
                 saved_layout = s.get("keyboard_layout")
-            except:
+            except Exception:
                 pass
         if saved_layout in ("US", "UK", "Arabic"):
             self._keyboard_layout = saved_layout
@@ -238,7 +271,7 @@ class BrailleNoteApp:
         if os.path.exists(account_path):
             try:
                 os.remove(account_path)
-            except:
+            except Exception:
                 pass
         self._start_setup()
 
@@ -280,7 +313,7 @@ class BrailleNoteApp:
         try:
             with open(os.path.join(self.tech_soft, '.clean_shutdown'), 'w') as f:
                 f.write('1' if value else '0')
-        except:
+        except Exception:
             pass
 
     def _read_clean_flag(self):
@@ -289,7 +322,7 @@ class BrailleNoteApp:
             if os.path.exists(path):
                 with open(path, 'r') as f:
                     return f.read().strip() == '1'
-        except:
+        except Exception:
             pass
         return True
 
@@ -308,7 +341,7 @@ class BrailleNoteApp:
                         app_data["state"] = self.current_app.get_state()
                     with open(os.path.join(self.tech_soft, 'resume.json'), 'w') as f:
                         json.dump(app_data, f)
-        except:
+        except Exception:
             pass
 
     def _start_services(self):
@@ -398,7 +431,7 @@ class BrailleNoteApp:
                     if app_module in ("menus.power_menu", "menus.lock_screen"):
                         try:
                             os.remove(resume_path)
-                        except:
+                        except Exception:
                             pass
                     else:
                         import importlib
@@ -865,7 +898,7 @@ class BrailleNoteApp:
                 self.synth.wait_until_done(5000)
             else:
                 time.sleep(1.5)
-        except:
+        except Exception:
             time.sleep(1.5)
 
         if mode == "sleep":
@@ -904,7 +937,7 @@ class BrailleNoteApp:
 
         try:
             self.window.close()
-        except:
+        except Exception:
             pass
         os._exit(0)
 
@@ -940,7 +973,7 @@ class BrailleNoteApp:
                 pct = int(bat.percent)
                 plugged = "charging" if bat.power_plugged else "on battery"
                 status += f"Battery {pct} percent, {plugged}."
-        except:
+        except Exception:
             pass
         return status
 

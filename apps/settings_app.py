@@ -252,6 +252,15 @@ class SettingsApp(SoftApp):
         self.speak("Settings. " + title)
         self.window.update_text("Settings: " + title)
 
+    def on_pause(self):
+        # Clear all invisible sub-states so they don't leak across
+        # app switches (power menu, auto-lock, another app launch).
+        self.adjust_mode = None
+        self.pin_mode = None
+        self.confirm_mode = None
+        self.text_input = None
+        self._find_setting_mode = False
+
     def on_key(self, vk):
         if getattr(self, '_find_setting_mode', False):
             self._handle_find_setting(vk)
