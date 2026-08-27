@@ -2,9 +2,9 @@
 
 All notable changes to Tech-Note are documented here.
 
-> **Release policy:** GitHub releases exist only for **v1 – v9** as a historical archive. Starting with **v10**, versions are never published as GitHub releases — the in-app version (`core/version.py`) and this changelog are the source of truth, and no `v1X` tags or releases should be created on GitHub.
+> **Release policy:** the current in-app version is **never** published as a GitHub release. GitHub releases archive every version behind it: while the app is on **v9**, the latest tagged release is **v8**; when the version bumps to v10, v9 gets tagged and released as the new latest, and so on. (The archive currently covers v1 – v8.)
 
-## v9.0.0 (released)
+## v9.0.0 (unreleased)
 
 ### Unified 32-bit bridge (one exe)
 - **Both 32-bit bridges are now one program.** `bridge/bridge_main.py` serves the SAPI TTS backend and `bits: 32` synth plugins over the same socket protocol (`tts` / `plugin <path>` modes), compiled by PyInstaller under 32-bit Python into a single `bridge/TechNoteBridge32.exe`. `core/bridge_launcher.py` resolves the launch command — the exe when present, otherwise a 32-bit Python plus the source script for development — and `BridgeTTS` (`core/tts_bridge.py`) and `BridgePluginSynth` (`core/plugin_bridge.py`) both drive it.
