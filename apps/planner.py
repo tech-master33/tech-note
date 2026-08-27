@@ -14,6 +14,7 @@ STATE_WEEK = 1
 
 
 class PlannerApp(SoftApp):
+    app_id = "planner"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.data_file = os.path.join(TECH_SOFT, 'planner.json')
@@ -76,7 +77,7 @@ class PlannerApp(SoftApp):
             root.add_child(MenuNode("Export ICS", self._export_ics))
             root.add_child(MenuNode("Import ICS", self._import_ics))
 
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _start_add_task(self):
         self.input_mode = "add"

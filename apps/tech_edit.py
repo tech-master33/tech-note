@@ -29,6 +29,7 @@ STATE_EXIT_CONFIRM = 8
 EXIT_CONFIRM_CHOICES = ["Save and Exit", "Exit Without Saving", "Cancel"]
 
 class TechEdit(SoftApp):
+    app_id = "word_processor"
     app_title = "Word Processor"
 
     def __init__(self, manager, window):

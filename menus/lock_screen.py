@@ -17,6 +17,7 @@ from core.config import ACCOUNT_PATH, SETTINGS_PATH, TECH_SOFT
 RECENT_ATTEMPT_WINDOW = 3600
 
 class LockScreenApp(SoftApp):
+    app_id = "lock_screen"
     def __init__(self, manager, window, success_callback):
         super().__init__(manager, window)
         self.success_callback = success_callback
@@ -105,7 +106,7 @@ class LockScreenApp(SoftApp):
             root.add_child(MenuNode(f"Unlock (locked {remaining}s)", lambda: self._locked_warn()))
         else:
             root.add_child(MenuNode("Unlock", self._start_entry))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _locked_warn(self):
         remaining = int(self._locked_until - time.time())
@@ -308,6 +309,9 @@ class LockScreenApp(SoftApp):
         self.window.update_text(self._display_text())
 
     def _unlock(self):
+        # Reset pin_mode immediately so any keyboard events queued during
+        # the unlock sound are NOT routed to _handle_input.
+        self.pin_mode = False
         if self._clock_timer:
             self._clock_timer.cancel()
         # NOTE: resume.json is deliberately NOT deleted here. It carries the
@@ -319,6 +323,12 @@ class LockScreenApp(SoftApp):
         self.exit_app()
 
     def _play_unlock(self):
+        """Play the unlock sound synchronously then speak 'Unlocked.'
+
+        play_blocking freezes the main thread so the sound completes
+        before the menu loads. Any keyboard events that queue during the
+        block are flushed by boot_64._unlock_done via _unlock_time.
+        """
         unlock_sound = _get_sound_path('unlock.mp3')
         if not os.path.exists(unlock_sound):
             unlock_sound = os.path.join(SOUNDS_DIR, 'unlock.mp3')

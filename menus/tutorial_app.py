@@ -25,6 +25,7 @@ TOPIC_TEXTS = {
 }
 
 class TutorialApp(SoftApp):
+    app_id = "tutorial"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self._topic_mode = None
@@ -40,7 +41,7 @@ class TutorialApp(SoftApp):
             categories.add_child(MenuNode(cat_name, lambda cn=cat_name: self._show_category(cn)))
         root.add_child(MenuNode("Interactive Walkthrough", self._start_walkthrough))
         root.add_child(MenuNode("All Topics", self._show_all_topics))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _show_category(self, cat_name):
         self._category_mode = cat_name
@@ -51,7 +52,7 @@ class TutorialApp(SoftApp):
                     root.add_child(MenuNode(TOPIC_TEXTS[t].split(".")[0], lambda tt=t: self._show_topic(tt)))
                 break
         root.add_child(MenuNode("Back", self._exit_category))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _exit_category(self):
@@ -65,7 +66,7 @@ class TutorialApp(SoftApp):
             title = TOPIC_TEXTS[key].split(".")[0]
             root.add_child(MenuNode(title, lambda k=key: self._show_topic(k)))
         root.add_child(MenuNode("Back", self._build_main_menu))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _start_walkthrough(self):

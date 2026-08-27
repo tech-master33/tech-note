@@ -12,6 +12,7 @@ INSTALLED_FILE = os.path.join(TECH_SOFT, "installed_apps.json")
 
 
 class GameCenter(SoftApp):
+    app_id = "game_center"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self._build_menu()
@@ -41,7 +42,7 @@ class GameCenter(SoftApp):
             root.add_child(MenuNode(name, loader))
 
         root.add_child(MenuNode("Back", self.exit_app))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _load_builtin(self, module_name, class_name):
         try:

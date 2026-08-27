@@ -9,6 +9,7 @@ HISTORY_MAX = 50
 
 
 class TerminalApp(SoftApp):
+    app_id = "terminal"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self._history = self._load_json(HISTORY_FILE, []) or []

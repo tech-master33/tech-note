@@ -42,6 +42,7 @@ CONVERSION_CATEGORIES = {
 
 
 class TechCalc(SoftApp):
+    app_id = "calculator"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.expression = ""
@@ -162,7 +163,7 @@ class TechCalc(SoftApp):
         root.add_child(MenuNode("Back", self.exit_app))
         if self.history:
             root.add_child(MenuNode(f"History ({len(self.history)})", self._show_history))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _insert_fn(self, fn_text):
         self.expression += fn_text
@@ -265,7 +266,7 @@ class TechCalc(SoftApp):
         for entry in reversed(self.history[-50:]):
             root.add_child(MenuNode(entry))
         root.add_child(MenuNode("Back", self._build_menu_back))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _enter_history(self):

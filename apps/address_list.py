@@ -6,6 +6,7 @@ from core.config import TECH_SOFT
 from core.menu import MenuNode, MenuSystem
 
 class AddressListApp(SoftApp):
+    app_id = "address_list"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.data_file = os.path.join(TECH_SOFT, 'contacts', 'contacts.json')
@@ -82,7 +83,7 @@ class AddressListApp(SoftApp):
         root.add_child(MenuNode("Import CSV", self._import_csv))
         root.add_child(MenuNode("Export CSV", self._export_csv))
             
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _start_add(self):
         self.input_mode = "name"
@@ -244,7 +245,7 @@ class AddressListApp(SoftApp):
         for gname in sorted(self.groups.keys()):
             root.add_child(MenuNode(f"{gname} ({len(self.groups[gname])})"))
         root.add_child(MenuNode("Back", lambda: self._build_menu()))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _toggle_group_membership(self):

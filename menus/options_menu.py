@@ -9,6 +9,7 @@ import core.error_handler
 import core.pronunciation_dict
 
 class OptionsApp(SoftApp):
+    app_id = "options"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.adjust_mode = None
@@ -90,7 +91,7 @@ class OptionsApp(SoftApp):
         if self._add_plugin_option_menus(root, plugin_settings):
             root.add_child(plugin_settings)
 
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def on_focus(self):
         item = self.menu.get_current_item()
@@ -110,6 +111,9 @@ class OptionsApp(SoftApp):
             return
         if self.adjust_mode == "pav_numeric":
             self._handle_pav_numeric(vk)
+            return
+        if self.adjust_mode == "edit_menu":
+            self._handle_edit_menu(vk)
             return
 
         if vk == win32con.VK_ESCAPE:
@@ -203,7 +207,7 @@ class OptionsApp(SoftApp):
 
     def _switch_to_submenu(self, root, title):
         self.adjust_mode = None
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.window.update_text(title + ": " + self.menu.get_current_item().title)
 
     def _build_list_menu(self, title, setting_key, options, side_effect=None):
@@ -890,7 +894,7 @@ class OptionsApp(SoftApp):
             root.add_child(MenuNode(display, lambda a=action: self._start_rebind(a)))
         root.add_child(MenuNode("Reset to Defaults", self._reset_bindings))
         root.add_child(MenuNode("Back", self._back_from_bindings))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _load_bindings(self):
@@ -936,6 +940,232 @@ class OptionsApp(SoftApp):
         self._save_bindings({})
         self.speak("Key bindings reset to defaults.")
         self._build_bindings_menu()
+
+    # --- Edit Main Menu ---
+
+    def _enter_edit_menu(self):
+        self.adjust_mode = "edit_menu"
+        self._edit_menu_entries = None
+        self._build_edit_menu()
+
+    def _build_edit_menu(self):
+        from core.menu import _load_main_menu_layout, _save_main_menu_layout, DEFAULT_MAIN_MENU
+        import json as _json
+        layout = _load_main_menu_layout()
+        if layout is None:
+            layout = list(DEFAULT_MAIN_MENU)
+        self._edit_menu_entries = layout
+        self._edit_menu_dirty = False
+        root = MenuNode("Edit Main Menu")
+        root.add_child(MenuNode("Add App", self._edit_menu_add_app))
+        for i, entry in enumerate(layout):
+            label = entry.get("label", entry.get("id", "?"))
+            shortcut = entry.get("shortcut", "")
+            hidden = entry.get("hidden", False)
+            children = entry.get("children")
+            if hidden:
+                prefix = "[hidden] "
+            elif shortcut:
+                prefix = f"[{shortcut}] "
+            elif children is not None:
+                prefix = "[folder] "
+            else:
+                prefix = ""
+            root.add_child(MenuNode(prefix + label, lambda idx=i: self._edit_menu_item_actions(idx)))
+        root.add_child(MenuNode("Save", self._edit_menu_save))
+        root.add_child(MenuNode("Restore Defaults", self._edit_menu_restore))
+        root.add_child(MenuNode("Cancel", self._back_from_edit_menu))
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
+        self.menu.announce_current()
+
+    def _edit_menu_item_actions(self, idx):
+        if not self._edit_menu_entries or idx >= len(self._edit_menu_entries):
+            return
+        self._edit_menu_sel = idx
+        entry = self._edit_menu_entries[idx]
+        entry_id = entry.get("id", "?")
+        hidden = entry.get("hidden", False)
+        children = entry.get("children")
+        root = MenuNode(entry.get("label", entry_id))
+        if idx > 0:
+            root.add_child(MenuNode("Move Up", self._edit_menu_move_up))
+        if idx < len(self._edit_menu_entries) - 1:
+            root.add_child(MenuNode("Move Down", self._edit_menu_move_down))
+        if children is None:
+            root.add_child(MenuNode("Set Shortcut", self._edit_menu_set_shortcut))
+        root.add_child(MenuNode("Rename", self._edit_menu_rename))
+        root.add_child(MenuNode("Show" if hidden else "Hide", self._edit_menu_toggle_visible))
+        if children is None:
+            root.add_child(MenuNode("Remove from Menu", self._edit_menu_remove))
+        else:
+            folder_children = children
+            child_summary = ", ".join(c.get("label", c.get("id", "?")) for c in folder_children)
+            root.add_child(MenuNode(f"Folder Contents: {child_summary}"))
+        root.add_child(MenuNode("Back", self._build_edit_menu))
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
+        self.menu.announce_current()
+
+    def _edit_menu_move_up(self):
+        idx = getattr(self, '_edit_menu_sel', 0)
+        if idx <= 0 or not self._edit_menu_entries:
+            self._build_edit_menu()
+            return
+        entries = self._edit_menu_entries
+        entries[idx], entries[idx - 1] = entries[idx - 1], entries[idx]
+        self._edit_menu_sel = idx - 1
+        self._edit_menu_dirty = True
+        self._build_edit_menu()
+
+    def _edit_menu_move_down(self):
+        idx = getattr(self, '_edit_menu_sel', 0)
+        if not self._edit_menu_entries or idx >= len(self._edit_menu_entries) - 1:
+            self._build_edit_menu()
+            return
+        entries = self._edit_menu_entries
+        entries[idx], entries[idx + 1] = entries[idx + 1], entries[idx]
+        self._edit_menu_sel = idx + 1
+        self._edit_menu_dirty = True
+        self._build_edit_menu()
+
+    def _edit_menu_toggle_visible(self):
+        idx = getattr(self, '_edit_menu_sel', 0)
+        if not self._edit_menu_entries or idx >= len(self._edit_menu_entries):
+            self._build_edit_menu()
+            return
+        entry = self._edit_menu_entries[idx]
+        current = entry.get("hidden", False)
+        entry["hidden"] = not current
+        self._edit_menu_dirty = True
+        self.speak("Hidden" if entry["hidden"] else "Visible")
+        self._build_edit_menu()
+
+    def _edit_menu_set_shortcut(self):
+        idx = getattr(self, '_edit_menu_sel', 0)
+        if not self._edit_menu_entries or idx >= len(self._edit_menu_entries):
+            return
+        self.adjust_mode = "edit_menu_shortcut"
+        self.speak("Press a key for the shortcut. Escape to cancel.")
+        self.window.update_text("Set shortcut...")
+
+    def _edit_menu_rename(self):
+        idx = getattr(self, '_edit_menu_sel', 0)
+        if not self._edit_menu_entries or idx >= len(self._edit_menu_entries):
+            return
+        entry = self._edit_menu_entries[idx]
+        self.adjust_mode = "edit_menu_rename"
+        self._edit_rename_buf = ""
+        self.speak(f"Type new name for {entry.get('label', entry.get('id', ''))}.")
+        self.window.update_text("Rename: ")
+
+    def _edit_menu_remove(self):
+        idx = getattr(self, '_edit_menu_sel', 0)
+        if not self._edit_menu_entries or idx >= len(self._edit_menu_entries):
+            return
+        entry = self._edit_menu_entries[idx]
+        self._edit_menu_entries.remove(entry)
+        self._edit_menu_dirty = True
+        self.speak(f"{entry.get('label', entry.get('id', ''))} removed from menu.")
+        self._build_edit_menu()
+
+    def _edit_menu_add_app(self):
+        from core.menu import _ensure_app_class, DEFAULT_MAIN_MENU
+        listed = set(e.get("id") for e in (self._edit_menu_entries or []))
+        root = MenuNode("Add App")
+        added_any = False
+        for entry in DEFAULT_MAIN_MENU:
+            if entry["id"] not in listed:
+                lbl = entry.get("label", entry["id"])
+                def _add(idx=self._edit_menu_entries.__len__(), e=dict(entry)):
+                    self._edit_menu_entries.append(dict(e))
+                    self._edit_menu_dirty = True
+                    self.speak(f"{e.get('label', e.get('id'))} added.")
+                    self._build_edit_menu()
+                root.add_child(MenuNode(lbl, _add))
+                added_any = True
+        if not added_any:
+            root.add_child(MenuNode("No more apps to add"))
+        root.add_child(MenuNode("Back", self._build_edit_menu))
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
+        self.menu.announce_current()
+
+    def _edit_menu_save(self):
+        from core.menu import _save_main_menu_layout
+        if self._edit_menu_entries:
+            _save_main_menu_layout(self._edit_menu_entries)
+            self._edit_menu_dirty = False
+            self.speak("Menu layout saved. Reopen the menu to see changes.")
+        self.adjust_mode = None
+        self._back_to_main_menu()
+
+    def _edit_menu_restore(self):
+        from core.menu import DEFAULT_MAIN_MENU
+        import json as _json
+        import os
+        from core.config import TECH_SOFT
+        path = os.path.join(TECH_SOFT, "settings.json")
+        s = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    s = _json.load(f)
+            except Exception:
+                pass
+        s.pop("main_menu", None)
+        with open(path, "w") as f:
+            _json.dump(s, f)
+        self._edit_menu_dirty = False
+        self.speak("Default layout restored. Reopen the menu to see changes.")
+        self.adjust_mode = None
+        self._back_to_main_menu()
+
+    def _back_from_edit_menu(self):
+        if getattr(self, '_edit_menu_dirty', False):
+            self.speak("Unsaved changes. Save to keep them. Cancel to exit without saving.")
+            return
+        self.adjust_mode = None
+        self._back_to_main_menu()
+
+    def _handle_edit_menu(self, vk):
+        if self.adjust_mode == "edit_menu_shortcut":
+            if vk == win32con.VK_ESCAPE:
+                self.adjust_mode = "edit_menu"
+                self._build_edit_menu()
+                return
+            idx = getattr(self, '_edit_menu_sel', 0)
+            if not self._edit_menu_entries or idx >= len(self._edit_menu_entries):
+                self.adjust_mode = "edit_menu"
+                self._build_edit_menu()
+                return
+            self._edit_menu_entries[idx]["shortcut"] = chr(vk)
+            self._edit_menu_dirty = True
+            self.adjust_mode = "edit_menu"
+            self.speak(f"Shortcut set to {chr(vk)}.")
+            self._build_edit_menu()
+            return
+        if self.adjust_mode == "edit_menu_rename":
+            if vk == win32con.VK_ESCAPE:
+                self.adjust_mode = "edit_menu"
+                self._build_edit_menu()
+                return
+            if vk == win32con.VK_RETURN:
+                new_name = self._edit_rename_buf.strip()
+                if new_name:
+                    self._edit_menu_entries[self._edit_menu_sel]["label"] = new_name
+                    self._edit_menu_dirty = True
+                    self.speak(f"Renamed to {new_name}.")
+                self.adjust_mode = "edit_menu"
+                self._build_edit_menu()
+                return
+            if vk == win32con.VK_BACK:
+                self._edit_rename_buf = self._edit_rename_buf[:-1]
+                self.window.update_text(self._edit_rename_buf or " ")
+                return
+            ch = self._vk_to_char(vk)
+            if ch:
+                self._edit_rename_buf += ch
+                self.window.update_text(self._edit_rename_buf)
+            return
+        # Default: do nothing
 
     def _back_from_bindings(self):
         self.adjust_mode = None

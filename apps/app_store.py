@@ -41,6 +41,7 @@ def _is_new(app_info):
 
 
 class AppStore(SoftApp):
+    app_id = "app_store"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.catalog = self._load_json(CATALOG_CACHE, [])
@@ -150,7 +151,7 @@ class AppStore(SoftApp):
         root.add_child(MenuNode("Install from File...", self._start_install_file))
         root.add_child(MenuNode("Refresh Catalog", self._fetch_catalog))
         root.add_child(MenuNode("Back", self.exit_app))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _start_search(self):
         self._search_mode = True
@@ -178,7 +179,7 @@ class AppStore(SoftApp):
         for app_info in results:
             root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
         root.add_child(MenuNode("Back", self._back_from_search))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _back_from_search(self):
@@ -205,7 +206,7 @@ class AppStore(SoftApp):
         if not_installed:
             root.add_child(MenuNode(f"Install All ({len(not_installed)} not installed)", lambda apps=not_installed: self._install_all_favorites(apps)))
         root.add_child(MenuNode("Back", self._back_from_favorites))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _back_from_favorites(self):
@@ -281,7 +282,7 @@ class AppStore(SoftApp):
         for app_info in apps:
             root.add_child(MenuNode(self._app_label(app_info), lambda a=app_info: self._show_app(a)))
         root.add_child(MenuNode("Back", self._back_from_category))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _back_from_category(self):
@@ -332,7 +333,7 @@ class AppStore(SoftApp):
             root.add_child(MenuNode("Add to Favorites", lambda: self._toggle_favorite(app_id)))
 
         root.add_child(MenuNode("Back", self._back_from_app))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _back_from_app(self):
@@ -530,7 +531,7 @@ class AppStore(SoftApp):
         if updates_available:
             root.add_child(MenuNode("Update All", self._update_all))
         root.add_child(MenuNode("Back", self._back_from_installed))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _update_all(self):

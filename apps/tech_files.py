@@ -77,6 +77,7 @@ SORT_MODES = ["Name", "Date", "Size", "Type"]
 
 
 class TechFiles(SoftApp):
+    app_id = "file_manager"
     DRIVE_MENU = 0
     FILE_MENU = 1
 
@@ -121,7 +122,7 @@ class TechFiles(SoftApp):
         root = MenuNode("Switch Drive")
         for i, (name, root_path) in enumerate(self.drives):
             root.add_child(MenuNode(name, lambda idx=i: self._open_drive(idx)))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.state = self.DRIVE_MENU
         self.speak("Switch Drive. " + self.menu.get_current_item().title)
 
@@ -176,7 +177,7 @@ class TechFiles(SoftApp):
         if not self.items:
             root.add_child(MenuNode("Empty Folder"))
 
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self._announce_folder()
 
     def _announce_folder(self):
@@ -547,7 +548,7 @@ class TechFiles(SoftApp):
                 root.add_child(MenuNode(m, lambda p=full: self._open_file(p)))
         root.add_child(MenuNode("Back", self._back_from_search))
         self._saved_menu = self.menu
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.speak(f"{len(matches)} match{'es' if len(matches) != 1 else ''}. " + self.menu.get_current_item().title)
         self.window.update_text(f"Search: {self.menu.get_current_item().title}")
 

@@ -5,6 +5,7 @@ from core.menu import MenuNode, MenuSystem
 
 
 class FMRadioApp(SoftApp):
+    app_id = "fm_radio"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.stations = [
@@ -21,7 +22,7 @@ class FMRadioApp(SoftApp):
         root = MenuNode("Radio")
         for name, url in self.stations:
             root.add_child(MenuNode(name, lambda n=name, u=url: self._tune(n, u)))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def on_focus(self):
         self._build_menu()

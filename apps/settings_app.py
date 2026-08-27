@@ -12,6 +12,7 @@ import core.error_handler
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 class SettingsApp(SoftApp):
+    app_id = "settings"
     def __init__(self, manager, window, on_reset_account=None):
         super().__init__(manager, window)
         self.on_reset_account = on_reset_account
@@ -63,7 +64,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode("Check for Updates", self._check_for_updates))
         root.add_child(MenuNode("About Tech-Note", self._about))
         root.add_child(MenuNode("Reset TechNote", self._reset_technote))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _enter_display_menu(self):
         self._in_sub_menu = True
@@ -199,7 +200,7 @@ class SettingsApp(SoftApp):
         core.error_handler.log(None, f"Log level set to {value}", level=core.error_handler.LEVEL_INFO)
 
     def _switch_to_submenu(self, root, title):
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.window.update_text(title + ": " + self.menu.get_current_item().title)
 
     def _back_to_main_menu(self):
@@ -371,7 +372,7 @@ class SettingsApp(SoftApp):
         root.add_child(MenuNode(f"Lock Type ({lt})", self._toggle_lock_type))
         root.add_child(MenuNode("Shutdown PIN (" + ("On" if self.settings.get("shutdown_pin") else "Off") + ")", lambda: self._toggle_shutdown_pin()))
         root.add_child(MenuNode("Back", self._back_from_account))
-        self.account_menu = MenuSystem(root, self.speak)
+        self.account_menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _toggle_lock_type(self):
         account = self._load_account()

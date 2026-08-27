@@ -60,12 +60,13 @@ class MenuNode:
         return child
 
 class MenuSystem:
-    def __init__(self, root_node, speak_func, play_sound=None):
+    def __init__(self, root_node, speak_func, play_sound=None, stop_func=None):
         self.root = root_node
         self.current_node = root_node
         self.current_index = 0
         self.speak = speak_func
         self.play_sound = play_sound
+        self._stop = stop_func
 
     def get_current_item(self):
         if not self.current_node.children:
@@ -150,78 +151,183 @@ class MenuSystem:
             self.current_node.children = self._original_children
             self._original_children = None
 
+    def _speak_stopping(self, text):
+        """Speak *text*, stopping any in-progress utterance first.
+
+        Calls stop() explicitly so the engine is guaranteed idle before
+        speak() begins — the SAPI engine's _engine_stop is synchronous
+        (Speak with flag 0), so this eliminates the race where two
+        overlapping async Speak calls stack on some engines.
+        """
+        if self._stop:
+            self._stop()
+        self.speak(text)
+
     def announce_current(self):
         item = self.get_current_item()
         if item:
             if ANNOUNCE_POSITION:
                 total = len(self.current_node.children)
                 pos = self.current_index + 1
-                self.speak(f"{item.title}. {pos} of {total}.")
+                self._speak_stopping(f"{item.title}. {pos} of {total}.")
             else:
-                self.speak(item.title)
+                self._speak_stopping(item.title)
         else:
-            self.speak(self.current_node.title)
+            self._speak_stopping(self.current_node.title)
+
+DEFAULT_MAIN_MENU = [
+    {"id": "word_processor", "label": "Word Processor", "shortcut": "w"},
+    {"id": "calculator", "label": "Calculator", "shortcut": "c"},
+    {"id": "planner", "label": "Planner", "shortcut": "p"},
+    {"id": "address_list", "label": "Address List", "shortcut": "a"},
+    {"id": "notes", "label": "Notes", "shortcut": "n"},
+    {"id": "email", "label": "Email", "shortcut": "e"},
+    {"id": "internet", "label": "Internet", "shortcut": "i"},
+    {"id": "chat", "label": "Chat", "shortcut": "h"},
+    {"id": "terminal", "label": "Terminal", "shortcut": "t"},
+    {"id": "media_center", "label": "Media Center", "shortcut": "m", "children": [
+        {"id": "media_player", "label": "Media Player"},
+        {"id": "fm_radio", "label": "FM Radio"},
+    ]},
+    {"id": "file_manager", "label": "File Manager", "shortcut": "f"},
+    {"id": "game_center", "label": "Game Center", "shortcut": "g"},
+    {"id": "app_store", "label": "App Store", "shortcut": "l"},
+    {"id": "settings", "label": "Settings", "shortcut": "s"},
+]
+
+APP_CLASS_MAP = {}
+
+def _ensure_app_class(app_id):
+    if app_id in APP_CLASS_MAP:
+        return APP_CLASS_MAP[app_id]
+    _APP_IMPORTS = {
+        "word_processor": ("apps.tech_edit", "TechEdit"),
+        "calculator": ("apps.tech_calc", "TechCalc"),
+        "file_manager": ("apps.tech_files", "TechFiles"),
+        "settings": ("apps.settings_app", "SettingsApp"),
+        "planner": ("apps.planner", "PlannerApp"),
+        "address_list": ("apps.address_list", "AddressListApp"),
+        "email": ("apps.email_app", "EmailApp"),
+        "internet": ("apps.internet_app", "InternetApp"),
+        "media_player": ("apps.media_player", "MediaPlayerApp"),
+        "fm_radio": ("apps.fm_radio", "FMRadioApp"),
+        "chat": ("apps.chat_app", "ChatApp"),
+        "terminal": ("apps.terminal_app", "TerminalApp"),
+        "game_center": ("apps.game_center", "GameCenter"),
+        "app_store": ("apps.app_store", "AppStore"),
+        "notes": ("apps.notes_app", "NotesApp"),
+        "plugin_manager": ("apps.plugin_manager_app", "PluginManagerApp"),
+    }
+    import importlib
+    path, cls_name = _APP_IMPORTS.get(app_id, (None, None))
+    if not path:
+        return None
+    try:
+        mod = importlib.import_module(path)
+        cls = getattr(mod, cls_name)
+        APP_CLASS_MAP[app_id] = cls
+        return cls
+    except Exception:
+        return None
+
+
+def _load_main_menu_layout():
+    import json as _json
+    path = os.path.join(TECH_SOFT, "settings.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                s = _json.load(f)
+            layout = s.get("main_menu")
+            if isinstance(layout, list) and layout:
+                return layout
+        except Exception:
+            pass
+    return None
+
+
+def _save_main_menu_layout(layout):
+    import json as _json
+    path = os.path.join(TECH_SOFT, "settings.json")
+    s = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                s = _json.load(f)
+        except Exception:
+            pass
+    s["main_menu"] = layout
+    with open(path, "w") as f:
+        _json.dump(s, f)
+
 
 def build_braillenote_menu(synth, window, app_callback, on_reset_account=None, safe_mode=False):
-    from apps.tech_edit import TechEdit
-    from apps.tech_calc import TechCalc
-    from apps.tech_files import TechFiles
-    from apps.settings_app import SettingsApp
-    from apps.planner import PlannerApp
-    from apps.address_list import AddressListApp
-    from apps.email_app import EmailApp
-    from apps.internet_app import InternetApp
-    from apps.media_player import MediaPlayerApp
-    from apps.fm_radio import FMRadioApp
-    from apps.chat_app import ChatApp
-    from apps.game_center import GameCenter
-    from apps.app_store import AppStore
-    from apps.notes_app import NotesApp
-    from apps.terminal_app import TerminalApp
-    
-    # Optional apps
-    try:
-        from apps.book_reader import BookReaderApp
-    except ImportError:
-        BookReaderApp = None
-    try:
-        from apps.voice_memo import VoiceMemoApp
-    except ImportError:
-        VoiceMemoApp = None
-    try:
-        from apps.calendar_app import CalendarApp
-    except ImportError:
-        CalendarApp = None
+    def _add_entry(root, entry, hidden_ids, on_reset):
+        app_id = entry.get("id")
+        visible = entry.get("visible", True)
+        children = entry.get("children")
+        if children is not None:
+            if visible and not hidden_ids.get(app_id):
+                folder = MenuNode(entry.get("label", app_id),
+                                 shortcut=entry.get("shortcut"))
+                for child_entry in children:
+                    cid = child_entry.get("id")
+                    if child_entry.get("visible", True) and not hidden_ids.get(cid):
+                        cls = _ensure_app_class(cid)
+                        if cls:
+                            lbl = child_entry.get("label", cid)
+                            folder.add_child(MenuNode(
+                                lbl, lambda c=cls: app_callback(c)))
+                if folder.children:
+                    root.add_child(folder)
+        else:
+            if visible and not hidden_ids.get(app_id):
+                cls = _ensure_app_class(app_id)
+                if cls:
+                    label = entry.get("label", app_id)
+                    shortcut = entry.get("shortcut")
+                    def _make_cb(c, reset):
+                        if app_id == "settings":
+                            return lambda: app_callback(
+                                lambda m, w: c(m, w, on_reset_account=reset))
+                        return lambda: app_callback(c)
+                    root.add_child(MenuNode(label, _make_cb(cls, on_reset), shortcut))
 
     root = MenuNode("Main Menu")
-    
-    root.add_child(MenuNode("Word Processor", lambda: app_callback(TechEdit), "w"))
-    if BookReaderApp:
-        root.add_child(MenuNode("Book Reader", lambda: app_callback(BookReaderApp), "b"))
-    if VoiceMemoApp:
-        root.add_child(MenuNode("Voice Memos", lambda: app_callback(VoiceMemoApp), "v"))
-    root.add_child(MenuNode("Calculator", lambda: app_callback(TechCalc), "c"))
-    if CalendarApp:
-        root.add_child(MenuNode("Calendar", lambda: app_callback(CalendarApp), "d"))
-    root.add_child(MenuNode("Planner", lambda: app_callback(PlannerApp), "p"))
-    root.add_child(MenuNode("Address List", lambda: app_callback(AddressListApp), "a"))
-    root.add_child(MenuNode("Notes", lambda: app_callback(NotesApp), "n"))
-    root.add_child(MenuNode("Email", lambda: app_callback(EmailApp), "e"))
-    root.add_child(MenuNode("Internet", lambda: app_callback(InternetApp), "i"))
-    root.add_child(MenuNode("Chat", lambda: app_callback(ChatApp), "h"))
-    root.add_child(MenuNode("Terminal", lambda: app_callback(TerminalApp), "t"))
-    media = root.add_child(MenuNode("Media Center", shortcut="m"))
-    media.add_child(MenuNode("Media Player", lambda: app_callback(MediaPlayerApp)))
-    media.add_child(MenuNode("FM Radio", lambda: app_callback(FMRadioApp)))
-    root.add_child(MenuNode("File Manager", lambda: app_callback(TechFiles), "f"))
-    root.add_child(MenuNode("Game Center", lambda: app_callback(GameCenter), "g"))
-    root.add_child(MenuNode("App Store", lambda: app_callback(AppStore), "l"))
-    root.add_child(MenuNode("Settings", lambda: app_callback(
-        lambda m, w: SettingsApp(m, w, on_reset_account=on_reset_account)
-    ), "s"))
+    layout = _load_main_menu_layout()
+    listed_ids = set()
+    hidden_ids = {}
+
+    if layout:
+        for item in layout:
+            listed_ids.add(item.get("id"))
+            if item.get("hidden"):
+                hidden_ids[item["id"]] = True
+            for c in item.get("children", []):
+                cid = c.get("id")
+                if cid:
+                    listed_ids.add(cid)
+                    if c.get("hidden"):
+                        hidden_ids[cid] = True
+        for entry in layout:
+            _add_entry(root, entry, hidden_ids, on_reset_account)
+    else:
+        for entry in DEFAULT_MAIN_MENU:
+            _add_entry(root, entry, hidden_ids, on_reset_account)
+
     if not safe_mode:
-        _add_installed_apps(root, app_callback)
-    
+        try:
+            import importlib
+            import json as _json
+            for entry in DEFAULT_MAIN_MENU:
+                eid = entry["id"]
+                if eid not in listed_ids:
+                    _add_entry(root, entry, {}, on_reset_account)
+                    listed_ids.add(eid)
+            _add_installed_apps(root, app_callback)
+        except Exception:
+            pass
+
     return root
 
 

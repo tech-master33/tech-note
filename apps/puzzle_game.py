@@ -10,6 +10,7 @@ SCORES_FILE = os.path.join(os.environ['USERPROFILE'], '.tech-soft', 'puzzle_scor
 
 
 class PuzzleGame(SoftApp):
+    app_id = "puzzle_game"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.size = 4
@@ -75,7 +76,7 @@ class PuzzleGame(SoftApp):
         root.add_child(MenuNode(best_str))
         root.add_child(MenuNode("New Game", self._new_game))
         root.add_child(MenuNode("Back", self.exit_app))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _cycle_size(self):
         sizes = [3, 4, 5]

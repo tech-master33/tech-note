@@ -6,6 +6,7 @@ from core.plugin_manager import get_plugin_manager
 
 
 class PluginManagerApp(SoftApp):
+    app_id = "plugin_manager"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self._pm = get_plugin_manager()
@@ -29,7 +30,7 @@ class PluginManagerApp(SoftApp):
         root.add_child(MenuNode("Online Store", self._show_online_store))
         root.add_child(MenuNode("Install plugin", self._do_install))
         root.add_child(MenuNode("Back", self.exit_app))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _show_online_store(self):
         catalog = [
@@ -50,7 +51,7 @@ class PluginManagerApp(SoftApp):
                 label += " [installed]"
             root.add_child(MenuNode(label, lambda info=p: self._store_detail(info)))
         root.add_child(MenuNode("Back", self._build_menu_back))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _store_detail(self, info):
@@ -66,7 +67,7 @@ class PluginManagerApp(SoftApp):
         else:
             root.add_child(MenuNode("Already installed"))
         root.add_child(MenuNode("Back", self._show_online_store))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _store_install(self, info):
@@ -184,7 +185,7 @@ class {info['name'].replace(' ', '')}Plugin({info['type'].title()}Plugin):
         root.add_child(MenuNode(f"Description: {info['description']}"))
         root.add_child(MenuNode("Uninstall", lambda: self._confirm_uninstall(info['name'])))
         root.add_child(MenuNode("Back", self._build_menu_back))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _confirm_uninstall(self, name):

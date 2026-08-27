@@ -11,6 +11,7 @@ SCHEDULE_FILE = os.path.join(TECH_SOFT, "power_schedule.json")
 
 
 class PowerApp(SoftApp):
+    app_id = "power"
     def __init__(self, manager, window, on_restart=None, on_exit=None,
                  on_lock=None):
         super().__init__(manager, window)
@@ -147,7 +148,7 @@ class PowerApp(SoftApp):
             schedule.add_child(MenuNode("Schedule Sleep", self._enter_schedule_sleep))
             
         root.add_child(MenuNode("Back", self.exit_app))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def on_focus(self):
         item = self.menu.get_current_item()

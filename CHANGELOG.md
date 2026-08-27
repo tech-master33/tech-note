@@ -4,6 +4,16 @@ All notable changes to Tech-Note are documented here.
 
 > **Status terms:** **released** means the source is on GitHub (pushed to `main`); **released to archive** means it is also tagged as a GitHub release. Every shipped version is released; only the ones behind the current version are released to archive — while the app is on **v9**, the archive tops out at **v8**, and when the version bumps to v10, v9 gets tagged and released to archive as the new latest, and so on.
 
+## v9.1.0 (released)
+
+### Bug fixes
+- **Speech no longer overlaps during menu navigation.** `MenuSystem` now calls `synth.stop()` before every `speak()` call in `announce_current()`. On the 64-bit SAPI engine, `_engine_stop()` uses a synchronous `Speak("", 0)` instead of the old async flag `2`, guaranteeing the engine is fully idle before the next utterance. On the 32-bit bridge, `speak()` now uses async flag `1` (returns immediately) and `cancel()` uses flag `2` (SVSFPurgeBeforeSpeak) — the bridge's `stop` handler acquires `_speak_lock` so stop and speak serialize correctly instead of racing.
+- **Unlock no longer gets stuck on the lock screen or opens Word Processor.** Two fixes: (1) `_unlock_done()` now syncs `self.current_app = self.app_manager.current_app` after popping the lock screen — without this, `self.current_app` still pointed at the (inactive) lock screen, so every keypress went to the dead lock screen instead of the main menu; (2) the key handler now refreshes the window text and announces the current menu item when the lock screen exits, preventing the display from being stuck on "PIN:". `_unlock()` also resets `pin_mode = False` immediately, and a 1-second keyboard flush window discards events that queued during `play_blocking`.
+
+### UI groundwork
+- **Every app has a stable `app_id`.** `SoftApp.get_app_id()` returns a pinned id set on each built-in app class (`word_processor`, `calculator`, `email`, `settings`, ...), falling back to a stable class-name-derived id for any app that doesn't set one. This is the identifier UI layouts, per-app settings, and profiles will key on in v10.
+- **Customizable main menu.** The main menu is now a declarative layout (`DEFAULT_MAIN_MENU` with `{id, label, shortcut, hidden, children}` entries) persisted in `settings.json` under the `main_menu` key. Users can reorder, hide, rename, change shortcuts, and remove apps. Press **Space+E** in the main menu to enter Edit Main Menu mode (also accessible from Options → Tools). Edit mode supports: Move Up/Down, Rename (text input), Set Shortcut (key capture), Show/Hide toggle, Remove from Menu, Add App (from unlisted built-ins), Save, and Restore Defaults. The layout is applied at menu load time; unlisted apps appear after listed ones, so new installs aren't lost.
+
 ## v9.0.0 (released)
 
 ### Unified 32-bit bridge (one exe)

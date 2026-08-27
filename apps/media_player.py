@@ -7,6 +7,7 @@ from core.menu import MenuNode, MenuSystem
 
 
 class MediaPlayerApp(SoftApp):
+    app_id = "media_player"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.media_path = os.path.join(TECH_SOFT, 'media')
@@ -28,7 +29,7 @@ class MediaPlayerApp(SoftApp):
         if not self.tracks:
             root.add_child(MenuNode("No media found"))
             
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _play_track(self, filename):
         file_path = os.path.join(self.media_path, filename)

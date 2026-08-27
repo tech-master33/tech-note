@@ -9,6 +9,7 @@ NOTES_FILE = os.path.join(TECH_SOFT, "notes.json")
 
 
 class NotesApp(SoftApp):
+    app_id = "notes"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.notes = self._load_json(NOTES_FILE, [])
@@ -57,7 +58,7 @@ class NotesApp(SoftApp):
             root.add_child(MenuNode(f"[Filter: {self._filter_tag}]", self._clear_filter))
         if not [n for n in shown]:
             root.add_child(MenuNode("No notes"))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _clear_filter(self):
         self._filter_tag = None
@@ -83,7 +84,7 @@ class NotesApp(SoftApp):
         root.add_child(MenuNode("Delete", lambda: self._delete_note(idx)))
         root.add_child(MenuNode("Export TXT", lambda: self._export_note_txt(idx)))
         root.add_child(MenuNode("Back", self._build_menu_back))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _start_edit(self, idx):
@@ -243,7 +244,7 @@ class NotesApp(SoftApp):
         for t in tags:
             root.add_child(MenuNode(t, lambda tag=t: self._apply_filter(tag)))
         root.add_child(MenuNode("All Notes", self._clear_filter))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _apply_filter(self, tag):

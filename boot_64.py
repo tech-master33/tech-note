@@ -366,7 +366,7 @@ class BrailleNoteApp:
             self, self.window, self.launch_app, self._reset_and_restart,
             safe_mode=core.safe_mode.is_safe_mode()
         )
-        self.menu = MenuSystem(self.menu_root, self.speak)
+        self.menu = MenuSystem(self.menu_root, self.speak, stop_func=self.stop)
 
         # Crash detection
         clean = self._read_clean_flag()
@@ -425,7 +425,7 @@ class BrailleNoteApp:
             self, self.window, self.launch_app, self._reset_and_restart,
             safe_mode=core.safe_mode.is_safe_mode()
         )
-        self.menu = MenuSystem(self.menu_root, self.speak)
+        self.menu = MenuSystem(self.menu_root, self.speak, stop_func=self.stop)
 
     def _create_lock_screen(self, manager, window):
         from menus.lock_screen import LockScreenApp
@@ -493,6 +493,14 @@ class BrailleNoteApp:
         self.current_app.on_focus()
         self.app_manager.current_app = self.current_app
 
+    def _open_edit_main_menu(self):
+        """Open Options directly into Edit Main Menu mode."""
+        self._typing_buffer = ""
+        self.app_manager.push_current()
+        self.current_app = OptionsApp(self, self.window)
+        self.app_manager.current_app = self.current_app
+        self.current_app._enter_edit_menu()
+
     def _open_power_menu(self):
         self._typing_buffer = ""
         # Save current app for resume before opening power menu
@@ -548,7 +556,12 @@ class BrailleNoteApp:
     def _unlock_done(self):
         """Lock screen succeeded: pop it and resume the app it interrupted
         (or return to the main menu if nothing was open)."""
+        self._last_unlock_time = time.time()
         self.app_manager.exit_current()
+        # Sync boot_64's current_app with the app manager — without this,
+        # self.current_app still pointed at the lock screen and every key
+        # went to the (now inactive) lock screen's on_key.
+        self.current_app = self.app_manager.current_app
         if self.current_app is None and self.menu:
             self.menu.announce_current()
 
@@ -1001,17 +1014,18 @@ class BrailleNoteApp:
                     self.current_app.on_key(vk)
                 except Exception as e:
                     print(f"Lock screen on_key error: {e}")
-                if not lock_app.active:
-                    self._last_unlock_time = time.time()
-                    # Boot lock: unlock goes straight to the main menu. A lock
-                    # raised from the power menu / auto-lock already swapped
-                    # current_app to the resumed app via the unlock callback,
-                    # so only the boot path announces the menu here.
-                    if self.current_app is lock_app:
-                        self.current_app = None
-                        if self.menu:
-                            self.menu.announce_current()
-                return
+            # Detect unlock: the lock screen just exited during on_key.
+            # This MUST be outside the active check - _unlock_done (called
+            # from on_key) already set active=False and synced current_app.
+            if not lock_app.active:
+                self._last_unlock_time = time.time()
+                if self.current_app is lock_app:
+                    self.current_app = None
+                if self.current_app is None and self.menu:
+                    title = self.menu.get_current_item().title if self.menu.get_current_item() else "Main Menu"
+                    self.window.update_text(title)
+                    self.menu.announce_current()
+            return
 
         if isinstance(self.current_app, TechNoteSetup):
             try:
@@ -1032,6 +1046,13 @@ class BrailleNoteApp:
             print("Global Chord: Space + O")
             self.space_used_in_chord = True
             self._open_options()
+            return
+
+        # Global Edit Main Menu (Space + E)
+        if self.window.space_down and vk == 0x45:
+            print("Global Chord: Space + E")
+            self.space_used_in_chord = True
+            self._open_edit_main_menu()
             return
 
         # Global Notifications (Space + N)
@@ -1113,8 +1134,14 @@ class BrailleNoteApp:
             print("Menu not loaded")
             return
 
+        # Flush any keyboard events that queued during the unlock sound.
+        # play_blocking freezes the thread; keys presssed while the sound
+        # plays land in the OS queue and fire now — discard them.
+        if time.time() - self._last_unlock_time < 1.0:
+            return
+
         if self._is_key_match(vk, "help"):
-            self.synth.speak(f"Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. {self._power_key_name} for power.")
+            self.synth.speak(f"Main Menu. Space for next, Backspace for previous. Enter to open. Space plus O for options. Space plus E to edit menu. {self._power_key_name} for power.")
             return
 
         if self._is_key_match(vk, "status"):

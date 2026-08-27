@@ -96,6 +96,7 @@ def _sanitize_filename(url):
 
 
 class InternetApp(SoftApp):
+    app_id = "internet"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.bookmarks = _load_bookmarks()
@@ -148,7 +149,7 @@ class InternetApp(SoftApp):
         for name in keys:
             url = self.bookmarks[name]
             root.add_child(MenuNode(name, lambda u=url: self.fetch_page(u)))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
 
     def _start_url_input(self):
         self.url_input_mode = True
@@ -167,7 +168,7 @@ class InternetApp(SoftApp):
         for name in sorted(self.bookmarks.keys()):
             root.add_child(MenuNode(name, lambda n=name: self._do_remove_bookmark(n)))
         root.add_child(MenuNode("Back", self._build_menu))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _do_remove_bookmark(self, name):
@@ -199,7 +200,7 @@ class InternetApp(SoftApp):
             root.add_child(MenuNode(f"{fname} ({size})", lambda p=fpath: self.speak(f"Path: {p}")))
         root.add_child(MenuNode("Clear Downloads", self._clear_downloads))
         root.add_child(MenuNode("Back", self._build_menu))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _clear_downloads(self):
@@ -223,7 +224,7 @@ class InternetApp(SoftApp):
             root.add_child(MenuNode(title, lambda u=url: self.fetch_page(u)))
         root.add_child(MenuNode("Clear History", self._clear_history))
         root.add_child(MenuNode("Back", self._build_menu))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _clear_history(self):
@@ -377,7 +378,7 @@ class InternetApp(SoftApp):
             root.add_child(MenuNode(name, lambda u=url: self.fetch_page(u)))
         root.add_child(MenuNode("Add Bookmark", self._start_add_bookmark))
         root.add_child(MenuNode("Back", lambda: self.speak("Back to reading.")))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _handle_add_bookmark(self, vk):

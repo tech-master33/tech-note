@@ -197,7 +197,10 @@ class SapiSynthBase:
 
     def _engine_stop(self):
         if self.engine:
-            self.engine.Speak("", 2)
+            # Flag 0 = synchronous: blocks until the engine finishes
+            # speaking the empty string, guaranteeing the previous
+            # utterance is fully stopped before the next one begins.
+            self.engine.Speak("", 0)
 
     def speak(self, text, interrupt=True):
         if not self.engine:

@@ -62,11 +62,17 @@ class _Win32Voice:
         return True
 
     def speak(self, text):
-        self._voice.Speak(text)
+        # Flag 1 = SVSFlagsAsync: start speaking and return immediately.
+        # This lets stop() interrupt a long utterance without waiting for
+        # it to finish — the old synchronous call (flag 0) blocked until
+        # the utterance completed, making cancel() ineffective.
+        self._voice.Speak(text, 1)
 
     def cancel(self):
         try:
-            self._voice.Speak("", 1)  # SVSFlagsAsync | SVSFPurgeSpeak
+            # Flag 2 = SVSFPurgeBeforeSpeak: purge the queue and speak
+            # an empty string, which stops any in-progress utterance.
+            self._voice.Speak("", 2)
         except Exception:
             pass
 
@@ -369,10 +375,11 @@ class BridgeServer:
                             "error": f"{type(e).__name__}: {e}"}
             return {"ok": True}
         if cmd == "stop":
-            try:
-                self.backend.stop()
-            except Exception as e:
-                return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+            with self._speak_lock:
+                try:
+                    self.backend.stop()
+                except Exception as e:
+                    return {"ok": False, "error": f"{type(e).__name__}: {e}"}
             return {"ok": True}
         if cmd == "call":
             method = msg.get("method")

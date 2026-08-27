@@ -56,6 +56,7 @@ DEFAULT_SCHEMA = {
     "notifications": {
         "dnd_enabled": False,
     },
+    "main_menu": None,
 }
 
 

@@ -225,6 +225,7 @@ class OutlookProvider(EmailProvider):
 
 
 class EmailApp(SoftApp):
+    app_id = "email"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         self.config = self._load_config()
@@ -310,7 +311,7 @@ class EmailApp(SoftApp):
             root.add_child(MenuNode("Switch Account", self._switch_account))
         if self._signature:
             root.add_child(MenuNode("Edit Signature", self._edit_signature))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         pname = self._provider.get_name()
         email = self._accounts[self._current_account]["email"] if self._accounts else 'Not Setup'
         self.speak(f"{pname} Email. Inbox, Sent, Trash, Compose.")
@@ -364,7 +365,7 @@ class EmailApp(SoftApp):
             self.speak(f"{name.title()} is empty.")
             root = MenuNode(name.title())
             root.add_child(MenuNode("Back", self._show_main_menu))
-            self.menu = MenuSystem(root, self.speak)
+            self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
             self.menu.announce_current()
             return
         root = MenuNode(name.title())
@@ -372,7 +373,7 @@ class EmailApp(SoftApp):
             sender = item.get('sender', 'Unknown')
             subject = item.get('subject', 'No Subject')
             root.add_child(MenuNode(f"{sender}: {subject}", lambda idx=i: self._read_folder_item(idx)))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _read_folder_item(self, idx):
@@ -429,7 +430,7 @@ class EmailApp(SoftApp):
             root.add_child(MenuNode(f"{e['sender']}. {e['subject']}{att_tag}", lambda idx=i: self._read_email(idx)))
         if self._search_query:
             root.add_child(MenuNode(f"[Search: {self._search_query}]", lambda: self._search_inbox()))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _read_email(self, idx):
@@ -505,7 +506,7 @@ class EmailApp(SoftApp):
         for i, e in enumerate(self._search_results):
             root.add_child(MenuNode(f"{e['sender']}. {e['subject']}", lambda idx=i: self._read_search_result(idx)))
         root.add_child(MenuNode("Back", self._show_inbox_menu))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _read_search_result(self, idx):

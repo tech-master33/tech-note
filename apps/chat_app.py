@@ -35,6 +35,7 @@ STATE_REGISTER_FORM = 16
 
 
 class ChatApp(SoftApp):
+    app_id = "chat"
     def __init__(self, manager, window):
         super().__init__(manager, window)
         os.makedirs(DATA_DIR, exist_ok=True)
@@ -234,7 +235,7 @@ class ChatApp(SoftApp):
         if self.is_admin:
             root.add_child(MenuNode("Admin Panel", self._enter_admin_panel, "a"))
         root.add_child(MenuNode("Logout", self._logout, "l"))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.speak("Chat Menu")
         self.window.update_text(f"Chat: {self.username}")
 
@@ -267,7 +268,7 @@ class ChatApp(SoftApp):
             if unread > 0:
                 label += f", {unread} new"
             root.add_child(MenuNode(label, lambda rid=r['id'], rn=name: self._open_room(rid, rn)))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
         self.state = STATE_ROOM_LIST
 
@@ -325,7 +326,7 @@ class ChatApp(SoftApp):
                     snippet = 'voice message'
                 label += f" - {snippet[:30]}"
             root.add_child(MenuNode(label, lambda uid=c['user_id'], un=uname: self._open_dm(uid, un)))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
         self.state = STATE_DM_LIST
 
@@ -377,7 +378,7 @@ class ChatApp(SoftApp):
                 label += " (admin)"
             user_id = u.get('id')
             root.add_child(MenuNode(label, lambda uid=user_id, un=uname: self._start_dm_from_user(uid, un)))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
         self.state = STATE_USER_LIST
 
@@ -400,7 +401,7 @@ class ChatApp(SoftApp):
         root.add_child(MenuNode(f"Voice record duration: {self._record_duration}s", self._cycle_record_duration, "v"))
         root.add_child(MenuNode(f"Poll interval: {self._poll_interval}s", self._cycle_poll_interval, "p"))
         root.add_child(MenuNode("Back", self._show_main_menu, "b"))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _cycle_poll_interval(self):
@@ -429,7 +430,7 @@ class ChatApp(SoftApp):
         root.add_child(MenuNode("Broadcast", self._admin_broadcast, "d"))
         root.add_child(MenuNode("List Users", self._admin_list_users, "l"))
         root.add_child(MenuNode("Back", self._show_main_menu, "b"))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.menu.announce_current()
 
     def _admin_grant(self):
@@ -1234,7 +1235,7 @@ class ChatApp(SoftApp):
         root.add_child(MenuNode("Login", self._show_login_form, "l"))
         root.add_child(MenuNode("Create Account", self._show_register_form, "c"))
         root.add_child(MenuNode("Exit", self.exit_app, "x"))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.speak("Chat Login")
         self.menu.announce_current()
         self.window.update_text("Chat Login")
@@ -1253,7 +1254,7 @@ class ChatApp(SoftApp):
         root.add_child(MenuNode(f"Password: {p}", self._edit_password_field, "p"))
         root.add_child(MenuNode("Login Now", self._do_login, "l"))
         root.add_child(MenuNode("Back", self._show_login_menu, "b"))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.speak("Login form")
         self.menu.announce_current()
         self.window.update_text(f"Login: {u} / pw {p}")
@@ -1272,7 +1273,7 @@ class ChatApp(SoftApp):
         root.add_child(MenuNode(f"Password: {p}", self._edit_reg_password_field, "p"))
         root.add_child(MenuNode("Create Account Now", self._do_register, "c"))
         root.add_child(MenuNode("Back", self._show_login_menu, "b"))
-        self.menu = MenuSystem(root, self.speak)
+        self.menu = MenuSystem(root, self.speak, stop_func=self.stop)
         self.speak("Create account form")
         self.menu.announce_current()
         self.window.update_text(f"Register: {u} / pw {p}")

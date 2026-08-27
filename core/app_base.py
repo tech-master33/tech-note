@@ -8,6 +8,7 @@ import core.error_handler
 
 class SoftApp:
     app_title = None  # Friendly display name used in messages (e.g. "Word Processor")
+    app_id = None  # Stable identifier for layouts, per-app settings, profiles
 
     def __init__(self, manager, window, app_type='app'):
         self.manager = manager
@@ -60,6 +61,18 @@ class SoftApp:
         if self.app_title:
             return self.app_title
         return re.sub(r'(?<!^)(?=[A-Z])', ' ', self.__class__.__name__)
+
+    def get_app_id(self):
+        """Stable identifier for this app, used by UI layouts, per-app
+        settings, and profiles. Set app_id on the class to pin it;
+        otherwise it is derived from the class name (stable even if the
+        display title is renamed)."""
+        if self.app_id:
+            return self.app_id
+        ident = re.sub(r'(?<!^)(?=[A-Z])', '_', self.__class__.__name__).lower()
+        if ident.endswith('_app'):
+            ident = ident[:-4]
+        return ident
 
     def exit_app(self):
         self.manager.reset_temp_params()
